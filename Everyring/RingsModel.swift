@@ -16,9 +16,9 @@ final class RingsModel {
 
     private let health: HealthManager
 
-    init(library: RingLibrary? = nil, health: HealthManager = .shared) {
+    init(library: RingLibrary? = nil, health: HealthManager? = nil) {
         self.library = library ?? RingStore.load() ?? .starter
-        self.health = health
+        self.health = health ?? .shared
     }
 
     var calendar: Calendar { library.calendar() }

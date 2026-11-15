@@ -40,11 +40,12 @@ extension HealthMetric {
                     .locale(locale))
         case .minutes, .hours:
             let seconds = (baseUnit == .hours ? value * 3600 : value * 60).rounded(.down)
-            let allowed: Set<Duration.UnitsFormatStyle.Unit> = baseUnit == .hours ? [.hours, .minutes] : [.minutes]
+            let allowed: Set<Duration.UnitsFormatStyle.Unit> =
+                baseUnit == .hours && seconds >= 60 ? [.hours, .minutes] : [.minutes]
             let width: Duration.UnitsFormatStyle.UnitWidth = style == .wide ? .wide : .abbreviated
             let zero: Duration.UnitsFormatStyle.ZeroValueUnitsDisplayStrategy = seconds < 60 ? .show(length: 1) : .hide
             return Duration.seconds(max(0, seconds))
-                .formatted(.units(allowed: seconds < 60 ? [.minutes] : allowed, width: width, zeroValueUnits: zero)
+                .formatted(.units(allowed: allowed, width: width, zeroValueUnits: zero)
                     .locale(locale))
         }
     }
