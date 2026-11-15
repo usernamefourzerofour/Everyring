@@ -22,7 +22,7 @@ struct RingEditorView: View {
     init(ring: Ring, isNew: Bool, showsCancel: Bool = false, previewValue: Double? = nil,
          onSave: @escaping (Ring) -> Void, onDelete: (() -> Void)? = nil) {
         _ring = State(initialValue: ring)
-        _displayGoal = State(initialValue: ring.metric.toDisplay(ring.goal))
+        _displayGoal = State(initialValue: Self.rounded(ring.metric.toDisplay(ring.goal)))
         _nameEdited = State(initialValue: !isNew)
         _goalEdited = State(initialValue: !isNew)
         self.isNew = isNew
@@ -30,6 +30,11 @@ struct RingEditorView: View {
         self.previewValue = previewValue
         self.onSave = onSave
         self.onDelete = onDelete
+    }
+
+    /// Goals are entered with at most two decimals (62.137… mi shows as 62.14).
+    static func rounded(_ value: Double) -> Double {
+        (value * 100).rounded() / 100
     }
 
     private var edited: Ring {
@@ -48,8 +53,12 @@ struct RingEditorView: View {
                 NavigationLink {
                     MetricPickerView(selection: $ring.metric)
                 } label: {
-                    LabeledContent("Metric") {
-                        Label(ring.metric.title, systemImage: ring.metric.defaultSymbol)
+                    HStack {
+                        Text("Metric")
+                        Spacer()
+                        Text(ring.metric.title)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
                     }
                 }
                 if case .workouts(let measure, let kind) = ring.metric {
@@ -143,10 +152,10 @@ struct RingEditorView: View {
             if !nameEdited || ring.symbol == old.defaultSymbol { ring.symbol = new.defaultSymbol }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
-            if !goalEdited { displayGoal = new.toDisplay(new.suggestedGoal(for: ring.period)) }
+            if !goalEdited { displayGoal = Self.rounded(new.toDisplay(new.suggestedGoal(for: ring.period))) }
         }
         .onChange(of: ring.period) { _, period in
-            if !goalEdited { displayGoal = ring.metric.toDisplay(ring.metric.suggestedGoal(for: period)) }
+            if !goalEdited { displayGoal = Self.rounded(ring.metric.toDisplay(ring.metric.suggestedGoal(for: period))) }
         }
     }
 }
