@@ -63,7 +63,8 @@ struct HomeView: View {
                 guard let celebration = model.celebration else { return }
                 AccessibilityNotification.Announcement(
                     String(localized: "\(celebration.ring.name) ring closed")).post()
-                try? await Task.sleep(for: .seconds(3))
+                // A cancelled task (the view was rebuilt) must not hide the banner early.
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 if model.celebration == celebration { model.dismissCelebration() }
             }
             .overlay(alignment: .bottom) {
