@@ -99,8 +99,8 @@ struct PerDayMathTests {
     @Test func coveredSplitsAtMidnight() {
         let late = DateInterval(start: date(2026, 11, 17, 23, 30, in: cph), end: date(2026, 11, 18, 0, 20, in: cph))
         let byDay = IntervalMath.coveredByDay([late], calendar: cph)
-        #expect(byDay[date(2026, 11, 17, in: cph)] == 30 * 60)
-        #expect(byDay[date(2026, 11, 18, in: cph)] == 20 * 60)
+        #expect(byDay[date(2026, 11, 17, in: cph)] == TimeInterval(30 * 60))
+        #expect(byDay[date(2026, 11, 18, in: cph)] == TimeInterval(20 * 60))
     }
 
     @Test func nightsCountOnWakeUpDay() {
