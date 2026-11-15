@@ -29,6 +29,7 @@ struct WatchHomeView: View {
             guard url.host() == "set", let id = UUID(uuidString: url.lastPathComponent) else { return }
             selectedSet = id
         }
+        .sensoryFeedback(.success, trigger: model.celebration) { _, new in new != nil }
         .task { await model.refresh() }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -133,7 +134,7 @@ struct WatchRingDetail: View {
                 }
             }
             .navigationTitle(ring.name)
-            .task(id: ring) { streak = await model.streak(for: ring) }
+            .task(id: ring) { streak = await model.history(for: ring)?.streak }
         } else {
             ContentUnavailableView("Ring deleted", systemImage: "circle.dashed")
         }

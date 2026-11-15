@@ -113,6 +113,7 @@ final class RingsModel {
             }
             values = snapshots.mapValues(\.value)
             lastUpdated = now
+            celebrateClosedRings(snapshots)
             error = nil
             // With the app open the value may go down (e.g. deleted samples).
             ProgressUpdater.store(snapshots, library: library, allowDecrease: true)
@@ -135,20 +136,89 @@ final class RingsModel {
         return result
     }
 
-    /// Current and best streak, from Health data for the last `period.streakLookback` periods. `nil` on failure.
-    func streak(for ring: Ring, now: Date = .now) async -> Streak? {
-        if Self.isDemo { return Streak(current: 4, best: 9) }
+    // MARK: History
+
+    private struct DailyCache {
+        var from: Date
+        var fetched: Date
+        var values: [Date: Double]
+    }
+
+    /// Daily values per metric, so opening a ring's details again doesn't re-read months of Health data.
+    private var dailyCache: [HealthMetric: DailyCache] = [:]
+
+    /// The ring's history and streak, from one daily-values query. `nil` if Health couldn't be read.
+    func history(for ring: Ring, now: Date = .now) async -> RingHistory? {
         let calendar = calendar
-        do {
-            let current = try await health.value(of: ring.metric, in: ring.period.interval(now: now, calendar: calendar))
-            var finished: [Bool] = []
-            for interval in ring.period.history(now: now, count: ring.period.streakLookback, calendar: calendar) {
-                let value = try await health.value(of: ring.metric, in: interval)
-                finished.append(Streak.isClosed(value: value, goal: ring.goal))
+        let start = RingHistory.requiredStart(for: ring, now: now, calendar: calendar)
+        var daily: [Date: Double]
+        if Self.isDemo {
+            daily = DemoHistory.daily(for: ring, from: start, to: now, calendar: calendar)
+            // Let the current period add up to the value on the home screen.
+            let current = ring.period.interval(now: now, calendar: calendar)
+            let days = (0..<ring.period.nominalDays).compactMap { calendar.date(byAdding: .day, value: $0, to: current.start) }
+                .filter { $0 <= now }
+            for day in days { daily[day] = value(for: ring) / Double(max(1, days.count)) }
+        } else {
+            do {
+                daily = try await dailyValues(of: ring.metric, from: start, now: now, calendar: calendar)
+            } catch {
+                return nil
             }
-            return Streak(finished: finished, inProgress: Streak.isClosed(value: current, goal: ring.goal))
-        } catch {
-            return nil
         }
+        return RingHistory.make(for: ring, daily: daily, now: now, calendar: calendar)
+    }
+
+    private func dailyValues(of metric: HealthMetric, from start: Date, now: Date,
+                             calendar: Calendar) async throws -> [Date: Double] {
+        // Past days rarely change: within an hour, only re-read yesterday and today.
+        if var cached = dailyCache[metric], cached.from <= start, now.timeIntervalSince(cached.fetched) < 3600,
+           let recent = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) {
+            let fresh = try await health.dailyValues(of: metric, from: recent, to: now, calendar: calendar)
+            cached.values = cached.values.filter { $0.key < recent }.merging(fresh) { $1 }
+            dailyCache[metric] = cached
+            return cached.values
+        }
+        let values = try await health.dailyValues(of: metric, from: start, to: now, calendar: calendar)
+        dailyCache[metric] = DailyCache(from: start, fetched: now, values: values)
+        return values
+    }
+
+    // MARK: Closing rings
+
+    /// A ring that just reached its goal: the home screen celebrates it with an animation and a haptic.
+    struct Celebration: Equatable {
+        let id = UUID()
+        let ring: Ring
+    }
+
+    private(set) var celebration: Celebration?
+
+    func dismissCelebration() { celebration = nil }
+
+    /// Celebrates each fixed ring once per period when it closes, and a rolling ring when it gets back above its goal.
+    private func celebrateClosedRings(_ snapshots: [Ring.ID: RingSnapshot]) {
+        let defaults = UserDefaults.standard
+        var celebrated = defaults.stringArray(forKey: "celebratedPeriods") ?? []
+        var rollingClosed = defaults.dictionary(forKey: "rollingClosed") as? [String: Bool] ?? [:]
+        var newlyClosed: [Ring] = []
+        for ring in library.sets.flatMap(\.rings) {
+            guard let snapshot = snapshots[ring.id] else { continue }
+            let closed = Streak.isClosed(value: snapshot.value, goal: ring.goal)
+            if ring.period.isRolling {
+                let key = ring.id.uuidString
+                if closed, rollingClosed[key] == false { newlyClosed.append(ring) }
+                rollingClosed[key] = closed
+            } else if closed {
+                let key = "\(ring.id.uuidString)|\(Int(snapshot.intervalStart.timeIntervalSince1970))"
+                if !celebrated.contains(key) {
+                    celebrated.append(key)
+                    newlyClosed.append(ring)
+                }
+            }
+        }
+        defaults.set(Array(celebrated.suffix(300)), forKey: "celebratedPeriods")
+        defaults.set(rollingClosed, forKey: "rollingClosed")
+        if let ring = newlyClosed.first { celebration = Celebration(ring: ring) }
     }
 }

@@ -48,4 +48,35 @@ enum IntervalMath {
             }
             .reduce(0) { total, night in total + night.reduce(0) { $0 + $1.duration } }
     }
+
+    // MARK: Per day
+
+    /// Time covered by `intervals` on each calendar day (keyed by start of day), split at midnight.
+    static func coveredByDay(_ intervals: [DateInterval], calendar: Calendar) -> [Date: TimeInterval] {
+        var result: [Date: TimeInterval] = [:]
+        for interval in merged(intervals) {
+            var start = interval.start
+            while start < interval.end {
+                let day = calendar.startOfDay(for: start)
+                let next = calendar.date(byAdding: .day, value: 1, to: day) ?? interval.end
+                let end = min(next, interval.end)
+                result[day, default: 0] += end.timeIntervalSince(start)
+                start = end
+            }
+        }
+        return result
+    }
+
+    /// Sleep per calendar day: each night counts on the day it ends (the day you wake up).
+    static func asleepByDay(_ intervals: [DateInterval], calendar: Calendar,
+                            maxGap: TimeInterval = 2 * 3600) -> [Date: TimeInterval] {
+        var result: [Date: TimeInterval] = [:]
+        for night in sessions(intervals, maxGap: maxGap) {
+            guard let end = night.last?.end else { continue }
+            // A night ending exactly at midnight belongs to the day before.
+            let day = calendar.startOfDay(for: end.addingTimeInterval(-1))
+            result[day, default: 0] += night.reduce(0) { $0 + $1.duration }
+        }
+        return result
+    }
 }

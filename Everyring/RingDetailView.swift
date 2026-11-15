@@ -1,11 +1,12 @@
+import Charts
 import SwiftUI
 
-/// One ring: progress, period and streaks. History follows in a later milestone.
+/// One ring: progress, period, streaks and history.
 struct RingDetailView: View {
     @Environment(RingsModel.self) private var model
     let ringID: Ring.ID
-    @State private var streak: Streak?
-    @State private var loadingStreak = true
+    @State private var history: RingHistory?
+    @State private var loading = true
     @State private var editing = false
 
     var body: some View {
@@ -35,7 +36,11 @@ struct RingDetailView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    StreakCard(ring: ring, streak: streak, loading: loadingStreak)
+                    StreakCard(ring: ring, streak: history?.streak, loading: loading)
+
+                    if let history {
+                        HistoryCard(ring: ring, history: history, calendar: model.calendar)
+                    }
                 }
                 .padding()
                 .frame(maxWidth: 600)
@@ -53,9 +58,9 @@ struct RingDetailView: View {
                 }
             }
             .task(id: ring) {
-                loadingStreak = true
-                streak = await model.streak(for: ring)
-                loadingStreak = false
+                loading = true
+                history = await model.history(for: ring)
+                loading = false
             }
         } else {
             ContentUnavailableView("Ring deleted", systemImage: "circle.dashed")
@@ -91,9 +96,7 @@ struct StreakCard: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: .rect(cornerRadius: 20))
+        .card()
     }
 }
 
@@ -111,5 +114,181 @@ private struct StreakNumber: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: History
+
+struct HistoryCard: View {
+    let ring: Ring
+    let history: RingHistory
+    let calendar: Calendar
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("History", systemImage: "calendar")
+                .font(.headline)
+                .foregroundStyle(ring.color.color)
+            switch ring.period {
+            case .rollingDays(let n):
+                RollingChart(ring: ring, days: history.days)
+                Text("The value of the last \(n) days, as it stood at the end of each day.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            case .today:
+                DayGrid(ring: ring, records: history.periods, calendar: calendar)
+            default:
+                PeriodList(ring: ring, records: history.periods, calendar: calendar)
+            }
+        }
+        .card()
+    }
+}
+
+/// A rolling ring's window value per day, with the goal line.
+struct RollingChart: View {
+    let ring: Ring
+    let days: [DayValue]
+
+    var body: some View {
+        let display = days.map { DayValue(day: $0.day, value: ring.metric.toDisplay($0.value)) }
+        let goal = ring.metric.toDisplay(ring.goal)
+        Chart {
+            ForEach(display) { day in
+                AreaMark(x: .value("Day", day.day, unit: .day), y: .value("Value", day.value))
+                    .foregroundStyle(.linearGradient(colors: [ring.color.color.opacity(0.35), ring.color.color.opacity(0.02)],
+                                                     startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.monotone)
+                LineMark(x: .value("Day", day.day, unit: .day), y: .value("Value", day.value))
+                    .foregroundStyle(ring.color.color)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .interpolationMethod(.monotone)
+            }
+            RuleMark(y: .value("Goal", goal))
+                .foregroundStyle(.secondary)
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .annotation(position: .top, alignment: .leading) {
+                    Text("Goal \(ring.metric.format(ring.goal))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+        }
+        .chartYAxisLabel(ring.metric.unitName())
+        .frame(height: 200)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        let above = days.filter { Streak.isClosed(value: $0.value, goal: ring.goal) }.count
+        return String(localized: "Chart of the last \(days.count) days. Above the goal on \(above) of them.")
+    }
+}
+
+/// Daily rings as a calendar: one mini ring per day, weeks in rows starting on the week start.
+struct DayGrid: View {
+    let ring: Ring
+    let records: [PeriodRecord]
+    let calendar: Calendar
+
+    var body: some View {
+        let byDay = Dictionary(records.map { ($0.interval.start, $0) }, uniquingKeysWith: { a, _ in a })
+        let days = gridDays
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
+                Text(symbol)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            ForEach(days, id: \.self) { day in
+                if let record = byDay[day] {
+                    VStack(spacing: 2) {
+                        RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: ring.fraction(record.value))])
+                            .frame(width: 30, height: 30)
+                        Text(calendar.component(.day, from: day), format: .number)
+                            .font(.caption2.monospacedDigit())
+                            .fontWeight(record.isCurrent ? .bold : .regular)
+                            .foregroundStyle(record.isCurrent ? .primary : .secondary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityText(record))
+                } else {
+                    Color.clear.frame(height: 30)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+    }
+
+    /// From the week start before the oldest record through the end of the current week.
+    private var gridDays: [Date] {
+        guard let oldest = records.last?.interval.start, let newest = records.first?.interval.start,
+              let first = calendar.dateInterval(of: .weekOfYear, for: oldest)?.start,
+              let last = calendar.dateInterval(of: .weekOfYear, for: newest)?.end else { return [] }
+        var days: [Date] = []
+        var day = first
+        while day < last {
+            days.append(day)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        return days
+    }
+
+    private var weekdaySymbols: [String] {
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let start = calendar.firstWeekday - 1
+        return Array(symbols[start...] + symbols[..<start])
+    }
+
+    private func accessibilityText(_ record: PeriodRecord) -> String {
+        let label = ring.period.label(for: record.interval, calendar: calendar)
+        let state = record.closed ? String(localized: "closed") : String(localized: "not closed")
+        return "\(label), \(ring.progressText(record.value)), \(state)"
+    }
+}
+
+/// Weeks, months or custom periods as a list with mini rings.
+struct PeriodList: View {
+    let ring: Ring
+    let records: [PeriodRecord]
+    let calendar: Calendar
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(records) { record in
+                HStack(spacing: 12) {
+                    RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: ring.fraction(record.value))])
+                        .frame(width: 34, height: 34)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(record.isCurrent ? ring.period.title : ring.period.label(for: record.interval, calendar: calendar))
+                            .font(.subheadline.weight(record.isCurrent ? .semibold : .regular))
+                        Text(ring.progressText(record.value))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if record.closed {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(ring.color.color)
+                            .accessibilityLabel("Closed")
+                    }
+                }
+                .padding(.vertical, 6)
+                .accessibilityElement(children: .combine)
+                if record.id != records.last?.id { Divider() }
+            }
+        }
+    }
+}
+
+extension View {
+    /// The rounded panel used on the detail screen.
+    func card() -> some View {
+        padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.background.secondary, in: .rect(cornerRadius: 20))
     }
 }

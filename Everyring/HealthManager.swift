@@ -130,6 +130,68 @@ final class HealthManager {
         }
     }
 
+    /// The metric's value per calendar day from `start` up to `end`, keyed by start of day (days without data are
+    /// missing). One query for the whole range: daily statistics for quantities, samples bucketed by day otherwise.
+    func dailyValues(of metric: HealthMetric, from start: Date, to end: Date,
+                     calendar: Calendar) async throws -> [Date: Double] {
+        guard Self.isAvailable, start < end else { return [:] }
+        let range = DateInterval(start: calendar.startOfDay(for: start), end: end)
+        if let type = metric.quantityType {
+            let predicate = HKQuery.predicateForSamples(withStart: range.start, end: range.end)
+            let descriptor = HKStatisticsCollectionQueryDescriptor(
+                predicate: .quantitySample(type: type, predicate: predicate), options: .cumulativeSum,
+                anchorDate: range.start, intervalComponents: DateComponents(day: 1))
+            var result: [Date: Double] = [:]
+            do {
+                let collection = try await descriptor.result(for: store)
+                collection.enumerateStatistics(from: range.start, to: range.end) { statistics, _ in
+                    if let sum = statistics.sumQuantity()?.doubleValue(for: metric.hkUnit) {
+                        result[calendar.startOfDay(for: statistics.startDate), default: 0] += sum
+                    }
+                }
+            } catch let error as HKError where error.code == .errorNoData {
+                return [:]
+            }
+            return result
+        }
+        switch metric {
+        case .standHours:
+            let stood = try await categorySamples(.appleStandHour, in: range, strictStart: true)
+                .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
+            return Dictionary(grouping: stood) { calendar.startOfDay(for: $0.startDate) }.mapValues { Double($0.count) }
+        case .mindfulMinutes:
+            let samples = try await categorySamples(.mindfulSession, in: range)
+            return IntervalMath.coveredByDay(samples.map(\.interval), calendar: calendar)
+                .filter { $0.key >= range.start }
+                .mapValues { $0 / 60 }
+        case .sleep:
+            let asleep = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
+            let fetch = DateInterval(start: range.start.addingTimeInterval(-24 * 3600),
+                                     end: range.end.addingTimeInterval(18 * 3600))
+            let samples = try await categorySamples(.sleepAnalysis, in: fetch).filter { asleep.contains($0.value) }
+            return IntervalMath.asleepByDay(samples.map(\.interval), calendar: calendar)
+                .filter { $0.key >= range.start && $0.key < range.end }
+                .mapValues { $0 / 3600 }
+        case .workouts(let measure, let kind):
+            let workouts = try await workouts(kind: kind, in: range)
+            return Dictionary(grouping: workouts) { calendar.startOfDay(for: $0.startDate) }.mapValues { list in
+                switch measure {
+                case .count: Double(list.count)
+                case .minutes: list.reduce(0) { $0 + $1.duration } / 60
+                case .distance: list.reduce(0) { $0 + Self.distance(of: $1) }
+                }
+            }
+        default:
+            return [:]
+        }
+    }
+
+    private static func distance(of workout: HKWorkout) -> Double {
+        HealthMetric.workoutDistanceTypes.reduce(0) { sum, type in
+            sum + (workout.statistics(for: type)?.sumQuantity()?.doubleValue(for: .meter()) ?? 0)
+        }
+    }
+
     // MARK: Queries
 
     private func sum(_ type: HKQuantityType, unit: HKUnit, in interval: DateInterval) async throws -> Double {
