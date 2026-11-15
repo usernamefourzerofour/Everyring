@@ -12,7 +12,7 @@ settings:
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 targets:
-  # iPhone + iPad app. Widget and Watch targets are added in later milestones.
+  # iPhone + iPad app. Watch targets are added in a later milestone.
   Everyring:
     type: application
     platform: iOS
@@ -41,9 +41,35 @@ targets:
         UISupportedInterfaceOrientations~ipad:
           [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
            UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+    dependencies:
+      - target: EveryringWidget
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Home Screen and Lock Screen widgets (iPhone + iPad). Draw from the App Group cache; no HealthKit access.
+  EveryringWidget:
+    type: app-extension
+    platform: iOS
+    sources: [EveryringWidget, Shared]
+    entitlements:
+      path: EveryringWidget/EveryringWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dk.erik.everyring]
+    info:
+      path: EveryringWidget/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en]
+        CFBundleDisplayName: Everyring
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.widget
         TARGETED_DEVICE_FAMILY: "1,2"
 
   EveryringTests:

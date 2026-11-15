@@ -83,6 +83,12 @@ struct HomeView: View {
             if let selectedSet, ids.contains(selectedSet) { return }
             selectedSet = ids.first
         }
+        .onOpenURL { url in
+            // everyring://set/<id> from a widget.
+            guard url.host() == "set", let id = UUID(uuidString: url.lastPathComponent),
+                  model.library.sets.contains(where: { $0.id == id }) else { return }
+            selectedSet = id
+        }
         .task { await model.refresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.refresh() } }

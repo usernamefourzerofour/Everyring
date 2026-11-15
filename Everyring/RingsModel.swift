@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 /// The app's state: the ring library and the latest value per ring.
 @MainActor
@@ -9,6 +10,8 @@ final class RingsModel {
         didSet {
             guard library != oldValue else { return }
             try? RingStore.save(library)
+            WidgetCenter.shared.reloadAllTimelines()
+            BackgroundUpdater.shared.start(library: library)
             Task { await refresh() }
         }
     }
@@ -25,8 +28,12 @@ final class RingsModel {
     static var isDemo: Bool { UserDefaults.standard.bool(forKey: "demo") }
 
     init(library: RingLibrary? = nil, health: HealthManager? = nil) {
-        self.library = library ?? RingStore.load() ?? .starter
+        let stored = RingStore.load()
+        self.library = library ?? stored ?? .starter
         self.health = health ?? .shared
+        // Save the starter set on first launch so the widgets can read it.
+        if library == nil, stored == nil { try? RingStore.save(self.library) }
+        BackgroundUpdater.shared.start(library: self.library)
     }
 
     var calendar: Calendar { library.calendar() }
@@ -86,31 +93,38 @@ final class RingsModel {
                 Task { await refresh() }
             }
         }
-        let rings = library.sets.flatMap(\.rings)
-        if Self.isDemo {
-            values = Dictionary(uniqueKeysWithValues: library.sets.flatMap { set in
-                set.rings.enumerated().map { index, ring in (ring.id, ring.goal * Self.demoFractions[index % 5]) }
-            })
-            lastUpdated = now
-            return
-        }
+        let library = library
         do {
-            try await health.requestAuthorization(for: rings.map(\.metric))
-            let calendar = calendar
-            var result: [Ring.ID: Double] = [:]
-            for ring in rings {
-                result[ring.id] = try await health.value(of: ring.metric,
-                                                         in: ring.period.interval(now: now, calendar: calendar))
+            let snapshots: [Ring.ID: RingSnapshot]
+            if Self.isDemo {
+                snapshots = demoSnapshots(now: now)
+            } else {
+                try await health.requestAuthorization(for: library.sets.flatMap(\.rings).map(\.metric))
+                snapshots = try await ProgressUpdater.snapshots(for: library, now: now, health: health)
             }
-            values = result
+            values = snapshots.mapValues(\.value)
             lastUpdated = now
             error = nil
+            // With the app open the value may go down (e.g. deleted samples).
+            ProgressUpdater.store(snapshots, library: library, allowDecrease: true)
         } catch {
             self.error = error.localizedDescription
         }
     }
 
     private static let demoFractions = [0.72, 1.24, 0.46, 1.0, 0.31]
+
+    private func demoSnapshots(now: Date) -> [Ring.ID: RingSnapshot] {
+        var result: [Ring.ID: RingSnapshot] = [:]
+        for set in library.sets {
+            for (index, ring) in set.rings.enumerated() {
+                let interval = ring.period.interval(now: now, calendar: calendar)
+                result[ring.id] = RingSnapshot(value: ring.goal * Self.demoFractions[index % 5],
+                                               intervalStart: interval.start, intervalEnd: interval.end, updated: now)
+            }
+        }
+        return result
+    }
 
     /// Current and best streak, from Health data for the last `period.streakLookback` periods. `nil` on failure.
     func streak(for ring: Ring, now: Date = .now) async -> Streak? {

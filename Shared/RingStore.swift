@@ -54,6 +54,6 @@ enum RingStore {
 
     static func save(_ library: RingLibrary, to url: URL = url) throws {
         let data = try JSONEncoder().encode(library)
-        try data.write(to: url, options: .atomic)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 }
