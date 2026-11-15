@@ -30,7 +30,7 @@ All data stays on your device. A privacy policy will be published in `docs/priva
 
 ## Building
 
-Requirements: Xcode 26 or later (iOS 26 / iPadOS 26 / watchOS 26 SDK) and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Requirements: Xcode 27 or later (iOS 27 / iPadOS 27 / watchOS 27 SDK) and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
 xcodegen generate

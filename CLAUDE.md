@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Guidance for Claude working on Everyring, an iPhone, iPad and Apple Watch app (Swift, SwiftUI, Swift Charts, SwiftData,
-WidgetKit, HealthKit) with concentric progress rings where each ring has its own period (day, week, month, custom or rolling).
+Guidance for Claude working on Everyring, an iPhone, iPad and Apple Watch app (Swift, SwiftUI, Swift Charts,
+WidgetKit, HealthKit, Codable JSON in an App Group) with concentric progress rings where each ring has its own period (day, week, month, custom or rolling).
 
 The full product brief is in `docs/HANDOVER.md`. Read it before larger changes.
 
