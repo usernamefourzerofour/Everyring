@@ -58,15 +58,6 @@ struct HomeView: View {
                     }
                 }
             }
-            .overlay(alignment: .top) {
-                if let celebration = model.celebration {
-                    CelebrationBanner(ring: celebration.ring)
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .onTapGesture { model.dismissCelebration() }
-                }
-            }
-            .animation(.spring(duration: 0.5), value: model.celebration)
             .sensoryFeedback(.success, trigger: model.celebration) { _, new in new != nil }
             .task(id: model.celebration) {
                 guard let celebration = model.celebration else { return }
@@ -85,6 +76,15 @@ struct HomeView: View {
                 }
             }
         }
+        // On the navigation stack, so the banner sits over the navigation bar rather than under it.
+        .overlay(alignment: .top) {
+            if let celebration = model.celebration {
+                CelebrationBanner(ring: celebration.ring)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onTapGesture { model.dismissCelebration() }
+            }
+        }
+        .animation(.spring(duration: 0.5), value: model.celebration)
         .sheet(item: $sheet) { sheet in
             switch sheet {
             case .newSet:
