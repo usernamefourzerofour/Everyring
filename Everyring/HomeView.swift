@@ -5,18 +5,59 @@ struct HomeView: View {
     @Environment(RingsModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedSet: RingSet.ID?
+    @State private var sheet: Sheet?
+
+    private enum Sheet: Identifiable {
+        case newSet, editSet(RingSet), settings
+
+        var id: String {
+            switch self {
+            case .newSet: "new"
+            case .editSet(let set): set.id.uuidString
+            case .settings: "settings"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            TabView(selection: $selectedSet) {
-                ForEach(model.library.sets) { set in
-                    RingSetPage(set: set)
-                        .tag(Optional(set.id))
+            Group {
+                if model.library.sets.isEmpty {
+                    ContentUnavailableView {
+                        Label("No ring sets", systemImage: "circle.circle")
+                    } description: {
+                        Text("A ring set holds up to five rings, each with its own goal and period.")
+                    } actions: {
+                        Button("Create Ring Set") { sheet = .newSet }
+                            .buttonStyle(.borderedProminent)
+                    }
+                } else {
+                    TabView(selection: $selectedSet) {
+                        ForEach(model.library.sets) { set in
+                            RingSetPage(set: set)
+                                .tag(Optional(set.id))
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: model.library.sets.count > 1 ? .automatic : .never))
+                    .indexViewStyle(.page(backgroundDisplayMode: .automatic))
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: model.library.sets.count > 1 ? .automatic : .never))
             .navigationTitle(currentSet?.name ?? String(localized: "Everyring"))
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: Ring.ID.self) { RingDetailView(ringID: $0) }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Settings", systemImage: "gearshape") { sheet = .settings }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Ring Sets", systemImage: "ellipsis") {
+                        if let currentSet {
+                            Button("Edit “\(currentSet.name)”", systemImage: "pencil") { sheet = .editSet(currentSet) }
+                        }
+                        Button("New Ring Set", systemImage: "plus") { sheet = .newSet }
+                    }
+                }
+            }
             .overlay(alignment: .bottom) {
                 if let error = model.error {
                     Text(error)
@@ -27,7 +68,21 @@ struct HomeView: View {
                 }
             }
         }
-        .onAppear { if selectedSet == nil { selectedSet = model.library.sets.first?.id } }
+        .sheet(item: $sheet) { sheet in
+            switch sheet {
+            case .newSet:
+                SetEditorView(set: nil) { selectedSet = $0.id }
+            case .editSet(let set):
+                SetEditorView(set: set)
+            case .settings:
+                NavigationStack { SettingsView() }
+            }
+        }
+        .onAppear { if currentSet?.id != selectedSet { selectedSet = currentSet?.id } }
+        .onChange(of: model.library.sets.map(\.id)) { _, ids in
+            if let selectedSet, ids.contains(selectedSet) { return }
+            selectedSet = ids.first
+        }
         .task { await model.refresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.refresh() } }
@@ -51,12 +106,16 @@ struct RingSetPage: View {
                 RingStackView(rings: model.displays(for: set))
                     .frame(maxWidth: sizeClass == .regular ? 420 : 300)
                     .padding(.horizontal)
+                    .animation(.smooth(duration: 0.8), value: model.displays(for: set))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(set.rings.map { model.accessibilityText(for: $0) }.joined(separator: "; "))
 
                 VStack(spacing: 12) {
                     ForEach(set.rings) { ring in
-                        RingRow(ring: ring)
+                        NavigationLink(value: ring.id) {
+                            RingRow(ring: ring)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -100,8 +159,10 @@ struct RingRow: View {
         }
         .padding(14)
         .background(.background.secondary, in: .rect(cornerRadius: 20))
+        .contentShape(.rect(cornerRadius: 20))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(model.accessibilityText(for: ring))
+        .accessibilityAddTraits(.isButton)
     }
 }
 
