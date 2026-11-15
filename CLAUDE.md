@@ -70,6 +70,11 @@ xcodebuild -exportArchive -archivePath build/Everyring.xcarchive -exportPath bui
   -exportOptionsPlist "$HOME/.nomac/signing/BYNRN8J29U.ExportOptions.plist"
 ```
 
+For simulator builds, sign ad hoc so the widget extension may run and the App Group works (with
+`CODE_SIGNING_ALLOWED=NO` widgets stay placeholders): add `CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=`.
+The simulator sometimes dies at test start ("server died" / "Channel disconnected"): boot it with `xcrun simctl boot`
+and rerun. Launch the app with `-demo YES` for made-up values (screenshots); it also fills the widget cache.
+
 Then `send_to_testflight` with `/Users/agent/drive/src/Everyring/build/export/Everyring.ipa` (encryption: false) and short notes.
 NoMac project id: TODO (create the Everyring project and run `set_up_signing` for the new bundle IDs and App Group first).
 Bump `CURRENT_PROJECT_VERSION` in `project.yml` for every build.

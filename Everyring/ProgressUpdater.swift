@@ -6,7 +6,8 @@ import WidgetKit
 @MainActor
 enum ProgressUpdater {
     static func snapshots(for library: RingLibrary, now: Date = .now,
-                          health: HealthManager = .shared) async throws -> [Ring.ID: RingSnapshot] {
+                          health: HealthManager? = nil) async throws -> [Ring.ID: RingSnapshot] {
+        let health = health ?? .shared
         let calendar = library.calendar()
         var result: [Ring.ID: RingSnapshot] = [:]
         for ring in library.sets.flatMap(\.rings) {
