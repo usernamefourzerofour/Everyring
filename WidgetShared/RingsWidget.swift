@@ -19,7 +19,6 @@ struct RingsWidget: Widget {
     static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge,
                                            .accessoryCircular, .accessoryRectangular, .accessoryInline]
     #endif
-    }
 }
 
 struct RingsEntry: TimelineEntry {
