@@ -23,7 +23,8 @@ The full product brief is in `docs/HANDOVER.md`. Read it before larger changes.
 | `Everyring/` | iPhone + iPad app: HealthKit (`HealthManager.swift`), progress computation, views, editors. |
 | `EveryringWatch/` | Apple Watch app (receives ring sets from the iPhone, computes from its own HealthKit store). |
 | `EveryringWatchWidget/` | Watch complications (WidgetKit accessory families). |
-| `EveryringWidget/` | iPhone/iPad widgets (Home Screen, Lock Screen), AppIntent configuration to pick a ring set. |
+| `EveryringWidget/` | iPhone/iPad widget extension (just the bundle). |
+| `WidgetShared/` | The widget itself (timeline, views, AppIntent to pick a ring set), shared by the iPhone widget and the Watch complications. |
 | `Shared/` | Used by all targets: model (`RingSet`, `Ring`, `RingPeriod`, `HealthMetric`), period and streak engines, App Group cache, ring drawing, String Catalog, privacy manifest. |
 | `EveryringTests/` | Unit tests: period boundaries (week start, month lengths, DST, time zones), streaks, cache rules. |
 | `Design/` | App icon source and scripts. |

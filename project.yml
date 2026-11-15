@@ -12,7 +12,7 @@ settings:
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 targets:
-  # iPhone + iPad app. Watch targets are added in a later milestone.
+  # iPhone + iPad app. Embeds the widget extension and the Apple Watch app.
   Everyring:
     type: application
     platform: iOS
@@ -43,6 +43,7 @@ targets:
            UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     dependencies:
       - target: EveryringWidget
+      - target: EveryringWatch
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring
@@ -52,7 +53,7 @@ targets:
   EveryringWidget:
     type: app-extension
     platform: iOS
-    sources: [EveryringWidget, Shared]
+    sources: [EveryringWidget, WidgetShared, Shared]
     entitlements:
       path: EveryringWidget/EveryringWidget.entitlements
       properties:
@@ -71,6 +72,67 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.widget
         TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Apple Watch app: receives ring sets from the iPhone, computes progress from the watch's own Health data and caches
+  # it for the complications.
+  EveryringWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - EveryringWatch
+      - Shared
+      - Everyring/HealthManager.swift
+      - Everyring/ProgressUpdater.swift
+      - Everyring/RingsModel.swift
+    entitlements:
+      path: EveryringWatch/EveryringWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.healthkit.background-delivery: true
+        com.apple.security.application-groups: [group.dk.erik.everyring]
+    info:
+      path: EveryringWatch/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en]
+        CFBundleDisplayName: Everyring
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: dk.erik.everyring
+        CFBundleURLTypes:
+          - CFBundleURLName: dk.erik.everyring.watchkitapp
+            CFBundleURLSchemes: [everyring]
+        NSHealthShareUsageDescription: "Everyring reads the Health data your rings use, such as steps, workouts and sleep, to show your progress on your watch. Your data never leaves your devices."
+    dependencies:
+      - target: EveryringWatchWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.watchkitapp
+
+  # Complications (WidgetKit accessory families) on the watch face.
+  EveryringWatchWidget:
+    type: app-extension
+    platform: watchOS
+    sources: [EveryringWatchWidget, WidgetShared, Shared]
+    entitlements:
+      path: EveryringWatchWidget/EveryringWatchWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dk.erik.everyring]
+    info:
+      path: EveryringWatchWidget/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en]
+        CFBundleDisplayName: Everyring
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.watchkitapp.widget
 
   EveryringTests:
     type: bundle.unit-test

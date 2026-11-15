@@ -1,14 +1,8 @@
 import SwiftUI
 import WidgetKit
 
-@main
-struct EveryringWidgetBundle: WidgetBundle {
-    var body: some Widget {
-        RingsWidget()
-    }
-}
-
-/// One widget for every size: the chosen ring set, drawn from the App Group cache.
+/// One widget for every size: the chosen ring set, drawn from the App Group cache. Shared by the iPhone/iPad widget
+/// extension and the Apple Watch complications.
 struct RingsWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "RingsWidget", intent: SelectRingSetIntent.self, provider: RingsProvider()) { entry in
@@ -16,8 +10,15 @@ struct RingsWidget: Widget {
         }
         .configurationDisplayName("Rings")
         .description("A ring set at a glance.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
-                            .accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .supportedFamilies(Self.families)
+    }
+
+    #if os(watchOS)
+    static let families: [WidgetFamily] = [.accessoryCircular, .accessoryRectangular, .accessoryInline, .accessoryCorner]
+    #else
+    static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge,
+                                           .accessoryCircular, .accessoryRectangular, .accessoryInline]
+    #endif
     }
 }
 
@@ -52,6 +53,15 @@ struct RingsProvider: AppIntentTimelineProvider {
     func snapshot(for configuration: SelectRingSetIntent, in context: Context) async -> RingsEntry {
         let entry = entry(for: configuration, at: .now)
         return context.isPreview && entry.set == nil ? .preview : entry
+    }
+
+    /// Watch faces list one complication per ring set.
+    func recommendations() -> [AppIntentRecommendation<SelectRingSetIntent>] {
+        (RingStore.load()?.sets ?? []).map { set in
+            let intent = SelectRingSetIntent()
+            intent.ringSet = RingSetEntity(set)
+            return AppIntentRecommendation(intent: intent, description: Text(set.name))
+        }
     }
 
     func timeline(for configuration: SelectRingSetIntent, in context: Context) async -> Timeline<RingsEntry> {
@@ -93,12 +103,15 @@ struct RingsWidgetView: View {
             empty
         } else {
             switch family {
-            case .systemSmall: small
-            case .systemMedium: medium
-            case .systemLarge: large
             case .accessoryCircular: circular
             case .accessoryRectangular: rectangular
             case .accessoryInline: inline
+            #if os(watchOS)
+            case .accessoryCorner: corner
+            #else
+            case .systemMedium: medium
+            case .systemLarge: large
+            #endif
             default: small
             }
         }
@@ -216,6 +229,25 @@ struct RingsWidgetView: View {
         }
     }
 
+    #if os(watchOS)
+    /// The first ring as a gauge along the corner, with its icon in the corner.
+    private var corner: some View {
+        let first = entry.items[0]
+        return Image(systemName: first.ring.symbol)
+            .font(.title3)
+            .widgetAccentable()
+            .widgetLabel {
+                Gauge(value: min(first.fraction, 1)) {
+                    Text(first.ring.name)
+                } currentValueLabel: {
+                    Text(first.fraction, format: .percent.precision(.fractionLength(0)))
+                }
+                .tint(first.ring.color.color)
+            }
+            .accessibilityLabel(first.ring.accessibilityText(first.value, now: entry.date, calendar: entry.calendar))
+    }
+    #endif
+
     private var inline: some View {
         Text(entry.items.prefix(2).map {
             "\($0.ring.name) \($0.fraction.formatted(.percent.precision(.fractionLength(0))))"
@@ -223,6 +255,7 @@ struct RingsWidgetView: View {
     }
 }
 
+#if os(iOS)
 #Preview("Small", as: .systemSmall) {
     RingsWidget()
 } timeline: {
@@ -246,3 +279,4 @@ struct RingsWidgetView: View {
 } timeline: {
     RingsEntry.preview
 }
+#endif

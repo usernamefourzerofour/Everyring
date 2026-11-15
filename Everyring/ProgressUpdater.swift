@@ -68,12 +68,13 @@ final class BackgroundUpdater {
         observedTypes = types
     }
 
-    /// Recomputes all rings, at most once a minute (several types often change together).
-    func update(now: Date = .now) async {
-        guard now.timeIntervalSince(lastUpdate) > 60, let library = RingStore.load() else { return }
+    /// Recomputes all rings, at most once a minute unless `force` (several types often change together).
+    func update(now: Date = .now, force: Bool = false) async {
+        guard force || now.timeIntervalSince(lastUpdate) > 60, let library = RingStore.load() else { return }
         lastUpdate = now
         // Health can't be read while the device is locked; then the cache keeps its values.
         guard let snapshots = try? await ProgressUpdater.snapshots(for: library, now: now) else { return }
         ProgressUpdater.store(snapshots, library: library, allowDecrease: false)
+        if force { WidgetCenter.shared.reloadAllTimelines() }
     }
 }

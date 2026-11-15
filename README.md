@@ -68,7 +68,8 @@ xcodebuild test -project Everyring.xcodeproj -scheme Everyring -destination 'pla
 | `Everyring/` | iPhone and iPad app |
 | `EveryringWatch/` | Apple Watch app |
 | `EveryringWatchWidget/` | Watch complications |
-| `EveryringWidget/` | iPhone and iPad widgets |
+| `EveryringWidget/` | iPhone and iPad widget extension |
+| `WidgetShared/` | Widget code shared by the iPhone widgets and the Watch complications |
 | `Shared/` | Model, period and streak engines, ring drawing, cache – shared by all targets |
 | `EveryringTests/` | Unit tests |
 | `docs/` | Product brief, privacy policy and support page (GitHub Pages) |

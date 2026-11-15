@@ -12,6 +12,9 @@ final class RingsModel {
             try? RingStore.save(library)
             WidgetCenter.shared.reloadAllTimelines()
             BackgroundUpdater.shared.start(library: library)
+            #if os(iOS)
+            PhoneSync.shared.send(library)
+            #endif
             Task { await refresh() }
         }
     }
@@ -29,10 +32,16 @@ final class RingsModel {
 
     init(library: RingLibrary? = nil, health: HealthManager? = nil) {
         let stored = RingStore.load()
-        self.library = library ?? stored ?? .starter
         self.health = health ?? .shared
-        // Save the starter set on first launch so the widgets can read it.
+        #if os(watchOS)
+        // The watch shows the iPhone's rings; until they arrive it has none.
+        self.library = library ?? stored ?? (Self.isDemo ? .starter : RingLibrary(sets: []))
+        #else
+        self.library = library ?? stored ?? .starter
+        // Save the starter set on first launch so the widgets (and the watch) can read it.
         if library == nil, stored == nil { try? RingStore.save(self.library) }
+        PhoneSync.shared.activate()
+        #endif
         BackgroundUpdater.shared.start(library: self.library)
     }
 
