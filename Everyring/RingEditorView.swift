@@ -39,7 +39,9 @@ struct RingEditorView: View {
 
     private var edited: Ring {
         var r = ring
-        r.goal = ring.metric.fromDisplay(displayGoal)
+        // Keep the exact stored goal unless the user changed the (rounded) number shown.
+        let unchanged = abs(Self.rounded(ring.metric.toDisplay(ring.goal)) - displayGoal) < 0.000_001
+        if !unchanged { r.goal = ring.metric.fromDisplay(displayGoal) }
         return r
     }
 
