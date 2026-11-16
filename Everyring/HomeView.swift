@@ -127,7 +127,7 @@ struct RingSetPage: View {
                 ? [GridItem(.flexible(), spacing: 32), GridItem(.flexible())]
                 : [GridItem(.flexible())]
             LazyVGrid(columns: columns, alignment: .center, spacing: 24) {
-                RingStackView(rings: model.displays(for: set))
+                RingStackView(rings: model.displays(for: set), showsLabels: true)
                     .frame(maxWidth: sizeClass == .regular ? 420 : 300)
                     .padding(.horizontal)
                     .animation(.smooth(duration: 0.8), value: model.displays(for: set))
