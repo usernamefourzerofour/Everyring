@@ -94,6 +94,14 @@ final class HealthManager {
     /// reveal for reading) counts as zero.
     func value(of metric: HealthMetric, in interval: DateInterval) async throws -> Double {
         guard Self.isAvailable else { return 0 }
+        do {
+            return try await readValue(of: metric, in: interval)
+        } catch let error as HKError where error.code == .errorNoData {
+            return 0
+        }
+    }
+
+    private func readValue(of metric: HealthMetric, in interval: DateInterval) async throws -> Double {
         if let type = metric.quantityType {
             return try await sum(type, unit: metric.hkUnit, in: interval)
         }

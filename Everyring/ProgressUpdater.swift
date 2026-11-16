@@ -5,16 +5,26 @@ import WidgetKit
 /// Computes every ring's value from Health and writes it to the App Group cache for the widgets.
 @MainActor
 enum ProgressUpdater {
-    static func snapshots(for library: RingLibrary, now: Date = .now,
-                          health: HealthManager? = nil) async throws -> [Ring.ID: RingSnapshot] {
+    /// The result of reading every ring: the rings that could be read, and the ones that couldn't (with why).
+    struct Result {
+        var snapshots: [Ring.ID: RingSnapshot] = [:]
+        var failures: [(ring: Ring, error: Error)] = []
+    }
+
+    /// Reads each ring on its own, so one ring that can't be read (a Health error for one type) never stops the others.
+    static func snapshots(for library: RingLibrary, now: Date = .now, health: HealthManager? = nil) async -> Result {
         let health = health ?? .shared
         let calendar = library.calendar()
-        var result: [Ring.ID: RingSnapshot] = [:]
+        var result = Result()
         for ring in library.sets.flatMap(\.rings) {
             let interval = ring.period.interval(now: now, calendar: calendar)
-            let value = try await health.value(of: ring.metric, in: interval)
-            result[ring.id] = RingSnapshot(value: value, intervalStart: interval.start, intervalEnd: interval.end,
-                                           updated: now)
+            do {
+                let value = try await health.value(of: ring.metric, in: interval)
+                result.snapshots[ring.id] = RingSnapshot(value: value, intervalStart: interval.start,
+                                                         intervalEnd: interval.end, updated: now)
+            } catch {
+                result.failures.append((ring, error))
+            }
         }
         return result
     }
@@ -72,8 +82,9 @@ final class BackgroundUpdater {
     func update(now: Date = .now, force: Bool = false) async {
         guard force || now.timeIntervalSince(lastUpdate) > 60, let library = RingStore.load() else { return }
         lastUpdate = now
-        // Health can't be read while the device is locked; then the cache keeps its values.
-        guard let snapshots = try? await ProgressUpdater.snapshots(for: library, now: now) else { return }
+        // Health can't be read while the device is locked; then those rings keep their cached values.
+        let snapshots = await ProgressUpdater.snapshots(for: library, now: now).snapshots
+        guard !snapshots.isEmpty else { return }
         ProgressUpdater.store(snapshots, library: library, allowDecrease: false)
         if force { WidgetCenter.shared.reloadAllTimelines() }
     }

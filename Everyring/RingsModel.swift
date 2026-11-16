@@ -103,23 +103,30 @@ final class RingsModel {
             }
         }
         let library = library
-        do {
-            let snapshots: [Ring.ID: RingSnapshot]
-            if Self.isDemo {
-                snapshots = demoSnapshots(now: now)
-            } else {
-                try await health.requestAuthorization(for: library.sets.flatMap(\.rings).map(\.metric))
-                snapshots = try await ProgressUpdater.snapshots(for: library, now: now, health: health)
-            }
-            values = snapshots.mapValues(\.value)
-            lastUpdated = now
-            celebrateClosedRings(snapshots)
+        let snapshots: [Ring.ID: RingSnapshot]
+        if Self.isDemo {
+            snapshots = demoSnapshots(now: now)
             error = nil
-            // With the app open the value may go down (e.g. deleted samples).
-            ProgressUpdater.store(snapshots, library: library, allowDecrease: true)
-        } catch {
-            self.error = error.localizedDescription
+        } else {
+            var problems: [String] = []
+            do {
+                try await health.requestAuthorization(for: library.sets.flatMap(\.rings).map(\.metric))
+            } catch {
+                // Rings with access granted earlier can still be read.
+                problems.append(String(localized: "Health access: \(error.localizedDescription)"))
+            }
+            let result = await ProgressUpdater.snapshots(for: library, now: now, health: health)
+            snapshots = result.snapshots
+            problems += result.failures.map { "\($0.ring.name): \($0.error.localizedDescription)" }
+            error = problems.isEmpty ? nil : problems.joined(separator: "\n")
         }
+        // Rings that couldn't be read keep their last value.
+        values.merge(snapshots.mapValues(\.value)) { $1 }
+        values = values.filter { id, _ in library.sets.contains { $0.rings.contains { $0.id == id } } }
+        lastUpdated = now
+        celebrateClosedRings(snapshots)
+        // With the app open the value may go down (e.g. deleted samples).
+        ProgressUpdater.store(snapshots, library: library, allowDecrease: true)
     }
 
     private static let demoFractions = [0.72, 1.24, 0.46, 1.0, 0.31]
@@ -166,7 +173,12 @@ final class RingsModel {
                 return nil
             }
         }
-        return RingHistory.make(for: ring, daily: daily, now: now, calendar: calendar)
+        let history = RingHistory.make(for: ring, daily: daily, now: now, calendar: calendar)
+        // The current period from the history is as fresh as it gets: use it, so the ring and its history agree.
+        if !Self.isDemo, let current = ring.period.isRolling ? history.days.last?.value : history.periods.first?.value {
+            values[ring.id] = current
+        }
+        return history
     }
 
     private func dailyValues(of metric: HealthMetric, from start: Date, now: Date,
