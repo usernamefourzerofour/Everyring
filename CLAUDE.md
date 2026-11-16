@@ -77,7 +77,8 @@ The simulator sometimes dies at test start ("server died" / "Channel disconnecte
 and rerun. Launch the app with `-demo YES` for made-up values (screenshots); it also fills the widget cache.
 
 Then `send_to_testflight` with `/Users/agent/drive/src/Everyring/build/export/Everyring.ipa` (encryption: false) and short notes.
-NoMac project id: TODO (create the Everyring project and run `set_up_signing` for the new bundle IDs and App Group first).
+NoMac project id: `prj_oY4ZSJZ4uYb0OFRHouFmV` (App Store Connect app 6835209406). Signing is set up with `set_up_signing`; run it
+again on a fresh Mac before archiving (it installs the profiles in the Mac's keychain).
 Bump `CURRENT_PROJECT_VERSION` in `project.yml` for every build.
 
 ## App Store
