@@ -165,8 +165,12 @@ struct RingStartLabel: View {
     }
 
     var body: some View {
-        let size = lineWidth * 0.62
         let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
+        // On a small inner ring a full-size label would run far around it: shrink it to fit about 100°.
+        var size = lineWidth * 0.62
+        let maxAngle = Double.pi * 100 / 180
+        let (_, natural) = layout(percent: percent, size: size)
+        if natural > maxAngle { size *= max(0.7, maxAngle / natural) }
         let (glyphs, end) = layout(percent: percent, size: size)
         // White on the filled arc; where too little is filled under the text, the system's text colour (the track is
         // too light for the ring's own colour, e.g. yellow).
@@ -202,7 +206,7 @@ struct RingStartLabel: View {
             angle += a
         }
         // On a tight inner ring the glyphs' inner edges crowd together; space them a little more.
-        let curve = 1 + lineWidth * 0.25 / max(radius, 1)
+        let curve = 1 + lineWidth * 0.12 / max(radius, 1)
         if let symbol = ring.symbol {
             add(symbol: symbol, text: "", advance: (Self.symbolWidth(symbol, size: size * 0.9) + size * 0.3) * curve)
         }
