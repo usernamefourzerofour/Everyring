@@ -193,9 +193,12 @@ final class RingsModel {
 
     /// How the ring's value built up through its current period, for the chart on the detail screen. `nil` if Health
     /// couldn't be read, or for sleep and mindful minutes in a one-day period (no meaningful hourly build-up).
-    func periodProgress(for ring: Ring, now: Date = .now) async -> PeriodProgress? {
+    /// - Parameter chosen: a period picked in the history; `nil` for the one in progress.
+    func periodProgress(for ring: Ring, interval chosen: DateInterval? = nil, now: Date = .now) async -> PeriodProgress? {
         let calendar = calendar
-        let interval = PeriodProgress.chartInterval(for: ring, now: now, calendar: calendar)
+        let interval = chosen ?? PeriodProgress.chartInterval(for: ring, now: now, calendar: calendar)
+        let isPast = interval.end <= now
+        let end = min(now, interval.end)
         let buckets: [Date: Double]
         if PeriodProgress.bucket(for: ring.period) == .hour {
             switch ring.metric {
@@ -203,24 +206,30 @@ final class RingsModel {
             default: break
             }
             if Self.isDemo {
-                buckets = DemoHistory.hourly(total: value(for: ring), from: interval.start, to: now, calendar: calendar)
+                let total = isPast
+                    ? DemoHistory.daily(for: ring, from: interval.start, to: interval.start, calendar: calendar).values.reduce(0, +)
+                    : value(for: ring)
+                buckets = DemoHistory.hourly(total: total, from: interval.start, to: end, calendar: calendar)
             } else {
                 guard let hourly = try? await health.hourlyValues(
-                    of: ring.metric, in: DateInterval(start: interval.start, end: max(interval.start, now)),
+                    of: ring.metric, in: DateInterval(start: interval.start, end: max(interval.start, end)),
                     calendar: calendar) else { return nil }
                 buckets = hourly
             }
+        } else if Self.isDemo && isPast {
+            buckets = DemoHistory.daily(for: ring, from: interval.start, to: end, calendar: calendar)
         } else if Self.isDemo {
             // Spread the home screen's demo value over the days so far, so the chart ends where the ring is.
-            let days = DemoHistory.daily(for: ring, from: interval.start, to: now, calendar: calendar).keys.sorted()
+            let days = DemoHistory.daily(for: ring, from: interval.start, to: end, calendar: calendar).keys.sorted()
             let share = value(for: ring) / Double(max(1, days.count))
             buckets = Dictionary(uniqueKeysWithValues: days.map { ($0, share) })
         } else {
+            // Daily values from the cache cover past periods too (it reaches back as far as the history needs).
             guard let daily = try? await dailyValues(of: ring.metric, from: interval.start, now: now, calendar: calendar)
             else { return nil }
             buckets = daily
         }
-        return PeriodProgress.make(for: ring, buckets: buckets, now: now, calendar: calendar)
+        return PeriodProgress.make(for: ring, buckets: buckets, interval: interval, now: now, calendar: calendar)
     }
 
     /// One page of the ring's history (`offset` 0 = this month, or this year for monthly rings).

@@ -13,10 +13,14 @@ struct RingDetailView: View {
     @State private var page: HistoryPage?
     @State private var progress: PeriodProgress?
     @State private var pageFailed = false
+    /// A period picked in the history for the chart; `nil` = the one in progress.
+    @State private var selected: DateInterval?
+    @State private var pageRing: Ring?
 
     var body: some View {
         if let ring = model.ring(id: ringID) {
             let value = model.value(for: ring)
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 24) {
                     RingStackView(rings: [ring.display(value)])
@@ -42,16 +46,25 @@ struct RingDetailView: View {
                     }
 
                     if let progress {
-                        ProgressChartCard(ring: ring, progress: progress, calendar: model.calendar)
+                        ProgressChartCard(ring: ring, progress: progress, calendar: model.calendar,
+                                          onShowCurrent: selected == nil ? nil : { withAnimation { selected = nil } })
+                            .id("chart")
                     }
 
                     StreakCard(ring: ring, streak: history?.streak, loading: loading)
 
-                    HistoryCard(ring: ring, page: page, failed: pageFailed, offset: $pageOffset, calendar: model.calendar)
+                    HistoryCard(ring: ring, page: page, failed: pageFailed, offset: $pageOffset, calendar: model.calendar,
+                                selected: selected) { interval, isCurrent in
+                        withAnimation {
+                            selected = isCurrent || interval == selected ? nil : interval
+                            proxy.scrollTo("chart", anchor: .top)
+                        }
+                    }
                 }
                 .padding()
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
+            }
             }
             .navigationTitle(ring.name)
             .toolbar {
@@ -65,16 +78,27 @@ struct RingDetailView: View {
                 }
             }
             .task(id: PageKey(ring: ring, offset: pageOffset)) {
+                // Never show the old page for a changed ring (e.g. today → this week) while the new one loads.
+                if pageRing != ring { page = nil }
+                pageRing = ring
                 page = await withTimeout { await model.historyPage(for: ring, offset: pageOffset) } ?? nil
                 pageFailed = page == nil
             }
             .task(id: ring) {
                 // One access request first, then the readings one after another (never three sheets at once).
                 loading = true
+                selected = nil
                 await model.requestAccess(for: ring)
                 progress = await withTimeout { await model.periodProgress(for: ring) } ?? nil
                 history = await withTimeout { await model.history(for: ring) } ?? nil
                 loading = false
+            }
+            .task(id: selected) {
+                guard !loading || selected != nil else { return }
+                let chosen = selected
+                if let next = await withTimeout({ await model.periodProgress(for: ring, interval: chosen) }) ?? nil {
+                    withAnimation { progress = next }
+                }
             }
         } else {
             ContentUnavailableView("Ring deleted", systemImage: "circle.dashed")
@@ -87,16 +111,29 @@ struct ProgressChartCard: View {
     let ring: Ring
     let progress: PeriodProgress
     let calendar: Calendar
+    /// Shown for a past period: goes back to the one in progress.
+    var onShowCurrent: (() -> Void)?
 
     var body: some View {
         let goal = ring.metric.toDisplay(ring.goal)
         let points = progress.points.map { (date: $0.date, value: ring.metric.toDisplay($0.total)) }
         let lineColor = ring.tint(progress.points.last?.total ?? 0)
         VStack(alignment: .leading, spacing: 12) {
-            Label(ring.period.isRolling ? String(localized: "The last \(ring.period.nominalDays) days") : ring.period.title,
-                  systemImage: "chart.xyaxis.line")
-                .font(.headline)
-                .foregroundStyle(ring.color.color)
+            HStack {
+                Label(title, systemImage: "chart.xyaxis.line")
+                    .font(.headline)
+                    .foregroundStyle(ring.color.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer()
+                if let onShowCurrent {
+                    Button("Now", systemImage: "arrow.uturn.backward", action: onShowCurrent)
+                        .font(.subheadline.weight(.semibold))
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .tint(ring.color.color)
+                }
+            }
 
             Chart {
                 ForEach(points, id: \.date) { point in
@@ -175,9 +212,23 @@ struct ProgressChartCard: View {
         return style
     }
 
+    private var title: String {
+        if progress.isPast { return ring.period.label(for: progress.interval, calendar: calendar) }
+        return ring.period.isRolling ? String(localized: "The last \(ring.period.nominalDays) days") : ring.period.title
+    }
+
     /// "Ahead of an even pace by 1,200 steps" and the like.
     private var summary: String {
         let total = progress.points.last?.total ?? 0
+        if progress.isPast {
+            let result = ring.progressText(total)
+            if ring.isLimit {
+                return ring.isMet(total) ? String(localized: "Ended at \(result): under the limit.")
+                                         : String(localized: "Ended at \(result).")
+            }
+            return ring.isMet(total) ? String(localized: "Ended at \(result): goal reached.")
+                                     : String(localized: "Ended at \(result).")
+        }
         guard let pace = progress.paceNow else {
             return String(localized: "Your total over the window, day by day.")
         }
@@ -256,6 +307,9 @@ struct HistoryCard: View {
     var failed = false
     @Binding var offset: Int
     let calendar: Calendar
+    var selected: DateInterval?
+    /// A period (or, for rolling rings, the window ending on a day) was tapped; `isCurrent` for the one in progress.
+    var onSelect: (DateInterval, Bool) -> Void = { _, _ in }
 
     /// How far back you can page: two years of months, or ten years.
     private var oldestOffset: Int { HistoryPage.unit(for: ring.period) == .year ? -9 : -23 }
@@ -272,14 +326,19 @@ struct HistoryCard: View {
             if let page {
                 switch ring.period {
                 case .rollingDays(let n):
-                    RollingChart(ring: ring, days: page.days)
+                    RollingChart(ring: ring, days: page.days, selectedEnd: selected?.end) { day in
+                        let window = ring.period.interval(containing: day, calendar: calendar)
+                        onSelect(window, calendar.isDateInToday(day))
+                    }
                     Text("The value of the last \(n) days, as it stood at the end of each day.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 case .today:
-                    DayGrid(ring: ring, records: page.periods, range: page.range, calendar: calendar)
+                    DayGrid(ring: ring, records: page.periods, range: page.range, calendar: calendar,
+                            selected: selected, onSelect: onSelect)
                 default:
-                    PeriodList(ring: ring, records: page.periods, calendar: calendar)
+                    PeriodList(ring: ring, records: page.periods, calendar: calendar,
+                               selected: selected, onSelect: onSelect)
                 }
             } else if failed {
                 Text("Couldn’t read Health data. Check Everyring’s access in the Health app.")
@@ -335,6 +394,11 @@ struct HistoryCard: View {
 struct RollingChart: View {
     let ring: Ring
     let days: [DayValue]
+    /// The end of the window shown in the period chart, to mark its day.
+    var selectedEnd: Date?
+    /// A day was tapped: show the window ending that day.
+    var onSelectDay: (Date) -> Void = { _ in }
+    @State private var rawSelection: Date?
 
     var body: some View {
         let display = days.map { DayValue(day: $0.day, value: ring.metric.toDisplay($0.value)) }
@@ -358,6 +422,18 @@ struct RollingChart: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+            if let selectedEnd, let day = days.first(where: { $0.day < selectedEnd && selectedEnd.timeIntervalSince($0.day) <= 86_400 + 3_600 }) {
+                RuleMark(x: .value("Day", day.day, unit: .day))
+                    .foregroundStyle(ring.color.color.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+            }
+        }
+        .chartXSelection(value: $rawSelection)
+        .onChange(of: rawSelection) { _, date in
+            // Tapping (or dragging across) the chart picks the window ending on that day.
+            guard let date, let day = days.min(by: { abs($0.day.timeIntervalSince(date)) < abs($1.day.timeIntervalSince(date)) })
+            else { return }
+            onSelectDay(day.day)
         }
         .chartYAxisLabel(ring.metric.unitName())
         .frame(height: 200)
@@ -377,6 +453,8 @@ struct DayGrid: View {
     let records: [PeriodRecord]
     let range: DateInterval
     let calendar: Calendar
+    var selected: DateInterval?
+    var onSelect: (DateInterval, Bool) -> Void = { _, _ in }
 
     var body: some View {
         let byDay = Dictionary(records.map { ($0.interval.start, $0) }, uniquingKeysWith: { a, _ in a })
@@ -393,13 +471,23 @@ struct DayGrid: View {
                     Color.clear.frame(height: 30)
                         .accessibilityHidden(true)
                 } else if let record = byDay[day] {
-                    VStack(spacing: 2) {
-                        RingStackView(rings: [ring.display(record.value)])
-                            .frame(width: 30, height: 30)
-                        dayNumber(day, bold: record.isCurrent)
+                    let isSelected = selected == nil ? record.isCurrent : selected == record.interval
+                    Button {
+                        onSelect(record.interval, record.isCurrent)
+                    } label: {
+                        VStack(spacing: 2) {
+                            RingStackView(rings: [ring.display(record.value)])
+                                .frame(width: 30, height: 30)
+                            dayNumber(day, bold: record.isCurrent || isSelected)
+                        }
+                        .padding(.vertical, 3)
+                        .frame(maxWidth: .infinity)
+                        .background(isSelected ? ring.color.color.opacity(0.15) : .clear, in: .rect(cornerRadius: 10))
                     }
+                    .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibilityText(record))
+                    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 } else {
                     // A day still to come.
                     VStack(spacing: 2) {
@@ -455,10 +543,16 @@ struct PeriodList: View {
     let ring: Ring
     let records: [PeriodRecord]
     let calendar: Calendar
+    var selected: DateInterval?
+    var onSelect: (DateInterval, Bool) -> Void = { _, _ in }
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(records) { record in
+                let isSelected = selected == nil ? record.isCurrent : selected == record.interval
+                Button {
+                    onSelect(record.interval, record.isCurrent)
+                } label: {
                 HStack(spacing: 12) {
                     RingStackView(rings: [ring.display(record.value)])
                         .frame(width: 34, height: 34)
@@ -477,7 +571,13 @@ struct PeriodList: View {
                     }
                 }
                 .padding(.vertical, 6)
+                .padding(.horizontal, 6)
+                .background(isSelected ? ring.color.color.opacity(0.15) : .clear, in: .rect(cornerRadius: 12))
+                .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
                 .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 if record.id != records.last?.id { Divider() }
             }
         }

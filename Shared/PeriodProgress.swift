@@ -18,6 +18,8 @@ struct PeriodProgress: Hashable, Sendable {
     /// Where you would be now going at an even pace to the goal; `nil` for rolling rings, which have no "now" in a
     /// period that started on a fixed day.
     var paceNow: Double?
+    /// A finished period picked in the history (not the one in progress).
+    var isPast = false
 
     /// Whether the chart counts hours (one-day periods) or days.
     static func bucket(for period: RingPeriod) -> Calendar.Component {
@@ -32,9 +34,15 @@ struct PeriodProgress: Hashable, Sendable {
         ring.period.interval(containing: now, calendar: calendar)
     }
 
-    /// - Parameter buckets: values keyed by the start of each hour or day.
-    static func make(for ring: Ring, buckets: [Date: Double], now: Date, calendar: Calendar) -> PeriodProgress {
-        let interval = chartInterval(for: ring, now: now, calendar: calendar)
+    /// - Parameters:
+    ///   - buckets: values keyed by the start of each hour or day.
+    ///   - interval: a past period to show instead of the current one (whole days; for a rolling ring, the window
+    ///     ending on a past day).
+    static func make(for ring: Ring, buckets: [Date: Double], interval chosen: DateInterval? = nil, now: Date,
+                     calendar: Calendar) -> PeriodProgress {
+        let interval = chosen ?? chartInterval(for: ring, now: now, calendar: calendar)
+        let isPast = interval.end <= now
+        let now = min(now, interval.end)
         let bucket = bucket(for: ring.period)
         var points = [Point(date: interval.start, total: 0)]
         var total = 0.0
@@ -49,7 +57,7 @@ struct PeriodProgress: Hashable, Sendable {
         if !ring.period.isRolling, interval.duration > 0 {
             pace = ring.goal * min(1, max(0, now.timeIntervalSince(interval.start) / interval.duration))
         }
-        return PeriodProgress(interval: interval, points: points, bucket: bucket, paceNow: pace)
+        return PeriodProgress(interval: interval, points: points, bucket: bucket, paceNow: pace, isPast: isPast)
     }
 }
 

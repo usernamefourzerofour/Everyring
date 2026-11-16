@@ -48,4 +48,22 @@ struct PeriodProgressTests {
         #expect(abs(hourly.values.reduce(0, +) - 7_200) < 0.001)
         #expect(hourly.keys.allSatisfy { (7...14).contains(cph.component(.hour, from: $0)) })
     }
+
+    @Test func pastWeekRunsToItsEnd() {
+        let now = date(2026, 11, 18, 12, in: cph)
+        let lastWeek = DateInterval(start: date(2026, 11, 9, in: cph), end: date(2026, 11, 16, in: cph))
+        let buckets = [date(2026, 11, 9, in: cph): 40.0, date(2026, 11, 15, in: cph): 70]
+        let progress = PeriodProgress.make(for: ring(.thisWeek), buckets: buckets, interval: lastWeek, now: now,
+                                           calendar: cph)
+        #expect(progress.isPast)
+        #expect(progress.points.count == 8)
+        #expect(progress.points.last?.total == 110)
+        #expect(progress.points.last?.date == lastWeek.end)
+        #expect(progress.paceNow == 100)
+    }
+
+    @Test func currentPeriodIsNotPast() {
+        let now = date(2026, 11, 18, 12, in: cph)
+        #expect(!PeriodProgress.make(for: ring(.thisWeek), buckets: [:], now: now, calendar: cph).isPast)
+    }
 }
