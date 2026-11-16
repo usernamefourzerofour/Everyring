@@ -594,7 +594,8 @@ struct PeriodList: View {
                     RingStackView(rings: [ring.display(record.value)])
                         .frame(width: 34, height: 34)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(record.isCurrent ? ring.period.title : ring.period.label(for: record.interval, calendar: calendar))
+                        Text(record.isCurrent ? ring.period.currentLabel(for: record.interval, calendar: calendar)
+                                              : ring.period.label(for: record.interval, calendar: calendar))
                             .font(.subheadline.weight(record.isCurrent ? .semibold : .regular))
                         Text(ring.progressText(record.value))
                             .font(.caption)

@@ -160,6 +160,17 @@ struct HistoryPage: Hashable, Sendable {
 
 extension RingPeriod {
     /// A finished or current period's name in a history list: "Mon 16 Nov", "16 Nov – 22 Nov", "November 2026".
+    /// The week's number in the calendar's own numbering (ISO weeks with a Monday start in e.g. Denmark).
+    static func weekNumber(of interval: DateInterval, calendar: Calendar) -> Int {
+        calendar.component(.weekOfYear, from: interval.start)
+    }
+
+    /// The name of the period in progress in lists: "This week · Week 47", otherwise the title.
+    func currentLabel(for interval: DateInterval, calendar: Calendar) -> String {
+        guard case .thisWeek = self else { return title }
+        return String(localized: "\(title) · Week \(Self.weekNumber(of: interval, calendar: calendar))")
+    }
+
     func label(for interval: DateInterval, calendar: Calendar) -> String {
         var day = Date.FormatStyle.dateTime.day().month(.abbreviated)
         day.timeZone = calendar.timeZone
@@ -172,6 +183,10 @@ extension RingPeriod {
             var style = Date.FormatStyle.dateTime.month(.wide).year()
             style.timeZone = calendar.timeZone
             return interval.start.formatted(style)
+        case .thisWeek:
+            let last = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.end
+            let week = Self.weekNumber(of: interval, calendar: calendar)
+            return String(localized: "Week \(week) · \(interval.start.formatted(day)) – \(last.formatted(day))")
         default:
             let last = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.end
             return "\(interval.start.formatted(day)) – \(last.formatted(day))"

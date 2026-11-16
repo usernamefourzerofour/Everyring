@@ -81,6 +81,12 @@ struct RingHistoryTests {
         let week = RingPeriod.thisWeek.interval(containing: now, calendar: cph)
         let label = RingPeriod.thisWeek.label(for: week, calendar: cph)
         #expect(label.contains("16") && label.contains("22"))
+        // ISO week 47 (Monday start, as in Denmark).
+        var iso = Calendar(identifier: .iso8601)
+        iso.timeZone = cph.timeZone
+        #expect(RingPeriod.thisWeek.label(for: week, calendar: iso).hasPrefix("Week 47 · "))
+        #expect(RingPeriod.thisWeek.currentLabel(for: week, calendar: iso) == "This week · Week 47")
+        #expect(RingPeriod.today.currentLabel(for: week, calendar: iso) == "Today")
     }
 
     @Test func demoValuesAreStable() {
