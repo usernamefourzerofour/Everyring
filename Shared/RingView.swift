@@ -47,13 +47,16 @@ struct RingDisplay: Identifiable, Hashable {
     var fraction: Double
     /// A limit ring past its limit: drawn in the warning colours.
     var warning = false
+    /// SF Symbol shown at the ring's start when the stack draws labels.
+    var symbol: String?
 
-    init(id: UUID, start: Color, end: Color, fraction: Double, warning: Bool = false) {
+    init(id: UUID, start: Color, end: Color, fraction: Double, warning: Bool = false, symbol: String? = nil) {
         self.id = id
         self.start = start
         self.end = end
         self.fraction = fraction
         self.warning = warning
+        self.symbol = symbol
     }
 
     init(id: UUID, color: RingColor, fraction: Double, warning: Bool = false) {
@@ -85,7 +88,8 @@ extension Ring {
     /// The ring as drawn for `value`.
     func display(_ value: Double) -> RingDisplay {
         let (start, end) = gradient
-        return RingDisplay(id: id, start: start, end: end, fraction: fraction(value), warning: isOverLimit(value))
+        return RingDisplay(id: id, start: start, end: end, fraction: fraction(value), warning: isOverLimit(value),
+                           symbol: symbol)
     }
 
     /// The colour for the ring's text and icons at `value`: the warning colour past a limit.
@@ -100,6 +104,8 @@ struct RingStackView: View {
     var rings: [RingDisplay]
     /// Background track opacity.
     var trackOpacity = 0.18
+    /// Each ring's icon and percentage written on the ring at its start (small widget).
+    var showsLabels = false
 
     /// Free space in the middle, in ring widths, by ring count.
     static func holeUnits(_ count: Int) -> CGFloat {
@@ -130,11 +136,45 @@ struct RingStackView: View {
                                trackOpacity: trackOpacity,
                                warning: ring.warning)
                         .frame(width: radius * 2, height: radius * 2)
+                    if showsLabels {
+                        RingStartLabel(ring: ring, radius: radius, lineWidth: lw)
+                    }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+/// A ring's icon and percentage written on the ring just after its start (12 o'clock), so a small widget needs no
+/// legend. White on the filled ring; in the ring's colour when too little of the ring is filled under the text.
+struct RingStartLabel: View {
+    let ring: RingDisplay
+    let radius: CGFloat
+    let lineWidth: CGFloat
+
+    var body: some View {
+        let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
+        let size = lineWidth * 0.64
+        // Rough width of icon + text, to know whether the filled arc reaches under all of it.
+        let width = size * (1.3 + 0.62 * CGFloat(percent.count))
+        let filledUnder = ring.fraction * 2 * .pi * radius >= width + lineWidth * 0.4
+        let colour = ring.warning ? RingDisplay.warningGradient.start : ring.start
+        HStack(spacing: size * 0.12) {
+            if let symbol = ring.symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: size * 0.9, weight: .bold))
+            }
+            Text(percent)
+                .font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
+        }
+        .foregroundStyle(filledUnder ? Color.white : colour)
+        .fixedSize()
+        // The label's leading edge sits a little right of 12 o'clock, on the middle of the stroke.
+        .alignmentGuide(HorizontalAlignment.center) { _ in -lineWidth * 0.25 }
+        .offset(y: -radius)
+        .accessibilityHidden(true)
     }
 }
 
