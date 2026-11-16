@@ -54,10 +54,13 @@ extension HealthMetric {
     }
 
     private func fractionDigits(locale: Locale) -> ClosedRange<Int> {
-        guard let unit = displayUnit(locale: locale) else { return baseUnit == .hours ? 0...1 : 0...0 }
+        guard let unit = displayUnit(locale: locale) else { return baseUnit == .hours && !isCountOfHours ? 0...1 : 0...0 }
         let oneDecimal: [Dimension] = [UnitLength.kilometers, UnitLength.miles, UnitVolume.liters]
         return oneDecimal.contains(unit) ? 0...1 : 0...0
     }
+
+    /// Stand hours count hours (whole hours in which you stood), not a duration like sleep.
+    private var isCountOfHours: Bool { self == .standHours }
 
     /// The bare number in the display unit, e.g. "8.8" or "6,512".
     func number(_ value: Double, locale: Locale = .current) -> String {
@@ -101,6 +104,8 @@ extension HealthMetric {
                 .formatted(.measurement(width: style == .wide ? .wide : .abbreviated, usage: .asProvided,
                                         numberFormatStyle: .number.precision(.fractionLength(digits)))
                     .locale(locale))
+        case .hours where isCountOfHours:
+            return String(localized: "\(number(value, locale: locale)) \(unitName(style: style, locale: locale))")
         case .minutes, .hours:
             let seconds = (baseUnit == .hours ? value * 3600 : value * 60).rounded(.down)
             let allowed: Set<Duration.UnitsFormatStyle.Unit> =
@@ -116,7 +121,8 @@ extension HealthMetric {
     /// Value and goal in the same unit: "6,512 of 10,000 steps", "8.8 of 62.1 mi", "6 hr 30 min of 8 hr".
     func formatProgress(_ value: Double, goal: Double, style: UnitStyle = .short, locale: Locale = .current) -> String {
         let goalText = format(goal, style: style, locale: locale)
-        let valueText = baseUnit == .hours ? format(value, style: style, locale: locale) : number(value, locale: locale)
+        let isDuration = baseUnit == .hours && !isCountOfHours
+        let valueText = isDuration ? format(value, style: style, locale: locale) : number(value, locale: locale)
         return String(localized: "\(valueText) of \(goalText)")
     }
 }
