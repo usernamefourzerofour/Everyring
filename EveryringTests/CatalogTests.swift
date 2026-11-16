@@ -17,7 +17,8 @@ struct DisplayUnitTests {
     @Test func standHoursAreACount() {
         #expect(HealthMetric.standHours.formatProgress(0, goal: 10, locale: us) == "0 of 10 hr")
         #expect(HealthMetric.standHours.format(7, locale: us) == "7 hr")
-        #expect(HealthMetric.sleep.formatProgress(6.5, goal: 8, locale: us).hasPrefix("6 hr, 30 min of"))
+        let sleep = HealthMetric.sleep.formatProgress(6.5, goal: 8, locale: us)
+        #expect(sleep.contains("6 hr") && sleep.contains("30 min") && sleep.hasSuffix("of 8 hr"))
     }
 
     @Test func progressNeverRoundsUpToGoal() {
