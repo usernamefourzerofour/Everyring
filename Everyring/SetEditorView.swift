@@ -156,7 +156,7 @@ struct RingLabel: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ring.name)
-                Text("\(ring.metric.format(ring.goal)) · \(ring.period.title)")
+                Text("\(ring.goalText) · \(ring.period.title)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

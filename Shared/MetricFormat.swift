@@ -150,13 +150,20 @@ extension Ring {
 
     /// "6,512 of 10,000 steps", shown under the ring name.
     func progressText(_ value: Double) -> String {
-        metric.formatProgress(value, goal: goal)
+        let text = metric.formatProgress(value, goal: goal)
+        return isAverage ? String(localized: "\(text) a day") : text
+    }
+
+    /// The goal as listed: "10,000 steps", or "8 hr a day" for an average ring.
+    var goalText: String {
+        isAverage ? String(localized: "\(metric.format(goal)) a day") : metric.format(goal)
     }
 
     /// What VoiceOver reads: "Running, 14 of 20 kilometers, This week · 3 days left, 70 percent".
     func accessibilityText(_ value: Double, now: Date = .now, calendar: Calendar = .current) -> String {
         let percent = Int((fraction(value) * 100).rounded(.down))
-        let progress = metric.formatProgress(value, goal: goal, style: .wide)
+        let total = metric.formatProgress(value, goal: goal, style: .wide)
+        let progress = isAverage ? String(localized: "\(total) a day on average") : total
         let status = period.status(now: now, calendar: calendar)
         if isOverLimit(value) {
             return String(localized: "\(name), \(progress), \(status), \(percent) percent, over the limit")

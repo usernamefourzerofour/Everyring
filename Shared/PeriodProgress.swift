@@ -4,7 +4,7 @@ import Foundation
 struct PeriodProgress: Hashable, Sendable {
     struct Point: Identifiable, Hashable, Sendable {
         var date: Date
-        /// Running total in the metric's base unit.
+        /// Running total in the metric's base unit (for an average ring: the running average per day).
         var total: Double
         var id: Date { date }
     }
@@ -44,17 +44,21 @@ struct PeriodProgress: Hashable, Sendable {
         let isPast = interval.end <= now
         let now = min(now, interval.end)
         let bucket = bucket(for: ring.period)
-        var points = [Point(date: interval.start, total: 0)]
+        let average = ring.isAverage && bucket == .day
+        // An average ring charts its running average per day, which has no meaningful zero at the start.
+        var points = average ? [] : [Point(date: interval.start, total: 0)]
         var total = 0.0
+        var days = 0
         var start = interval.start
         while start < min(interval.end, now) {
             guard let next = calendar.date(byAdding: bucket, value: 1, to: start) else { break }
             total += buckets[start] ?? 0
-            points.append(Point(date: min(next, now), total: total))
+            days += 1
+            points.append(Point(date: min(next, now), total: average ? total / Double(days) : total))
             start = next
         }
         var pace: Double?
-        if !ring.period.isRolling, interval.duration > 0 {
+        if !ring.period.isRolling, !average, interval.duration > 0 {
             pace = ring.goal * min(1, max(0, now.timeIntervalSince(interval.start) / interval.duration))
         }
         return PeriodProgress(interval: interval, points: points, bucket: bucket, paceNow: pace, isPast: isPast)
@@ -94,17 +98,14 @@ struct DailyPace: Hashable, Sendable {
     /// `nil` for one-day periods, where the average is the value itself.
     static func make(for ring: Ring, value: Double, interval: DateInterval, now: Date,
                      calendar: Calendar) -> DailyPace? {
-        let wholeDays = calendar.dateComponents([.day], from: calendar.startOfDay(for: interval.start),
-                                                to: calendar.startOfDay(for: interval.end.addingTimeInterval(-1))).day.map { $0 + 1 } ?? 1
+        // An average ring already shows its value per day.
+        guard !ring.isAverage else { return nil }
+        let wholeDays = RingPeriod.wholeDays(of: interval, calendar: calendar)
         guard wholeDays > 1 else { return nil }
-        let inProgress = interval.end > now
-        var days = wholeDays
+        let days = ring.period.averageDays(in: interval, now: now, calendar: calendar)
         var daysLeft = 0
-        if inProgress && !ring.period.isRolling {
-            let elapsed = (calendar.dateComponents([.day], from: calendar.startOfDay(for: interval.start),
-                                                   to: calendar.startOfDay(for: now)).day ?? 0) + 1
-            days = max(1, min(wholeDays, elapsed))
-            daysLeft = max(0, wholeDays - elapsed + 1)
+        if interval.end > now && !ring.period.isRolling {
+            daysLeft = max(0, wholeDays - days + 1)
         }
         var pace = DailyPace(average: value / Double(days), days: days, daysLeft: daysLeft)
         let remaining = ring.goal - value
@@ -112,5 +113,32 @@ struct DailyPace: Hashable, Sendable {
             pace.perDayLeft = remaining / Double(daysLeft)
         }
         return pace
+    }
+}
+
+extension RingPeriod {
+    /// The calendar days `interval` touches.
+    static func wholeDays(of interval: DateInterval, calendar: Calendar) -> Int {
+        let first = calendar.startOfDay(for: interval.start)
+        let last = calendar.startOfDay(for: interval.end.addingTimeInterval(-1))
+        return max(1, (calendar.dateComponents([.day], from: first, to: last).day ?? 0) + 1)
+    }
+
+    /// The days a daily average over `interval` divides by: all its days for a finished period or a rolling window
+    /// (today counts as one of them), and the days so far, today included, for a fixed period in progress.
+    func averageDays(in interval: DateInterval, now: Date, calendar: Calendar) -> Int {
+        let whole = Self.wholeDays(of: interval, calendar: calendar)
+        guard interval.end > now, !isRolling else { return whole }
+        let elapsed = (calendar.dateComponents([.day], from: calendar.startOfDay(for: interval.start),
+                                               to: calendar.startOfDay(for: now)).day ?? 0) + 1
+        return max(1, min(whole, elapsed))
+    }
+}
+
+extension Ring {
+    /// The value the ring shows for a period's total: the total itself, or for an average ring the average per day.
+    func measure(_ total: Double, in interval: DateInterval, now: Date, calendar: Calendar) -> Double {
+        guard isAverage else { return total }
+        return total / Double(period.averageDays(in: interval, now: now, calendar: calendar))
     }
 }

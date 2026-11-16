@@ -19,7 +19,8 @@ enum ProgressUpdater {
         for ring in library.sets.flatMap(\.rings) {
             let interval = ring.period.interval(now: now, calendar: calendar)
             do {
-                let value = try await health.value(of: ring.metric, in: interval)
+                let total = try await health.value(of: ring.metric, in: interval)
+                let value = ring.measure(total, in: interval, now: now, calendar: calendar)
                 result.snapshots[ring.id] = RingSnapshot(value: value, intervalStart: interval.start,
                                                          intervalEnd: interval.end, updated: now)
             } catch {

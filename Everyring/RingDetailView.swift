@@ -192,7 +192,7 @@ struct ProgressChartCard: View {
                         .foregroundStyle(lineColor)
                         .symbolSize(60)
                 }
-                if !ring.period.isRolling {
+                if progress.paceNow != nil {
                     // Even pace from nothing at the start to the goal at the end.
                     // An explicit colour: a series without one gets Swift Charts' default blue.
                     let paceColor = ring.accent.opacity(0.55)
@@ -270,6 +270,9 @@ struct ProgressChartCard: View {
                                      : String(localized: "Ended at \(result).")
         }
         guard let pace = progress.paceNow else {
+            if ring.isAverage {
+                return String(localized: "Your average per day so far, day by day.")
+            }
             return String(localized: "Your total over the window, day by day.")
         }
         let difference = ring.metric.format(abs(total - pace))

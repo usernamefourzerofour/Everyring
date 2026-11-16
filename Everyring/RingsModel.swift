@@ -169,7 +169,7 @@ final class RingsModel {
             let current = ring.period.interval(now: now, calendar: calendar)
             let days = (0..<ring.period.nominalDays).compactMap { calendar.date(byAdding: .day, value: $0, to: current.start) }
                 .filter { $0 <= now }
-            for day in days { daily[day] = value(for: ring) / Double(max(1, days.count)) }
+            for day in days { daily[day] = ring.isAverage ? value(for: ring) : value(for: ring) / Double(max(1, days.count)) }
         } else {
             do {
                 daily = try await dailyValues(of: ring.metric, from: start, now: now, calendar: calendar)
@@ -221,7 +221,7 @@ final class RingsModel {
         } else if Self.isDemo {
             // Spread the home screen's demo value over the days so far, so the chart ends where the ring is.
             let days = DemoHistory.daily(for: ring, from: interval.start, to: end, calendar: calendar).keys.sorted()
-            let share = value(for: ring) / Double(max(1, days.count))
+            let share = ring.isAverage ? value(for: ring) : value(for: ring) / Double(max(1, days.count))
             buckets = Dictionary(uniqueKeysWithValues: days.map { ($0, share) })
         } else {
             // Daily values from the cache cover past periods too (it reaches back as far as the history needs).

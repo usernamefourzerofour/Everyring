@@ -147,6 +147,14 @@ struct RingTint: Codable, Hashable, Sendable {
     var blue: Double
 }
 
+/// What a ring of several days measures against its goal.
+enum GoalAggregation: String, Codable, CaseIterable, Sendable {
+    /// The period's total (steps this week). The goal is for the whole period.
+    case total
+    /// The average per day over the period (8 hours of sleep a night over the last 30 days). The goal is per day.
+    case dailyAverage
+}
+
 /// Whether a ring's goal is something to reach or a limit to stay under.
 enum GoalKind: String, Codable, CaseIterable, Sendable {
     /// Reach at least the goal (steps, exercise). Closes at 100 % and may wrap around.
@@ -168,9 +176,12 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var goalKind: GoalKind = .reach
     /// A freely picked colour that replaces `color` when set.
     var customTint: RingTint?
+    /// Total or daily average; only counts for periods of several days (see `isAverage`).
+    var aggregation: GoalAggregation = .total
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
-         period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil) {
+         period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
+         aggregation: GoalAggregation = .total) {
         self.id = id
         self.name = name
         self.color = color
@@ -180,10 +191,11 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.period = period
         self.goalKind = goalKind
         self.customTint = customTint
+        self.aggregation = aggregation
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, color, symbol, metric, goal, period, goalKind, customTint
+        case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation
     }
 
     init(from decoder: Decoder) throws {
@@ -198,9 +210,13 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         // Rings saved before limits existed are goals to reach.
         goalKind = try c.decodeIfPresent(GoalKind.self, forKey: .goalKind) ?? .reach
         customTint = try c.decodeIfPresent(RingTint.self, forKey: .customTint)
+        aggregation = try c.decodeIfPresent(GoalAggregation.self, forKey: .aggregation) ?? .total
     }
 
     var isLimit: Bool { goalKind == .limit }
+
+    /// Whether the ring shows a daily average (its goal is per day). A one-day period is its own average.
+    var isAverage: Bool { aggregation == .dailyAverage && period.nominalDays > 1 }
 
     /// Whether a finished period met the ring: reached the goal, or (for a limit) logged something and stayed
     /// within it. A goal of zero or less is never met.

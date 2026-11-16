@@ -38,7 +38,8 @@ struct ProgressCache: Codable, Hashable, Sendable {
         let rings = library.sets.flatMap(\.rings)
         for ring in rings {
             guard let new = snapshots[ring.id] else { continue }
-            if Self.shouldReplace(self.rings[ring.id], with: new, rolling: ring.period.isRolling,
+            // A daily average can drop when a new day starts, like a rolling window.
+            if Self.shouldReplace(self.rings[ring.id], with: new, rolling: ring.period.isRolling || ring.isAverage,
                                   allowDecrease: allowDecrease) {
                 self.rings[ring.id] = new
             }

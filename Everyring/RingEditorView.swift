@@ -91,13 +91,21 @@ struct RingEditorView: View {
                 }
                 .pickerStyle(.segmented)
                 .listRowSeparator(.hidden)
+                if ring.period.nominalDays > 1 {
+                    Picker("Count", selection: $ring.aggregation) {
+                        Text("Total").tag(GoalAggregation.total)
+                        Text("Daily average").tag(GoalAggregation.dailyAverage)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowSeparator(.hidden)
+                }
                 HStack {
                     TextField(ring.isLimit ? "Limit" : "Goal", value: Binding(
                         get: { displayGoal },
                         set: { displayGoal = $0; goalEdited = true }
                     ), format: .number)
                     .keyboardType(.decimalPad)
-                    Text(ring.metric.unitName())
+                    Text(ring.isAverage ? String(localized: "\(ring.metric.unitName()) a day") : ring.metric.unitName())
                         .foregroundStyle(.secondary)
                 }
             } header: {
@@ -105,6 +113,8 @@ struct RingEditorView: View {
             } footer: {
                 if displayGoal <= 0 {
                     Text("The goal must be more than zero.")
+                } else if ring.isAverage {
+                    Text("A daily average: the ring compares your average per day over the period with the goal. Days without data count as zero.")
                 } else if ring.isLimit {
                     Text("A limit: the ring turns red when you go over it. A period counts when you logged something and stayed under.")
                 } else {
@@ -186,12 +196,21 @@ struct RingEditorView: View {
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
             if !goalEdited {
-                displayGoal = Self.rounded(new.toDisplay(new.suggestedGoal(for: ring.period)))
+                displayGoal = Self.rounded(new.toDisplay(new.suggestedGoal(for: ring.isAverage ? .today : ring.period)))
                 ring.goalKind = new.defaultGoalKind
             }
         }
         .onChange(of: ring.period) { _, period in
-            if !goalEdited { displayGoal = Self.rounded(ring.metric.toDisplay(ring.metric.suggestedGoal(for: period))) }
+            // An average goal is per day, so it stays the same when the period changes.
+            if !goalEdited {
+                displayGoal = Self.rounded(ring.metric.toDisplay(ring.metric.suggestedGoal(for: ring.isAverage ? .today : period)))
+            }
+        }
+        .onChange(of: ring.aggregation) { old, new in
+            // Keep the goal meaning the same: a week's 70,000 steps is 10,000 a day.
+            let days = Double(ring.period.nominalDays)
+            guard days > 1, old != new else { return }
+            displayGoal = Self.rounded(new == .dailyAverage ? displayGoal / days : displayGoal * days)
         }
     }
 }
@@ -215,7 +234,7 @@ struct RingPreview: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(ring.name.isEmpty ? ring.metric.title : ring.name)
                     .font(.headline)
-                Text(ring.metric.format(ring.goal))
+                Text(ring.goalText)
                     .font(.subheadline)
                 Text(ring.period.status())
                     .font(.caption)
