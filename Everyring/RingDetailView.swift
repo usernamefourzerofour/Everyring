@@ -306,10 +306,15 @@ struct HistoryCard: View {
             .disabled(offset <= oldestOffset)
             .accessibilityLabel(isYear ? "Previous year" : "Previous month")
 
-            Text(page?.title(calendar: calendar) ?? "")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .frame(minWidth: 110)
-                .contentTransition(.numericText())
+            // Always one line: the short month name if the full one doesn't fit, then a slightly smaller font.
+            ViewThatFits(in: .horizontal) {
+                Text(page?.title(calendar: calendar) ?? "")
+                Text(page?.title(calendar: calendar, short: true) ?? "")
+            }
+            .font(.subheadline.weight(.semibold).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .frame(minWidth: 80)
 
             Button {
                 offset += 1
@@ -322,6 +327,7 @@ struct HistoryCard: View {
         }
         .buttonStyle(.borderless)
         .tint(ring.color.color)
+        .layoutPriority(1)
     }
 }
 

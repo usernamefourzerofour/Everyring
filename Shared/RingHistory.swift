@@ -145,10 +145,11 @@ struct HistoryPage: Hashable, Sendable {
         return page
     }
 
-    /// "November 2026", or "2026" for a year page.
-    func title(calendar: Calendar) -> String {
+    /// "November 2026" ("Nov 2026" when `short`), or "2026" for a year page.
+    func title(calendar: Calendar, short: Bool = false) -> String {
         var style = calendar.dateInterval(of: .year, for: range.start) == range
-            ? Date.FormatStyle.dateTime.year() : Date.FormatStyle.dateTime.month(.wide).year()
+            ? Date.FormatStyle.dateTime.year()
+            : Date.FormatStyle.dateTime.month(short ? .abbreviated : .wide).year()
         style.timeZone = calendar.timeZone
         return range.start.formatted(style)
     }
