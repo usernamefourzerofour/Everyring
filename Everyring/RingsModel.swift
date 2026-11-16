@@ -211,7 +211,10 @@ final class RingsModel {
                 buckets = hourly
             }
         } else if Self.isDemo {
-            buckets = DemoHistory.daily(for: ring, from: interval.start, to: now, calendar: calendar)
+            // Spread the home screen's demo value over the days so far, so the chart ends where the ring is.
+            let days = DemoHistory.daily(for: ring, from: interval.start, to: now, calendar: calendar).keys.sorted()
+            let share = value(for: ring) / Double(max(1, days.count))
+            buckets = Dictionary(uniqueKeysWithValues: days.map { ($0, share) })
         } else {
             guard let daily = try? await dailyValues(of: ring.metric, from: interval.start, now: now, calendar: calendar)
             else { return nil }

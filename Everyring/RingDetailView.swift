@@ -117,14 +117,21 @@ struct ProgressChartCard: View {
                 }
                 if !ring.period.isRolling {
                     // Even pace from nothing at the start to the goal at the end.
+                    // An explicit colour: a series without one gets Swift Charts' default blue.
+                    let paceColor = ring.color.color.opacity(0.55)
                     LineMark(x: .value("Time", progress.interval.start), y: .value("Total", 0.0),
                              series: .value("Series", "Pace"))
-                        .foregroundStyle(.secondary)
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                        .foregroundStyle(paceColor)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [3, 4]))
                     LineMark(x: .value("Time", progress.interval.end), y: .value("Total", goal),
                              series: .value("Series", "Pace"))
-                        .foregroundStyle(.secondary)
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                        .foregroundStyle(paceColor)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [3, 4]))
+                        .annotation(position: .bottom, alignment: .trailing, spacing: 4) {
+                            Text("Even pace")
+                                .font(.caption2)
+                                .foregroundStyle(ring.color.color)
+                        }
                 }
                 RuleMark(y: .value("Goal", goal))
                     .foregroundStyle(ring.isLimit ? RingDisplay.warningGradient.end : Color.secondary)
