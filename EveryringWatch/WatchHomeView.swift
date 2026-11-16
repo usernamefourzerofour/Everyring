@@ -85,7 +85,7 @@ struct WatchRingRow: View {
             Spacer(minLength: 2)
             Text(ring.fraction(value), format: .percent.precision(.fractionLength(0)))
                 .font(.body.monospacedDigit().weight(.semibold))
-                .foregroundStyle(ring.color.color)
+                .foregroundStyle(ring.tint(value))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ring.accessibilityText(value))
@@ -102,7 +102,7 @@ struct WatchRingDetail: View {
             let value = model.value(for: ring)
             ScrollView {
                 VStack(spacing: 8) {
-                    RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: ring.fraction(value))])
+                    RingStackView(rings: [ring.display(value)])
                         .frame(height: 90)
                         .overlay {
                             Text(ring.fraction(value), format: .percent.precision(.fractionLength(0)))

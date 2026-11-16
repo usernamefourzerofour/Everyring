@@ -185,7 +185,7 @@ struct RingRow: View {
 
             Text(ring.fraction(value), format: .percent.precision(.fractionLength(0)))
                 .font(.title3.monospacedDigit().weight(.semibold))
-                .foregroundStyle(ring.color.color)
+                .foregroundStyle(ring.tint(value))
         }
         .padding(14)
         .background(.background.secondary, in: .rect(cornerRadius: 20))

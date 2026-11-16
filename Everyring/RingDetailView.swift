@@ -17,13 +17,13 @@ struct RingDetailView: View {
             let value = model.value(for: ring)
             ScrollView {
                 VStack(spacing: 24) {
-                    RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: ring.fraction(value))])
+                    RingStackView(rings: [ring.display(value)])
                         .frame(maxWidth: 240)
                         .overlay {
                             VStack(spacing: 2) {
                                 Image(systemName: ring.symbol)
                                     .font(.title)
-                                    .foregroundStyle(ring.color.color)
+                                    .foregroundStyle(ring.tint(value))
                                 Text(ring.fraction(value), format: .percent.precision(.fractionLength(0)))
                                     .font(.title2.monospacedDigit().weight(.semibold))
                             }
@@ -96,7 +96,8 @@ struct StreakCard: View {
             }
             Text(ring.period.isRolling
                  ? LocalizedStringKey("Days in a row on which the last \(ring.period.nominalDays) days reached your goal.")
-                 : "Periods in a row in which you closed the ring.")
+                 : ring.isLimit ? "Periods in a row in which you logged something and stayed under the limit."
+                                : "Periods in a row in which you closed the ring.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -232,7 +233,7 @@ struct RollingChart: View {
     }
 
     private var accessibilitySummary: String {
-        let above = days.filter { Streak.isClosed(value: $0.value, goal: ring.goal) }.count
+        let above = days.filter { ring.isMet($0.value) }.count
         return String(localized: "Chart of the last \(days.count) days. Above the goal on \(above) of them.")
     }
 }
@@ -260,7 +261,7 @@ struct DayGrid: View {
                         .accessibilityHidden(true)
                 } else if let record = byDay[day] {
                     VStack(spacing: 2) {
-                        RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: ring.fraction(record.value))])
+                        RingStackView(rings: [ring.display(record.value)])
                             .frame(width: 30, height: 30)
                         dayNumber(day, bold: record.isCurrent)
                     }
@@ -326,7 +327,7 @@ struct PeriodList: View {
         VStack(spacing: 0) {
             ForEach(records) { record in
                 HStack(spacing: 12) {
-                    RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: ring.fraction(record.value))])
+                    RingStackView(rings: [ring.display(record.value)])
                         .frame(width: 34, height: 34)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(record.isCurrent ? ring.period.title : ring.period.label(for: record.interval, calendar: calendar))

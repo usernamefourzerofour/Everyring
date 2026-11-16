@@ -27,7 +27,8 @@ struct RingsEntry: TimelineEntry {
         var value: Double
         var id: Ring.ID { ring.id }
         var fraction: Double { ring.fraction(value) }
-        var display: RingDisplay { RingDisplay(id: ring.id, color: ring.color, fraction: fraction) }
+        var display: RingDisplay { ring.display(value) }
+        var tint: Color { ring.tint(value) }
     }
 
     let date: Date
@@ -153,7 +154,7 @@ struct RingsWidgetView: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
-                    .foregroundStyle(item.ring.color.color)
+                    .foregroundStyle(item.tint)
                 }
             }
             .fixedSize()
@@ -168,7 +169,7 @@ struct RingsWidgetView: View {
                 ForEach(entry.items) { item in
                     HStack(spacing: 6) {
                         Image(systemName: item.ring.symbol)
-                            .foregroundStyle(item.ring.color.color)
+                            .foregroundStyle(item.tint)
                             .frame(width: 18)
                         Text(item.ring.name)
                             .lineLimit(1)
@@ -176,7 +177,7 @@ struct RingsWidgetView: View {
                         Text(item.fraction, format: .percent.precision(.fractionLength(0)))
                             .monospacedDigit()
                             .fontWeight(.semibold)
-                            .foregroundStyle(item.ring.color.color)
+                            .foregroundStyle(item.tint)
                     }
                     .font(entry.items.count > 3 ? .caption : .subheadline)
                 }
@@ -195,7 +196,7 @@ struct RingsWidgetView: View {
                 ForEach(entry.items) { item in
                     HStack(spacing: 8) {
                         Image(systemName: item.ring.symbol)
-                            .foregroundStyle(item.ring.color.color)
+                            .foregroundStyle(item.tint)
                             .frame(width: 22)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(item.ring.name)
@@ -209,7 +210,7 @@ struct RingsWidgetView: View {
                         Spacer(minLength: 4)
                         Text(item.fraction, format: .percent.precision(.fractionLength(0)))
                             .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(item.ring.color.color)
+                            .foregroundStyle(item.tint)
                     }
                 }
             }

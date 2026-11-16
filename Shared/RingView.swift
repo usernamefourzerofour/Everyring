@@ -44,6 +44,23 @@ struct RingDisplay: Identifiable, Hashable {
     var color: RingColor
     /// Fraction of the goal; may exceed 1 (the ring wraps around).
     var fraction: Double
+    /// A limit ring past its limit: drawn in the warning colours.
+    var warning = false
+
+    /// Warm red, used only for limits that were exceeded (no ring colour can be picked to look like it).
+    static let warningGradient = (start: Color(hex: 0xC4282D), end: Color(hex: 0xFF6A5C))
+}
+
+extension Ring {
+    /// The ring as drawn for `value`.
+    func display(_ value: Double) -> RingDisplay {
+        RingDisplay(id: id, color: color, fraction: fraction(value), warning: isOverLimit(value))
+    }
+
+    /// The colour for the ring's text and icons at `value`: the warning colour past a limit.
+    func tint(_ value: Double) -> Color {
+        isOverLimit(value) ? RingDisplay.warningGradient.end : color.color
+    }
 }
 
 /// Concentric rings, outermost first. Stroke width scales with the ring count so up to five rings stay readable in a
@@ -78,7 +95,8 @@ struct RingStackView: View {
             ZStack {
                 ForEach(Array(rings.enumerated()), id: \.element.id) { index, ring in
                     let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + Self.gapUnits)
-                    SingleRing(color: ring.color, fraction: ring.fraction, lineWidth: lw, trackOpacity: trackOpacity)
+                    SingleRing(color: ring.color, fraction: ring.fraction, lineWidth: lw, trackOpacity: trackOpacity,
+                               warning: ring.warning)
                         .frame(width: radius * 2, height: radius * 2)
                 }
             }
@@ -95,9 +113,10 @@ struct SingleRing: View {
     var fraction: Double
     var lineWidth: CGFloat
     var trackOpacity = 0.18
+    var warning = false
 
     var body: some View {
-        let (start, end) = color.gradient
+        let (start, end) = warning ? RingDisplay.warningGradient : color.gradient
         let f = max(0, fraction)
         let wraps = f > 1
         // Position of the ring end within its last lap.

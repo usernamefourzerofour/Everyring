@@ -58,7 +58,7 @@ struct RingHistory: Hashable, Sendable {
 
     static func make(for ring: Ring, daily: [Date: Double], now: Date = .now, calendar: Calendar) -> RingHistory {
         let period = ring.period
-        let closed = { (value: Double) in Streak.isClosed(value: value, goal: ring.goal) }
+        let closed = ring.isMet
         let current = period.interval(now: now, calendar: calendar)
         let currentValue = sum(daily, in: current, calendar: calendar)
 
@@ -66,7 +66,7 @@ struct RingHistory: Hashable, Sendable {
                                       calendar: calendar)
         let values = lookback.map { sum(daily, in: $0, calendar: calendar) }
         let streakCount = min(period.streakLookback, lookback.count)
-        let streak = Streak(finished: values.prefix(streakCount).map(closed), inProgress: closed(currentValue))
+        let streak = Streak(ring: ring, finished: Array(values.prefix(streakCount)), inProgress: currentValue)
 
         var history = RingHistory(streak: streak)
         let shown = shownCount(for: period)
@@ -77,8 +77,8 @@ struct RingHistory: Hashable, Sendable {
             }
             history.days = past + [DayValue(day: calendar.startOfDay(for: now), value: currentValue)]
         } else {
-            history.periods = [PeriodRecord(interval: current, value: currentValue, closed: closed(currentValue),
-                                            isCurrent: true)]
+            history.periods = [PeriodRecord(interval: current, value: currentValue,
+                                            closed: ring.isMetInProgress(currentValue), isCurrent: true)]
                 + zip(lookback, values).prefix(shown - 1).map { interval, value in
                     PeriodRecord(interval: interval, value: value, closed: closed(value), isCurrent: false)
                 }
@@ -120,7 +120,6 @@ struct HistoryPage: Hashable, Sendable {
                      calendar: Calendar) -> HistoryPage {
         var page = HistoryPage(range: range)
         let current = ring.period.interval(now: now, calendar: calendar)
-        let closed = { (value: Double) in Streak.isClosed(value: value, goal: ring.goal) }
         if ring.period.isRolling {
             var day = calendar.startOfDay(for: range.start)
             let today = calendar.startOfDay(for: now)
@@ -136,7 +135,8 @@ struct HistoryPage: Hashable, Sendable {
                 if interval.start <= now {
                     let isCurrent = interval.start == current.start
                     let value = RingHistory.sum(daily, in: isCurrent ? current : interval, calendar: calendar)
-                    page.periods.append(PeriodRecord(interval: interval, value: value, closed: closed(value),
+                    let closed = isCurrent ? ring.isMetInProgress(value) : ring.isMet(value)
+                    page.periods.append(PeriodRecord(interval: interval, value: value, closed: closed,
                                                      isCurrent: isCurrent))
                 }
                 interval = ring.period.previous(interval, calendar: calendar)

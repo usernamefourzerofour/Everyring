@@ -152,6 +152,9 @@ extension Ring {
         let percent = Int((fraction(value) * 100).rounded(.down))
         let progress = metric.formatProgress(value, goal: goal, style: .wide)
         let status = period.status(now: now, calendar: calendar)
+        if isOverLimit(value) {
+            return String(localized: "\(name), \(progress), \(status), \(percent) percent, over the limit")
+        }
         return String(localized: "\(name), \(progress), \(status), \(percent) percent")
     }
 }

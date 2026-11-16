@@ -116,6 +116,14 @@ extension HealthMetric {
         return max(step, (value / step).rounded() * step)
     }
 
+    /// Calories eaten, sugar and caffeine are usually limits to stay under; everything else a goal to reach.
+    var defaultGoalKind: GoalKind {
+        switch self {
+        case .quantity(.dietaryEnergy), .quantity(.sugar), .quantity(.caffeine): .limit
+        default: .reach
+        }
+    }
+
     /// Metrics that can be limited to one workout kind.
     var isWorkout: Bool {
         if case .workouts = self { true } else { false }
@@ -216,6 +224,7 @@ extension Ring {
         let period = metric.defaultPeriod
         let color = RingColor.allCases.first { !usedColors.contains($0) } ?? .sunrise
         return Ring(name: metric.title, color: color, symbol: metric.defaultSymbol, metric: metric,
-                    goal: metric.suggestedGoal(for: period, locale: locale), period: period)
+                    goal: metric.suggestedGoal(for: period, locale: locale), period: period,
+                    goalKind: metric.defaultGoalKind)
     }
 }

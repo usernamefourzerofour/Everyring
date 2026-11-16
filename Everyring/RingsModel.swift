@@ -54,7 +54,7 @@ final class RingsModel {
     func value(for ring: Ring) -> Double { values[ring.id] ?? 0 }
 
     func displays(for set: RingSet) -> [RingDisplay] {
-        set.rings.map { RingDisplay(id: $0.id, color: $0.color, fraction: $0.fraction(value(for: $0))) }
+        set.rings.map { $0.display(value(for: $0)) }
     }
 
     // MARK: Lookup and editing
@@ -238,7 +238,9 @@ final class RingsModel {
         var newlyClosed: [Ring] = []
         for ring in library.sets.flatMap(\.rings) {
             guard let snapshot = snapshots[ring.id] else { continue }
-            let closed = Streak.isClosed(value: snapshot.value, goal: ring.goal)
+            // Only goals to reach are celebrated; a limit is met by not doing something.
+            guard !ring.isLimit else { continue }
+            let closed = ring.isMet(snapshot.value)
             if ring.period.isRolling {
                 let key = ring.id.uuidString
                 if closed, rollingClosed[key] == false { newlyClosed.append(ring) }

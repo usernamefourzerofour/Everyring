@@ -136,6 +136,14 @@ enum RingColor: String, Codable, CaseIterable, Sendable {
     case sunrise, tangerine, magenta, violet, indigo, lagoon, fern, citrus
 }
 
+/// Whether a ring's goal is something to reach or a limit to stay under.
+enum GoalKind: String, Codable, CaseIterable, Sendable {
+    /// Reach at least the goal (steps, exercise). Closes at 100 % and may wrap around.
+    case reach
+    /// Stay under the goal (calories eaten, sugar). Turns a warning colour past 100 %.
+    case limit
+}
+
 struct Ring: Codable, Hashable, Identifiable, Sendable {
     var id = UUID()
     var name: String
@@ -146,6 +154,55 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     /// In `metric.baseUnit`.
     var goal: Double
     var period: RingPeriod
+    var goalKind: GoalKind = .reach
+
+    init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
+         period: RingPeriod, goalKind: GoalKind = .reach) {
+        self.id = id
+        self.name = name
+        self.color = color
+        self.symbol = symbol
+        self.metric = metric
+        self.goal = goal
+        self.period = period
+        self.goalKind = goalKind
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, color, symbol, metric, goal, period, goalKind
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        color = try c.decode(RingColor.self, forKey: .color)
+        symbol = try c.decode(String.self, forKey: .symbol)
+        metric = try c.decode(HealthMetric.self, forKey: .metric)
+        goal = try c.decode(Double.self, forKey: .goal)
+        period = try c.decode(RingPeriod.self, forKey: .period)
+        // Rings saved before limits existed are goals to reach.
+        goalKind = try c.decodeIfPresent(GoalKind.self, forKey: .goalKind) ?? .reach
+    }
+
+    var isLimit: Bool { goalKind == .limit }
+
+    /// Whether a finished period met the ring: reached the goal, or (for a limit) logged something and stayed
+    /// within it. A goal of zero or less is never met.
+    func isMet(_ value: Double) -> Bool {
+        guard goal > 0 else { return false }
+        return isLimit ? value > 0 && value <= goal : value >= goal
+    }
+
+    /// Whether the period in progress already counts towards the streak. A limit is only met once its period is over.
+    func isMetInProgress(_ value: Double) -> Bool {
+        isLimit ? false : isMet(value)
+    }
+
+    /// A limit ring past its limit.
+    func isOverLimit(_ value: Double) -> Bool {
+        isLimit && goal > 0 && value > goal
+    }
 }
 
 struct RingSet: Codable, Hashable, Identifiable, Sendable {

@@ -49,4 +49,9 @@ struct Streak: Codable, Hashable, Sendable {
             .map { isClosed(value: value($0), goal: goal) }
         return Streak(finished: finished, inProgress: isClosed(value: value(current), goal: goal))
     }
+
+    /// Streak for a ring, taking its goal kind into account.
+    init(ring: Ring, finished: [Double], inProgress: Double) {
+        self.init(finished: finished.map(ring.isMet), inProgress: ring.isMetInProgress(inProgress))
+    }
 }

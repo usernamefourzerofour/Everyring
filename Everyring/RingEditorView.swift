@@ -85,8 +85,14 @@ struct RingEditorView: View {
             }
 
             Section {
+                Picker("Goal type", selection: $ring.goalKind) {
+                    Text("Reach").tag(GoalKind.reach)
+                    Text("Stay under").tag(GoalKind.limit)
+                }
+                .pickerStyle(.segmented)
+                .listRowSeparator(.hidden)
                 HStack {
-                    TextField("Goal", value: Binding(
+                    TextField(ring.isLimit ? "Limit" : "Goal", value: Binding(
                         get: { displayGoal },
                         set: { displayGoal = $0; goalEdited = true }
                     ), format: .number)
@@ -97,7 +103,13 @@ struct RingEditorView: View {
             } header: {
                 Text("Goal")
             } footer: {
-                if displayGoal <= 0 { Text("The goal must be more than zero.") }
+                if displayGoal <= 0 {
+                    Text("The goal must be more than zero.")
+                } else if ring.isLimit {
+                    Text("A limit: the ring turns red when you go over it. A period counts when you logged something and stayed under.")
+                } else {
+                    Text("A goal to reach: the ring closes at 100 % and can go on past it.")
+                }
             }
 
             Section {
@@ -154,7 +166,10 @@ struct RingEditorView: View {
             if !nameEdited || ring.symbol == old.defaultSymbol { ring.symbol = new.defaultSymbol }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
-            if !goalEdited { displayGoal = Self.rounded(new.toDisplay(new.suggestedGoal(for: ring.period))) }
+            if !goalEdited {
+                displayGoal = Self.rounded(new.toDisplay(new.suggestedGoal(for: ring.period)))
+                ring.goalKind = new.defaultGoalKind
+            }
         }
         .onChange(of: ring.period) { _, period in
             if !goalEdited { displayGoal = Self.rounded(ring.metric.toDisplay(ring.metric.suggestedGoal(for: period))) }
