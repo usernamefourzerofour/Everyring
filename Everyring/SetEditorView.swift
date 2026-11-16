@@ -7,6 +7,8 @@ struct SetEditorView: View {
     @State private var draft: RingSet
     @State private var confirmDelete = false
     @State private var path: [Route] = []
+    /// Reordering mode: the system's drag handles (≡) on every ring.
+    @State private var editMode: EditMode = .inactive
     private let isNew: Bool
     private let onSaved: (RingSet) -> Void
 
@@ -42,22 +44,46 @@ struct SetEditorView: View {
 
                 Section {
                     ForEach(draft.rings) { ring in
-                        NavigationLink(value: Route.ring(ring.id)) {
+                        if editMode.isEditing {
                             RingLabel(ring: ring)
+                        } else {
+                            NavigationLink(value: Route.ring(ring.id)) {
+                                HStack {
+                                    RingLabel(ring: ring)
+                                    Spacer()
+                                    if draft.rings.count > 1 {
+                                        // A hint that the order can be changed (Reorder, or touch and hold).
+                                        Image(systemName: "line.3.horizontal")
+                                            .foregroundStyle(.tertiary)
+                                            .accessibilityHidden(true)
+                                    }
+                                }
+                            }
                         }
                     }
                     .onMove { draft.rings.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { draft.rings.remove(atOffsets: $0) }
 
-                    if draft.canAddRing {
+                    if draft.canAddRing && !editMode.isEditing {
                         NavigationLink(value: Route.newRing) {
                             Label("Add Ring", systemImage: "plus.circle.fill")
                         }
                     }
                 } header: {
-                    Text("Rings")
+                    HStack {
+                        Text("Rings")
+                        Spacer()
+                        if draft.rings.count > 1 {
+                            Button(editMode.isEditing ? "Done" : "Reorder",
+                                   systemImage: editMode.isEditing ? "checkmark" : "arrow.up.arrow.down") {
+                                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .textCase(nil)
+                        }
+                    }
                 } footer: {
-                    Text("Up to 5 rings. The first ring is the outermost. Touch and hold a ring to move it.")
+                    Text("Up to 5 rings. The first ring is the outermost. Tap Reorder and drag ≡ to change the order.")
                 }
 
                 if !isNew && model.library.sets.count > 1 {
@@ -66,6 +92,7 @@ struct SetEditorView: View {
                     }
                 }
             }
+            .environment(\.editMode, $editMode)
             .navigationTitle(isNew ? "New Set" : "Edit Set")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Route.self) { route in
