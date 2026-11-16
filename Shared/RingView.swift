@@ -166,11 +166,7 @@ struct RingStartLabel: View {
 
     var body: some View {
         let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
-        // On a small inner ring a full-size label would run far around it: shrink it to fit about 100°.
-        var size = lineWidth * 0.62
-        let maxAngle = Double.pi * 100 / 180
-        let (_, natural) = layout(percent: percent, size: size)
-        if natural > maxAngle { size *= max(0.7, maxAngle / natural) }
+        let size = fittedSize(percent: percent)
         let (glyphs, end) = layout(percent: percent, size: size)
         // White on the filled arc; where too little is filled under the text, the system's text colour (the track is
         // too light for the ring's own colour, e.g. yellow).
@@ -193,6 +189,14 @@ struct RingStartLabel: View {
         }
         .foregroundStyle(filledUnder ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
         .accessibilityHidden(true)
+    }
+
+    /// The text size: on a small inner ring a full-size label would run far around it, so shrink it to fit about 100°.
+    private func fittedSize(percent: String) -> CGFloat {
+        let size = lineWidth * 0.62
+        let maxAngle = Double.pi * 100 / 180
+        let natural = layout(percent: percent, size: size).1
+        return natural > maxAngle ? size * max(0.7, maxAngle / natural) : size
     }
 
     /// Each glyph's centre angle along the ring, starting just after 12 o'clock, and the angle where the text ends.
