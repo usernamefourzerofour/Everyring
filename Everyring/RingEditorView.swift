@@ -161,6 +161,13 @@ struct RingEditorView: View {
                 .disabled(displayGoal <= 0)
             }
         }
+        .task(id: ring.metric) {
+            // Ask for access to the chosen Health type right away, while the editor is open, instead of after saving.
+            // Let the metric list finish closing first; HealthKit only shows the sheet for types not asked before.
+            guard !RingsModel.isDemo else { return }
+            try? await Task.sleep(for: .milliseconds(450))
+            try? await HealthManager.shared.requestAuthorization(for: [ring.metric])
+        }
         .onChange(of: ring.metric) { old, new in
             // A name that is still the old metric's own name follows the metric; one the user wrote stays.
             let nameIsDefault = ring.name.trimmingCharacters(in: .whitespaces).isEmpty || ring.name == old.title
