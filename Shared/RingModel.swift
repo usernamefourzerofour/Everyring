@@ -16,9 +16,11 @@ enum HealthMetric: Codable, Hashable, Sendable {
     case quantity(QuantityKind)
     /// Counted Health events (toothbrushing, handwashing).
     case events(EventKind)
+    /// Fats, cholesterol, sodium, vitamins, minerals and alcoholic drinks.
+    case nutrient(NutrientKind)
 
     enum BaseUnit: String, Codable, Sendable {
-        case count, kilocalories, minutes, hours, meters, liters, grams, milligrams
+        case count, kilocalories, minutes, hours, meters, liters, grams, milligrams, micrograms
     }
 
     var baseUnit: BaseUnit {
@@ -37,6 +39,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .water: .liters
         case .quantity(let kind): kind.baseUnit
         case .events: .count
+        case .nutrient(let kind): kind.baseUnit
         }
     }
 
@@ -66,6 +69,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .water: String(localized: "Water")
         case .quantity(let kind): kind.title
         case .events(let kind): kind.title
+        case .nutrient(let kind): kind.title
         }
     }
 }

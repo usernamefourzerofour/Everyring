@@ -15,6 +15,7 @@ extension HealthMetric {
         case .liters: UnitVolume.liters
         case .grams: UnitMass.grams
         case .milligrams: UnitMass.milligrams
+        case .micrograms: UnitMass.micrograms
         case .count, .minutes, .hours: nil
         }
     }
@@ -43,6 +44,8 @@ extension HealthMetric {
             return UnitMass.grams
         case .milligrams:
             return UnitMass.milligrams
+        case .micrograms:
+            return UnitMass.micrograms
         case .count, .minutes, .hours:
             return nil
         }
@@ -62,7 +65,9 @@ extension HealthMetric {
 
     private func fractionDigits(locale: Locale) -> ClosedRange<Int> {
         guard let unit = displayUnit(locale: locale) else { return baseUnit == .hours && !isCountOfHours ? 0...1 : 0...0 }
-        let oneDecimal: [Dimension] = [UnitLength.kilometers, UnitLength.miles, UnitVolume.liters]
+        // Small nutrient amounts (0.9 mg copper, 2.4 µg B12) need a decimal too.
+        let oneDecimal: [Dimension] = [UnitLength.kilometers, UnitLength.miles, UnitVolume.liters, UnitMass.grams,
+                                       UnitMass.milligrams, UnitMass.micrograms]
         return oneDecimal.contains(unit) ? 0...1 : 0...0
     }
 
@@ -95,6 +100,7 @@ extension HealthMetric {
             case .steps: return String(localized: "steps")
             case .flightsClimbed: return String(localized: "flights")
             case .quantity(let kind): return kind.countNoun ?? String(localized: "times")
+            case .nutrient(let kind): return kind.countNoun ?? String(localized: "times")
             case .events: return String(localized: "times")
             default: return String(localized: "workouts")
             }
@@ -106,7 +112,7 @@ extension HealthMetric {
         switch baseUnit {
         case .count:
             return String(localized: "\(number(value, locale: locale)) \(unitName(style: style, locale: locale))")
-        case .meters, .kilocalories, .liters, .grams, .milligrams:
+        case .meters, .kilocalories, .liters, .grams, .milligrams, .micrograms:
             let unit = displayUnit(locale: locale)!
             let digits = fractionDigits(locale: locale)
             return Measurement(value: max(0, toDisplay(value, locale: locale)), unit: unit)

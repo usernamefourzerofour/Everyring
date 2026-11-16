@@ -3,7 +3,7 @@ import Foundation
 /// Groups, defaults and suggested goals for the metric picker and new rings.
 extension HealthMetric {
     enum Category: String, CaseIterable, Identifiable, Sendable {
-        case activity, distance, workouts, recovery, nutrition, hygiene
+        case activity, distance, workouts, recovery, nutrition, vitamins, minerals, hygiene
 
         var id: Self { self }
 
@@ -14,12 +14,15 @@ extension HealthMetric {
             case .workouts: String(localized: "Workouts")
             case .recovery: String(localized: "Recovery and mind")
             case .nutrition: String(localized: "Nutrition")
+            case .vitamins: String(localized: "Vitamins")
+            case .minerals: String(localized: "Minerals")
             case .hygiene: String(localized: "Hygiene")
             }
         }
 
         var metrics: [HealthMetric] {
             let more = QuantityKind.allCases.filter { $0.category == self }.map(HealthMetric.quantity)
+                + NutrientKind.allCases.filter { $0.category == self }.map(HealthMetric.nutrient)
             switch self {
             case .activity: return [.steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed] + more
             case .distance:
@@ -27,6 +30,7 @@ extension HealthMetric {
             case .workouts: return [.workouts(.count, kind: nil), .workouts(.minutes, kind: nil), .workouts(.distance, kind: nil)]
             case .recovery: return [.sleep, .mindfulMinutes, .timeInDaylight]
             case .nutrition: return [.water] + more
+            case .vitamins, .minerals: return more
             case .hygiene: return EventKind.allCases.map(HealthMetric.events)
             }
         }
@@ -41,6 +45,7 @@ extension HealthMetric {
         case .water: .nutrition
         case .quantity(let kind): kind.category
         case .events: .hygiene
+        case .nutrient(let kind): kind.category
         }
     }
 
@@ -62,6 +67,7 @@ extension HealthMetric {
         case .water: "drop"
         case .quantity(let kind): kind.symbol
         case .events(let kind): kind.symbol
+        case .nutrient(let kind): kind.symbol
         }
     }
 
@@ -72,7 +78,7 @@ extension HealthMetric {
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance, .workouts, .mindfulMinutes:
             .thisWeek
         case .quantity(let kind): kind.defaultPeriod
-        case .events: .today
+        case .events, .nutrient: .today
         }
     }
 
@@ -97,6 +103,7 @@ extension HealthMetric {
         case .water: 2
         case .quantity(let kind): kind.dailyBaseline
         case .events(let kind): kind.dailyBaseline
+        case .nutrient(let kind): kind.dailyBaseline
         }
     }
 
@@ -120,6 +127,7 @@ extension HealthMetric {
     var defaultGoalKind: GoalKind {
         switch self {
         case .quantity(.dietaryEnergy), .quantity(.sugar), .quantity(.caffeine): .limit
+        case .nutrient(let kind): kind.defaultGoalKind
         default: .reach
         }
     }

@@ -98,3 +98,27 @@ struct MoreMetricsTests {
         #expect(try JSONDecoder().decode([HealthMetric].self, from: data) == metrics)
     }
 }
+
+struct NutrientTests {
+    let us = Locale(identifier: "en_US")
+
+    @Test func everyNutrientIsListedOnce() {
+        let all = HealthMetric.Category.allCases.flatMap(\.metrics)
+        for kind in NutrientKind.allCases { #expect(all.filter { $0 == .nutrient(kind) }.count == 1) }
+        #expect(HealthMetric.Category.vitamins.metrics.count == 13)
+        #expect(HealthMetric.Category.minerals.metrics.count == 13)
+    }
+
+    @Test func smallAmountsKeepADecimal() {
+        #expect(HealthMetric.nutrient(.copper).format(0.9, locale: us) == "0.9 mg")
+        #expect(HealthMetric.nutrient(.vitaminB12).format(2.4, locale: us) == "2.4 µg")
+        #expect(HealthMetric.nutrient(.alcoholicBeverages).format(2, locale: us) == "2 drinks")
+    }
+
+    @Test func limitsAndGoals() {
+        #expect(HealthMetric.nutrient(.sodium).defaultGoalKind == .limit)
+        #expect(HealthMetric.nutrient(.alcoholicBeverages).defaultGoalKind == .limit)
+        #expect(HealthMetric.nutrient(.vitaminC).defaultGoalKind == .reach)
+        #expect(HealthMetric.nutrient(.copper).suggestedGoal(for: .today, locale: us) == 0.9)
+    }
+}

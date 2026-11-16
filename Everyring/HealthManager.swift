@@ -16,6 +16,7 @@ extension HealthMetric {
         case .timeInDaylight: HKQuantityType(.timeInDaylight)
         case .water: HKQuantityType(.dietaryWater)
         case .quantity(let kind): HKQuantityType(kind.identifier)
+        case .nutrient(let kind): HKQuantityType(kind.identifier)
         case .standHours, .workouts, .sleep, .mindfulMinutes, .events: nil
         }
     }
@@ -54,6 +55,7 @@ extension HealthMetric {
         case .liters: .liter()
         case .grams: .gram()
         case .milligrams: .gramUnit(with: .milli)
+        case .micrograms: .gramUnit(with: .micro)
         }
     }
 }
@@ -78,6 +80,45 @@ extension QuantityKind {
         case .fiber: .dietaryFiber
         case .sugar: .dietarySugar
         case .caffeine: .dietaryCaffeine
+        }
+    }
+}
+
+extension NutrientKind {
+    var identifier: HKQuantityTypeIdentifier {
+        switch self {
+        case .alcoholicBeverages: .numberOfAlcoholicBeverages
+        case .saturatedFat: .dietaryFatSaturated
+        case .monounsaturatedFat: .dietaryFatMonounsaturated
+        case .polyunsaturatedFat: .dietaryFatPolyunsaturated
+        case .cholesterol: .dietaryCholesterol
+        case .sodium: .dietarySodium
+        case .potassium: .dietaryPotassium
+        case .calcium: .dietaryCalcium
+        case .iron: .dietaryIron
+        case .phosphorus: .dietaryPhosphorus
+        case .magnesium: .dietaryMagnesium
+        case .zinc: .dietaryZinc
+        case .copper: .dietaryCopper
+        case .manganese: .dietaryManganese
+        case .chloride: .dietaryChloride
+        case .iodine: .dietaryIodine
+        case .selenium: .dietarySelenium
+        case .chromium: .dietaryChromium
+        case .molybdenum: .dietaryMolybdenum
+        case .vitaminA: .dietaryVitaminA
+        case .vitaminB6: .dietaryVitaminB6
+        case .vitaminB12: .dietaryVitaminB12
+        case .vitaminC: .dietaryVitaminC
+        case .vitaminD: .dietaryVitaminD
+        case .vitaminE: .dietaryVitaminE
+        case .vitaminK: .dietaryVitaminK
+        case .thiamin: .dietaryThiamin
+        case .riboflavin: .dietaryRiboflavin
+        case .niacin: .dietaryNiacin
+        case .folate: .dietaryFolate
+        case .biotin: .dietaryBiotin
+        case .pantothenicAcid: .dietaryPantothenicAcid
         }
     }
 }
