@@ -98,9 +98,17 @@ struct RingsWidgetView: View {
 
     var body: some View {
         content
-            .padding(family == .systemSmall ? EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6) : systemMargins)
+            .padding(margins)
             .widgetURL(entry.set.map { URL(string: "everyring://set/\($0.id.uuidString)")! })
             .containerBackground(.background, for: .widget)
+    }
+
+    /// Small widget: a thin margin so the rings fill it; everything else: the system's margins.
+    private var margins: EdgeInsets {
+        #if os(iOS)
+        if family == .systemSmall { return EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6) }
+        #endif
+        return systemMargins
     }
 
     @ViewBuilder private var content: some View {
