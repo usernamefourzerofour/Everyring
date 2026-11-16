@@ -145,8 +145,18 @@ final class HealthManager {
         guard Self.isAvailable else { return }
         let types = metrics.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.readTypes) }
         guard !types.isEmpty else { return }
-        try await store.requestAuthorization(toShare: [], read: types)
+        // iOS shows one access sheet at a time: requests made while one is open wait for it and then run one by one,
+        // instead of racing (several screens ask for the same new type at once).
+        let previous = authorization
+        let task = Task { @MainActor in
+            _ = await previous?.result
+            try await store.requestAuthorization(toShare: [], read: types)
+        }
+        authorization = task
+        try await task.value
     }
+
+    private var authorization: Task<Void, Error>?
 
     /// The ring's value over `interval`, in `metric.baseUnit`. Missing data (or no access, which HealthKit doesn't
     /// reveal for reading) counts as zero.

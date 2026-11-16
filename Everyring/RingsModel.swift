@@ -185,6 +185,12 @@ final class RingsModel {
         return history
     }
 
+    /// Asks for access to the ring's Health data if it was never asked for (shows the sheet once).
+    func requestAccess(for ring: Ring) async {
+        guard !Self.isDemo else { return }
+        try? await health.requestAuthorization(for: [ring.metric])
+    }
+
     /// How the ring's value built up through its current period, for the chart on the detail screen. `nil` if Health
     /// couldn't be read, or for sleep and mindful minutes in a one-day period (no meaningful hourly build-up).
     func periodProgress(for ring: Ring, now: Date = .now) async -> PeriodProgress? {

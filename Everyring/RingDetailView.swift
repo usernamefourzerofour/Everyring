@@ -12,6 +12,7 @@ struct RingDetailView: View {
     @State private var pageOffset = 0
     @State private var page: HistoryPage?
     @State private var progress: PeriodProgress?
+    @State private var pageFailed = false
 
     var body: some View {
         if let ring = model.ring(id: ringID) {
@@ -46,7 +47,7 @@ struct RingDetailView: View {
 
                     StreakCard(ring: ring, streak: history?.streak, loading: loading)
 
-                    HistoryCard(ring: ring, page: page, offset: $pageOffset, calendar: model.calendar)
+                    HistoryCard(ring: ring, page: page, failed: pageFailed, offset: $pageOffset, calendar: model.calendar)
                 }
                 .padding()
                 .frame(maxWidth: 600)
@@ -64,14 +65,15 @@ struct RingDetailView: View {
                 }
             }
             .task(id: PageKey(ring: ring, offset: pageOffset)) {
-                page = await model.historyPage(for: ring, offset: pageOffset)
+                page = await withTimeout { await model.historyPage(for: ring, offset: pageOffset) } ?? nil
+                pageFailed = page == nil
             }
             .task(id: ring) {
-                progress = await model.periodProgress(for: ring)
-            }
-            .task(id: ring) {
+                // One access request first, then the readings one after another (never three sheets at once).
                 loading = true
-                history = await model.history(for: ring)
+                await model.requestAccess(for: ring)
+                progress = await withTimeout { await model.periodProgress(for: ring) } ?? nil
+                history = await withTimeout { await model.history(for: ring) } ?? nil
                 loading = false
             }
         } else {
@@ -244,6 +246,7 @@ private struct PageKey: Hashable {
 struct HistoryCard: View {
     let ring: Ring
     let page: HistoryPage?
+    var failed = false
     @Binding var offset: Int
     let calendar: Calendar
 
@@ -271,6 +274,11 @@ struct HistoryCard: View {
                 default:
                     PeriodList(ring: ring, records: page.periods, calendar: calendar)
                 }
+            } else if failed {
+                Text("Couldn’t read Health data. Check Everyring’s access in the Health app.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 80)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 120)
@@ -469,5 +477,19 @@ extension View {
         padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.background.secondary, in: .rect(cornerRadius: 20))
+    }
+}
+
+/// Runs `operation`, but gives up after `seconds` so a Health read that never answers can't leave a spinner forever.
+func withTimeout<T: Sendable>(seconds: Double = 20, _ operation: @escaping @MainActor () async -> T) async -> T? {
+    await withTaskGroup(of: T?.self) { group in
+        group.addTask { await operation() }
+        group.addTask {
+            try? await Task.sleep(for: .seconds(seconds))
+            return nil
+        }
+        let first = await group.next() ?? nil
+        group.cancelAll()
+        return first
     }
 }
