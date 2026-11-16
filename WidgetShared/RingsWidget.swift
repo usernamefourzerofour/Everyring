@@ -11,6 +11,8 @@ struct RingsWidget: Widget {
         .configurationDisplayName("Rings")
         .description("A ring set at a glance.")
         .supportedFamilies(Self.families)
+        // The small widget's rings use almost the whole widget; other sizes add the usual margins themselves.
+        .contentMarginsDisabled()
     }
 
     #if os(watchOS)
@@ -90,10 +92,13 @@ struct RingsProvider: AppIntentTimelineProvider {
 
 struct RingsWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    /// The system's usual margins (the widget turns them off to let the small widget's rings fill it).
+    @Environment(\.widgetContentMargins) private var systemMargins
     let entry: RingsEntry
 
     var body: some View {
         content
+            .padding(family == .systemSmall ? EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6) : systemMargins)
             .widgetURL(entry.set.map { URL(string: "everyring://set/\($0.id.uuidString)")! })
             .containerBackground(.background, for: .widget)
     }

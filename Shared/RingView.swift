@@ -154,28 +154,64 @@ struct RingStartLabel: View {
     let radius: CGFloat
     let lineWidth: CGFloat
 
+    /// One glyph on the ring: a symbol or a character, with roughly how much arc it takes.
+    private struct Glyph: Identifiable {
+        var id: Int
+        var symbol: String?
+        var text: String
+        /// Angle of the glyph's centre, clockwise from 12 o'clock.
+        var angle: Double
+    }
+
     var body: some View {
+        let size = lineWidth * 0.62
         let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
-        let size = lineWidth * 0.6
-        // Rough width of icon + text, to know whether the filled arc reaches under all of it.
-        let width = size * (1.3 + 0.62 * CGFloat(percent.count))
-        let filledUnder = ring.fraction * 2 * .pi * radius >= width + lineWidth * 0.4
-        let colour = ring.warning ? RingDisplay.warningGradient.start : ring.start
-        HStack(spacing: size * 0.12) {
-            if let symbol = ring.symbol {
-                Image(systemName: symbol)
-                    .font(.system(size: size * 0.9, weight: .bold))
+        let (glyphs, end) = layout(percent: percent, size: size)
+        // White on the filled arc; where too little is filled under the text, the system's text colour (the track is
+        // too light for the ring's own colour, e.g. yellow).
+        let filledUnder = ring.fraction * 2 * .pi >= end
+        ZStack {
+            ForEach(glyphs) { glyph in
+                Group {
+                    if let symbol = glyph.symbol {
+                        Image(systemName: symbol)
+                            .font(.system(size: size * 0.9, weight: .bold))
+                    } else {
+                        Text(glyph.text)
+                            .font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
+                    }
+                }
+                .fixedSize()
+                .offset(y: -radius)
+                .rotationEffect(.radians(glyph.angle))
             }
-            Text(percent)
-                .font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
         }
-        .foregroundStyle(filledUnder ? Color.white : colour)
-        .fixedSize()
-        // Centred on the stroke and turned along the ring, just after 12 o'clock, so it follows the curve instead of
-        // sticking out of small inner rings.
-        .offset(y: -radius)
-        .rotationEffect(.radians(Double((width / 2 + lineWidth * 0.35) / max(radius, 1))))
+        .foregroundStyle(filledUnder ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
         .accessibilityHidden(true)
+    }
+
+    /// Each glyph's centre angle along the ring, starting just after 12 o'clock, and the angle where the text ends.
+    private func layout(percent: String, size: CGFloat) -> ([Glyph], Double) {
+        let r = Double(max(radius, 1))
+        var angle = Double(lineWidth) * 0.35 / r
+        var glyphs: [Glyph] = []
+        func add(symbol: String?, text: String, advance: CGFloat) {
+            let a = Double(advance) / r
+            glyphs.append(Glyph(id: glyphs.count, symbol: symbol, text: text, angle: angle + a / 2))
+            angle += a
+        }
+        if let symbol = ring.symbol { add(symbol: symbol, text: "", advance: size * 1.15) }
+        for character in percent {
+            let advance: CGFloat
+            switch character {
+            case "%": advance = size * 0.82
+            case " ", "\u{00A0}", "\u{202F}": advance = size * 0.22
+            default: advance = size * 0.6
+            }
+            if character.isWhitespace { angle += Double(advance) / r; continue }
+            add(symbol: nil, text: String(character), advance: advance)
+        }
+        return (glyphs, angle)
     }
 }
 
