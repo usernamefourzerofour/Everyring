@@ -11,6 +11,7 @@ struct RingDetailView: View {
     /// 0 = this month (or year for monthly rings), -1 = the one before, …
     @State private var pageOffset = 0
     @State private var page: HistoryPage?
+    @State private var progress: PeriodProgress?
 
     var body: some View {
         if let ring = model.ring(id: ringID) {
@@ -39,6 +40,10 @@ struct RingDetailView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    if let progress {
+                        ProgressChartCard(ring: ring, progress: progress, calendar: model.calendar)
+                    }
+
                     StreakCard(ring: ring, streak: history?.streak, loading: loading)
 
                     HistoryCard(ring: ring, page: page, offset: $pageOffset, calendar: model.calendar)
@@ -62,6 +67,9 @@ struct RingDetailView: View {
                 page = await model.historyPage(for: ring, offset: pageOffset)
             }
             .task(id: ring) {
+                progress = await model.periodProgress(for: ring)
+            }
+            .task(id: ring) {
                 loading = true
                 history = await model.history(for: ring)
                 loading = false
@@ -69,6 +77,110 @@ struct RingDetailView: View {
         } else {
             ContentUnavailableView("Ring deleted", systemImage: "circle.dashed")
         }
+    }
+}
+
+/// The ring's value building up through its current period, with the goal and an even pace to it.
+struct ProgressChartCard: View {
+    let ring: Ring
+    let progress: PeriodProgress
+    let calendar: Calendar
+
+    var body: some View {
+        let goal = ring.metric.toDisplay(ring.goal)
+        let points = progress.points.map { (date: $0.date, value: ring.metric.toDisplay($0.total)) }
+        let lineColor = ring.tint(progress.points.last?.total ?? 0)
+        VStack(alignment: .leading, spacing: 12) {
+            Label(ring.period.isRolling ? String(localized: "The last \(ring.period.nominalDays) days") : ring.period.title,
+                  systemImage: "chart.xyaxis.line")
+                .font(.headline)
+                .foregroundStyle(ring.color.color)
+
+            Chart {
+                ForEach(points, id: \.date) { point in
+                    AreaMark(x: .value("Time", point.date), y: .value("Total", point.value))
+                        .foregroundStyle(.linearGradient(colors: [lineColor.opacity(0.3), lineColor.opacity(0.02)],
+                                                         startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                    LineMark(x: .value("Time", point.date), y: .value("Total", point.value),
+                             series: .value("Series", "Total"))
+                        .foregroundStyle(lineColor)
+                        .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .interpolationMethod(.monotone)
+                }
+                if let last = points.last {
+                    PointMark(x: .value("Time", last.date), y: .value("Total", last.value))
+                        .foregroundStyle(lineColor)
+                        .symbolSize(60)
+                }
+                if !ring.period.isRolling {
+                    // Even pace from nothing at the start to the goal at the end.
+                    LineMark(x: .value("Time", progress.interval.start), y: .value("Total", 0.0),
+                             series: .value("Series", "Pace"))
+                        .foregroundStyle(.secondary)
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                    LineMark(x: .value("Time", progress.interval.end), y: .value("Total", goal),
+                             series: .value("Series", "Pace"))
+                        .foregroundStyle(.secondary)
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                }
+                RuleMark(y: .value("Goal", goal))
+                    .foregroundStyle(ring.isLimit ? RingDisplay.warningGradient.end : Color.secondary)
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .annotation(position: .top, alignment: .leading) {
+                        Text(ring.isLimit ? LocalizedStringKey("Limit \(ring.metric.format(ring.goal))")
+                                          : LocalizedStringKey("Goal \(ring.metric.format(ring.goal))"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+            }
+            .chartXScale(domain: progress.interval.start...progress.interval.end)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: progress.bucket == .hour ? 5 : 7)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: axisFormat)
+                }
+            }
+            .chartYAxisLabel(ring.metric.unitName())
+            .frame(height: 200)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(summary)
+
+            Text(summary)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .card()
+    }
+
+    private var axisFormat: Date.FormatStyle {
+        var style: Date.FormatStyle
+        if progress.bucket == .hour {
+            style = .dateTime.hour()
+        } else if progress.interval.duration <= 8 * 86_400 {
+            style = .dateTime.weekday(.abbreviated)
+        } else {
+            style = .dateTime.day().month(.abbreviated)
+        }
+        style.timeZone = calendar.timeZone
+        return style
+    }
+
+    /// "Ahead of an even pace by 1,200 steps" and the like.
+    private var summary: String {
+        let total = progress.points.last?.total ?? 0
+        guard let pace = progress.paceNow else {
+            return String(localized: "Your total over the window, day by day.")
+        }
+        let difference = ring.metric.format(abs(total - pace))
+        if ring.isLimit {
+            return total <= pace
+                ? String(localized: "Under an even pace for your limit by \(difference).")
+                : String(localized: "Over an even pace for your limit by \(difference).")
+        }
+        return total >= pace
+            ? String(localized: "Ahead of an even pace to your goal by \(difference).")
+            : String(localized: "Behind an even pace to your goal by \(difference).")
     }
 }
 

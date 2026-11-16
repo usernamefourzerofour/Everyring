@@ -273,6 +273,55 @@ final class HealthManager {
         }
     }
 
+    /// The metric's value per hour inside `interval`, keyed by the start of each hour. Sleep and mindful minutes have
+    /// no meaningful hourly build-up and return nothing.
+    func hourlyValues(of metric: HealthMetric, in interval: DateInterval, calendar: Calendar,
+                      askForAccess: Bool = true) async throws -> [Date: Double] {
+        guard Self.isAvailable, interval.duration > 0 else { return [:] }
+        func hour(_ date: Date) -> Date { calendar.dateInterval(of: .hour, for: date)?.start ?? date }
+        do {
+            if let type = metric.quantityType {
+                let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
+                let descriptor = HKStatisticsCollectionQueryDescriptor(
+                    predicate: .quantitySample(type: type, predicate: predicate), options: .cumulativeSum,
+                    anchorDate: interval.start, intervalComponents: DateComponents(hour: 1))
+                var result: [Date: Double] = [:]
+                let collection = try await descriptor.result(for: store)
+                collection.enumerateStatistics(from: interval.start, to: interval.end) { statistics, _ in
+                    if let sum = statistics.sumQuantity()?.doubleValue(for: metric.hkUnit) {
+                        result[hour(statistics.startDate), default: 0] += sum
+                    }
+                }
+                return result
+            }
+            switch metric {
+            case .events(let kind):
+                let events = try await categorySamples(kind.identifier, in: interval, strictStart: true)
+                return Dictionary(grouping: events) { hour($0.startDate) }.mapValues { Double($0.count) }
+            case .standHours:
+                let stood = try await categorySamples(.appleStandHour, in: interval, strictStart: true)
+                    .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
+                return Dictionary(grouping: stood) { hour($0.startDate) }.mapValues { Double($0.count) }
+            case .workouts(let measure, let kind):
+                let workouts = try await workouts(kind: kind, in: interval)
+                return Dictionary(grouping: workouts) { hour($0.startDate) }.mapValues { list in
+                    switch measure {
+                    case .count: Double(list.count)
+                    case .minutes: list.reduce(0) { $0 + $1.duration } / 60
+                    case .distance: list.reduce(0) { $0 + Self.distance(of: $1) }
+                    }
+                }
+            default:
+                return [:]
+            }
+        } catch let error as HKError where error.code == .errorNoData {
+            return [:]
+        } catch let error as HKError where error.code == .errorAuthorizationNotDetermined && askForAccess {
+            try await requestAuthorization(for: [metric])
+            return try await hourlyValues(of: metric, in: interval, calendar: calendar, askForAccess: false)
+        }
+    }
+
     private static func distance(of workout: HKWorkout) -> Double {
         HealthMetric.workoutDistanceTypes.reduce(0) { sum, type in
             sum + (workout.statistics(for: type)?.sumQuantity()?.doubleValue(for: .meter()) ?? 0)

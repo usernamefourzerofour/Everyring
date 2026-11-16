@@ -1,0 +1,72 @@
+import Foundation
+
+/// How a ring's value built up through its current period: a running total per hour (one-day periods) or per day.
+struct PeriodProgress: Hashable, Sendable {
+    struct Point: Identifiable, Hashable, Sendable {
+        var date: Date
+        /// Running total in the metric's base unit.
+        var total: Double
+        var id: Date { date }
+    }
+
+    /// The whole period (for a rolling ring: the window's whole days, ending tonight).
+    var interval: DateInterval
+    /// Starts with zero at the period start and ends at now.
+    var points: [Point]
+    /// Hourly buckets for one-day periods, otherwise daily.
+    var bucket: Calendar.Component
+    /// Where you would be now going at an even pace to the goal; `nil` for rolling rings, which have no "now" in a
+    /// period that started on a fixed day.
+    var paceNow: Double?
+
+    /// Whether the chart counts hours (one-day periods) or days.
+    static func bucket(for period: RingPeriod) -> Calendar.Component {
+        switch period {
+        case .today, .everyDays(1, _): .hour
+        default: .day
+        }
+    }
+
+    /// The whole period the chart spans.
+    static func chartInterval(for ring: Ring, now: Date, calendar: Calendar) -> DateInterval {
+        ring.period.interval(containing: now, calendar: calendar)
+    }
+
+    /// - Parameter buckets: values keyed by the start of each hour or day.
+    static func make(for ring: Ring, buckets: [Date: Double], now: Date, calendar: Calendar) -> PeriodProgress {
+        let interval = chartInterval(for: ring, now: now, calendar: calendar)
+        let bucket = bucket(for: ring.period)
+        var points = [Point(date: interval.start, total: 0)]
+        var total = 0.0
+        var start = interval.start
+        while start < min(interval.end, now) {
+            guard let next = calendar.date(byAdding: bucket, value: 1, to: start) else { break }
+            total += buckets[start] ?? 0
+            points.append(Point(date: min(next, now), total: total))
+            start = next
+        }
+        var pace: Double?
+        if !ring.period.isRolling, interval.duration > 0 {
+            pace = ring.goal * min(1, max(0, now.timeIntervalSince(interval.start) / interval.duration))
+        }
+        return PeriodProgress(interval: interval, points: points, bucket: bucket, paceNow: pace)
+    }
+}
+
+extension DemoHistory {
+    /// Made-up hourly values for demo mode: the ring's current value spread over the waking hours so far.
+    static func hourly(total: Double, from start: Date, to now: Date, calendar: Calendar) -> [Date: Double] {
+        var hours: [Date] = []
+        var hour = start
+        while hour < now {
+            let h = calendar.component(.hour, from: hour)
+            if (7...22).contains(h) { hours.append(hour) }
+            guard let next = calendar.date(byAdding: .hour, value: 1, to: hour) else { break }
+            hour = next
+        }
+        guard !hours.isEmpty else { return [:] }
+        let weights = hours.map { 0.5 + Double(calendar.component(.hour, from: $0) * 37 % 11) / 10 }
+        let sum = weights.reduce(0, +)
+        return Dictionary(uniqueKeysWithValues: zip(hours, weights.map { total * $0 / sum }))
+    }
+}
