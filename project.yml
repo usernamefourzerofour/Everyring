@@ -38,6 +38,8 @@ targets:
           - CFBundleURLName: dk.erik.everyring
             CFBundleURLSchemes: [everyring]
         NSHealthShareUsageDescription: "Everyring reads the Health data your rings use, such as steps, workouts and sleep, to show your progress. Your data never leaves your device."
+        # Required by App Store Connect for HealthKit apps even though Everyring never writes to Health.
+        NSHealthUpdateUsageDescription: "Everyring doesn’t save anything in Health: it only reads the data your rings use."
         UISupportedInterfaceOrientations~ipad:
           [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
            UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
@@ -106,6 +108,7 @@ targets:
           - CFBundleURLName: dk.erik.everyring.watchkitapp
             CFBundleURLSchemes: [everyring]
         NSHealthShareUsageDescription: "Everyring reads the Health data your rings use, such as steps, workouts and sleep, to show your progress on your watch. Your data never leaves your devices."
+        NSHealthUpdateUsageDescription: "Everyring doesn’t save anything in Health: it only reads the data your rings use."
     dependencies:
       - target: EveryringWatchWidget
     settings:
