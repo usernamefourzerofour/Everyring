@@ -111,7 +111,8 @@ struct NutrientTests {
 
     @Test func smallAmountsKeepADecimal() {
         #expect(HealthMetric.nutrient(.copper).format(0.9, locale: us) == "0.9 mg")
-        #expect(HealthMetric.nutrient(.vitaminB12).format(2.4, locale: us) == "2.4 µg")
+        // iOS writes micrograms with the Greek mu (μ, U+03BC), which looks like the micro sign (µ, U+00B5).
+        #expect(["2.4 \u{03BC}g", "2.4 \u{00B5}g"].contains(HealthMetric.nutrient(.vitaminB12).format(2.4, locale: us)))
         #expect(HealthMetric.nutrient(.alcoholicBeverages).format(2, locale: us) == "2 drinks")
     }
 
