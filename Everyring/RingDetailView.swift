@@ -16,6 +16,8 @@ struct RingDetailView: View {
     /// A period picked in the history for the chart; `nil` = the one in progress.
     @State private var selected: DateInterval?
     @State private var pageRing: Ring?
+    /// The ring the chart and streak were read for.
+    @State private var loadedRing: Ring?
 
     var body: some View {
         if let ring = model.ring(id: ringID) {
@@ -45,6 +47,9 @@ struct RingDetailView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    if let history, !history.hasData {
+                        NoDataCard(ring: ring)
+                    } else {
                     if let progress {
                         ProgressChartCard(ring: ring, progress: progress, calendar: model.calendar,
                                           onShowCurrent: selected == nil ? nil : { withAnimation { selected = nil } })
@@ -59,6 +64,7 @@ struct RingDetailView: View {
                             selected = isCurrent || interval == selected ? nil : interval
                             proxy.scrollTo("chart", anchor: .top)
                         }
+                    }
                     }
                 }
                 .padding()
@@ -85,6 +91,12 @@ struct RingDetailView: View {
                 pageFailed = page == nil
             }
             .task(id: ring) {
+                // A changed ring (another metric, goal or period) must never show the old ring's numbers meanwhile.
+                if loadedRing != ring {
+                    history = nil
+                    progress = nil
+                }
+                loadedRing = ring
                 // One access request first, then the readings one after another (never three sheets at once).
                 loading = true
                 selected = nil
@@ -241,6 +253,31 @@ struct ProgressChartCard: View {
         return total >= pace
             ? String(localized: "Ahead of an even pace to your goal by \(difference).")
             : String(localized: "Behind an even pace to your goal by \(difference).")
+    }
+}
+
+/// Shown instead of chart, streak and history when Health has no data at all for the ring's metric.
+struct NoDataCard: View {
+    let ring: Ring
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("No data", systemImage: "heart.text.square")
+                .font(.headline)
+                .foregroundStyle(ring.color.color)
+            Text("No \(ring.metric.title.lowercased()) data in Health. If you track it, check that Everyring may read it: open the Health app, tap your profile picture, then Apps → Everyring.")
+                .font(.callout)
+            if let url = URL(string: "x-apple-health://") {
+                Link(destination: url) {
+                    Label("Open Health", systemImage: "arrow.up.forward.app")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .tint(ring.color.color)
+            }
+        }
+        .card()
     }
 }
 

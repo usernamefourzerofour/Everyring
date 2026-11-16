@@ -111,3 +111,15 @@ struct PerDayMathTests {
         #expect(byDay[date(2026, 11, 17, in: cph)] == nil)
     }
 }
+
+struct NoDataTests {
+    let cph = makeCalendar()
+
+    @Test func emptyHealthMeansNoData() {
+        let ring = Ring.new(metric: .events(.toothbrushing))
+        let now = date(2026, 11, 18, 15, in: cph)
+        #expect(!RingHistory.make(for: ring, daily: [:], now: now, calendar: cph).hasData)
+        #expect(!RingHistory.make(for: ring, daily: [date(2026, 11, 17, in: cph): 0], now: now, calendar: cph).hasData)
+        #expect(RingHistory.make(for: ring, daily: [date(2026, 11, 17, in: cph): 2], now: now, calendar: cph).hasData)
+    }
+}

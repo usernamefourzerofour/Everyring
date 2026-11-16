@@ -26,6 +26,9 @@ struct RingHistory: Hashable, Sendable {
     var periods: [PeriodRecord] = []
     /// Rolling rings: the window value per day, oldest first, ending today.
     var days: [DayValue] = []
+    /// Whether Health had any data for the metric in the whole range read. With none, the app says so instead of
+    /// showing zeros (HealthKit never tells an app it may not read a type: it just returns nothing).
+    var hasData = true
 
     /// How many periods (or days, for rolling rings) the history shows.
     static func shownCount(for period: RingPeriod) -> Int {
@@ -68,7 +71,7 @@ struct RingHistory: Hashable, Sendable {
         let streakCount = min(period.streakLookback, lookback.count)
         let streak = Streak(ring: ring, finished: Array(values.prefix(streakCount)), inProgress: currentValue)
 
-        var history = RingHistory(streak: streak)
+        var history = RingHistory(streak: streak, hasData: daily.values.contains { $0 > 0 })
         let shown = shownCount(for: period)
         if period.isRolling {
             // Oldest first, ending with today's live window.
