@@ -98,6 +98,10 @@ final class HealthManager {
             return try await readValue(of: metric, in: interval)
         } catch let error as HKError where error.code == .errorNoData {
             return 0
+        } catch let error as HKError where error.code == .errorAuthorizationNotDetermined {
+            // Never asked for this type (e.g. the request failed while a sheet was closing): ask now, then read again.
+            try await requestAuthorization(for: [metric])
+            return try await readValue(of: metric, in: interval)
         }
     }
 
@@ -142,6 +146,18 @@ final class HealthManager {
     /// missing). One query for the whole range: daily statistics for quantities, samples bucketed by day otherwise.
     func dailyValues(of metric: HealthMetric, from start: Date, to end: Date,
                      calendar: Calendar) async throws -> [Date: Double] {
+        do {
+            return try await readDailyValues(of: metric, from: start, to: end, calendar: calendar)
+        } catch let error as HKError where error.code == .errorNoData {
+            return [:]
+        } catch let error as HKError where error.code == .errorAuthorizationNotDetermined {
+            try await requestAuthorization(for: [metric])
+            return try await readDailyValues(of: metric, from: start, to: end, calendar: calendar)
+        }
+    }
+
+    private func readDailyValues(of metric: HealthMetric, from start: Date, to end: Date,
+                                 calendar: Calendar) async throws -> [Date: Double] {
         guard Self.isAvailable, start < end else { return [:] }
         let range = DateInterval(start: calendar.startOfDay(for: start), end: end)
         if let type = metric.quantityType {

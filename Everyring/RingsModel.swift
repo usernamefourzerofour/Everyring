@@ -15,7 +15,11 @@ final class RingsModel {
             #if os(iOS)
             PhoneSync.shared.send(library)
             #endif
-            Task { await refresh() }
+            // Wait for an editor sheet to finish closing: Health can't show its access sheet over a closing one.
+            Task {
+                try? await Task.sleep(for: .milliseconds(800))
+                await refresh()
+            }
         }
     }
     /// Latest value per ring, in the metric's base unit.
