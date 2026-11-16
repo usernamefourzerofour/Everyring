@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 extension RingColor {
     /// Gradient from the ring start to its end. Everyring's own palette: deliberately not Apple's Activity colours.
@@ -200,7 +201,11 @@ struct RingStartLabel: View {
             glyphs.append(Glyph(id: glyphs.count, symbol: symbol, text: text, angle: angle + a / 2))
             angle += a
         }
-        if let symbol = ring.symbol { add(symbol: symbol, text: "", advance: size * 1.15) }
+        // On a tight inner ring the glyphs' inner edges crowd together; space them a little more.
+        let curve = 1 + lineWidth * 0.25 / max(radius, 1)
+        if let symbol = ring.symbol {
+            add(symbol: symbol, text: "", advance: (Self.symbolWidth(symbol, size: size * 0.9) + size * 0.3) * curve)
+        }
         for character in percent {
             let advance: CGFloat
             switch character {
@@ -208,10 +213,16 @@ struct RingStartLabel: View {
             case " ", "\u{00A0}", "\u{202F}": advance = size * 0.22
             default: advance = size * 0.6
             }
-            if character.isWhitespace { angle += Double(advance) / r; continue }
-            add(symbol: nil, text: String(character), advance: advance)
+            if character.isWhitespace { angle += Double(advance * curve) / r; continue }
+            add(symbol: nil, text: String(character), advance: advance * curve)
         }
         return (glyphs, angle)
+    }
+
+    /// A symbol's drawn width at `size` points (wide symbols such as a dumbbell take much more than a square).
+    private static func symbolWidth(_ name: String, size: CGFloat) -> CGFloat {
+        let config = UIImage.SymbolConfiguration(pointSize: size, weight: .bold)
+        return UIImage(systemName: name, withConfiguration: config)?.size.width ?? size
     }
 }
 
