@@ -53,7 +53,7 @@ struct RingDetailView: View {
                             .contentTransition(.numericText(value: shown))
                         if let past {
                             Text(ring.period.label(for: past.interval, calendar: model.calendar))
-                                .foregroundStyle(ring.color.color)
+                                .foregroundStyle(ring.accent)
                                 .fontWeight(.medium)
                         } else {
                             Text(ring.period.status(calendar: model.calendar))
@@ -70,7 +70,7 @@ struct RingDetailView: View {
                                      ? LocalizedStringKey("\(ring.metric.format(left)) per day left within your limit")
                                      : LocalizedStringKey("\(ring.metric.format(left)) per day to reach your goal"))
                                     .font(.subheadline)
-                                    .foregroundStyle(ring.color.color)
+                                    .foregroundStyle(ring.accent)
                             }
                         }
                     }
@@ -162,7 +162,7 @@ struct ProgressChartCard: View {
             HStack {
                 Label(title, systemImage: "chart.xyaxis.line")
                     .font(.headline)
-                    .foregroundStyle(ring.color.color)
+                    .foregroundStyle(ring.accent)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer()
@@ -171,7 +171,7 @@ struct ProgressChartCard: View {
                         .font(.subheadline.weight(.semibold))
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.capsule)
-                        .tint(ring.color.color)
+                        .tint(ring.accent)
                 }
             }
 
@@ -195,7 +195,7 @@ struct ProgressChartCard: View {
                 if !ring.period.isRolling {
                     // Even pace from nothing at the start to the goal at the end.
                     // An explicit colour: a series without one gets Swift Charts' default blue.
-                    let paceColor = ring.color.color.opacity(0.55)
+                    let paceColor = ring.accent.opacity(0.55)
                     LineMark(x: .value("Time", progress.interval.start), y: .value("Total", 0.0),
                              series: .value("Series", "Pace"))
                         .foregroundStyle(paceColor)
@@ -207,7 +207,7 @@ struct ProgressChartCard: View {
                         .annotation(position: .bottom, alignment: .trailing, spacing: 4) {
                             Text("Even pace")
                                 .font(.caption2)
-                                .foregroundStyle(ring.color.color)
+                                .foregroundStyle(ring.accent)
                         }
                 }
                 RuleMark(y: .value("Goal", goal))
@@ -292,7 +292,7 @@ struct NoDataCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("No data", systemImage: "heart.text.square")
                 .font(.headline)
-                .foregroundStyle(ring.color.color)
+                .foregroundStyle(ring.accent)
             Text("No \(ring.metric.title.lowercased()) data in Health. If you track it, check that Everyring may read it: open the Health app, tap your profile picture, then Apps → Everyring.")
                 .font(.callout)
             if let url = URL(string: "x-apple-health://") {
@@ -302,7 +302,7 @@ struct NoDataCard: View {
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
-                .tint(ring.color.color)
+                .tint(ring.accent)
             }
         }
         .card()
@@ -318,7 +318,7 @@ struct StreakCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Streak", systemImage: "flame.fill")
                 .font(.headline)
-                .foregroundStyle(ring.color.color)
+                .foregroundStyle(ring.accent)
             if let streak {
                 HStack {
                     StreakNumber(title: "Current", text: ring.period.streakUnits(streak.current))
@@ -384,7 +384,7 @@ struct HistoryCard: View {
             HStack {
                 Label("History", systemImage: "calendar")
                     .font(.headline)
-                    .foregroundStyle(ring.color.color)
+                    .foregroundStyle(ring.accent)
                 Spacer()
                 pager
             }
@@ -450,7 +450,7 @@ struct HistoryCard: View {
             .accessibilityLabel(isYear ? "Next year" : "Next month")
         }
         .buttonStyle(.borderless)
-        .tint(ring.color.color)
+        .tint(ring.accent)
         .layoutPriority(1)
     }
 }
@@ -471,11 +471,11 @@ struct RollingChart: View {
         Chart {
             ForEach(display) { day in
                 AreaMark(x: .value("Day", day.day, unit: .day), y: .value("Value", day.value))
-                    .foregroundStyle(.linearGradient(colors: [ring.color.color.opacity(0.35), ring.color.color.opacity(0.02)],
+                    .foregroundStyle(.linearGradient(colors: [ring.accent.opacity(0.35), ring.accent.opacity(0.02)],
                                                      startPoint: .top, endPoint: .bottom))
                     .interpolationMethod(.monotone)
                 LineMark(x: .value("Day", day.day, unit: .day), y: .value("Value", day.value))
-                    .foregroundStyle(ring.color.color)
+                    .foregroundStyle(ring.accent)
                     .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .interpolationMethod(.monotone)
             }
@@ -489,7 +489,7 @@ struct RollingChart: View {
                 }
             if let selectedEnd, let day = days.first(where: { $0.day < selectedEnd && selectedEnd.timeIntervalSince($0.day) <= 86_400 + 3_600 }) {
                 RuleMark(x: .value("Day", day.day, unit: .day))
-                    .foregroundStyle(ring.color.color.opacity(0.5))
+                    .foregroundStyle(ring.accent.opacity(0.5))
                     .lineStyle(StrokeStyle(lineWidth: 2))
             }
         }
@@ -547,7 +547,7 @@ struct DayGrid: View {
                         }
                         .padding(.vertical, 3)
                         .frame(maxWidth: .infinity)
-                        .background(isSelected ? ring.color.color.opacity(0.15) : .clear, in: .rect(cornerRadius: 10))
+                        .background(isSelected ? ring.accent.opacity(0.15) : .clear, in: .rect(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
@@ -557,7 +557,7 @@ struct DayGrid: View {
                     // A day still to come.
                     VStack(spacing: 2) {
                         Circle()
-                            .strokeBorder(ring.color.color.opacity(0.12), lineWidth: 3.75)
+                            .strokeBorder(ring.accent.opacity(0.12), lineWidth: 3.75)
                             .frame(width: 30, height: 30)
                         dayNumber(day, bold: false)
                             .opacity(0.5)
@@ -632,13 +632,13 @@ struct PeriodList: View {
                     Spacer()
                     if record.closed {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(ring.color.color)
+                            .foregroundStyle(ring.accent)
                             .accessibilityLabel("Closed")
                     }
                 }
                 .padding(.vertical, 6)
                 .padding(.horizontal, 6)
-                .background(isSelected ? ring.color.color.opacity(0.15) : .clear, in: .rect(cornerRadius: 12))
+                .background(isSelected ? ring.accent.opacity(0.15) : .clear, in: .rect(cornerRadius: 12))
                 .contentShape(.rect)
                 }
                 .buttonStyle(.plain)

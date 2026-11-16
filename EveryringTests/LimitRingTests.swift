@@ -54,3 +54,22 @@ struct LimitRingTests {
         #expect(Ring.new(metric: .quantity(.sugar)).isLimit)
     }
 }
+
+struct CustomColourTests {
+    @Test func customTintRoundTripsAndOldRingsHaveNone() throws {
+        var ring = Ring.new(metric: .steps)
+        #expect(ring.customTint == nil)
+        ring.customTint = RingTint(red: 0.2, green: 0.4, blue: 0.9)
+        let again = try JSONDecoder().decode(Ring.self, from: JSONEncoder().encode(ring))
+        #expect(again.customTint == ring.customTint)
+    }
+
+    @Test func customTintDrivesTheDrawing() {
+        var ring = Ring.new(metric: .steps)
+        let palette = ring.display(10)
+        ring.customTint = RingTint(red: 0.2, green: 0.4, blue: 0.9)
+        let custom = ring.display(10)
+        #expect(custom.start != palette.start)
+        #expect(custom.end == ring.accent)
+    }
+}

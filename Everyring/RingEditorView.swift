@@ -127,8 +127,12 @@ struct RingEditorView: View {
                     get: { ring.name },
                     set: { ring.name = $0; nameEdited = true }
                 ))
-                ColorRow(selection: $ring.color)
-                SymbolGrid(selection: $ring.symbol, color: ring.color)
+                ColorRow(selection: $ring.color, custom: $ring.customTint)
+                ColorPicker("Custom colour", selection: Binding(
+                    get: { ring.customTint?.color ?? ring.color.color },
+                    set: { ring.customTint = RingTint($0) }
+                ), supportsOpacity: false)
+                SymbolGrid(selection: $ring.symbol, color: ring.accent)
             }
 
             if let onDelete, !isNew {
@@ -178,7 +182,7 @@ struct RingEditorView: View {
             // Likewise the icon: the old metric's icon follows, one the user picked stays.
             if ring.symbol == old.defaultSymbol { ring.symbol = new.defaultSymbol }
             // And the colour: the old metric's colour follows, one the user picked stays.
-            if ring.color == old.defaultColor { ring.color = new.defaultColor }
+            if ring.customTint == nil && ring.color == old.defaultColor { ring.color = new.defaultColor }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
             if !goalEdited {
@@ -200,12 +204,12 @@ struct RingPreview: View {
     var body: some View {
         let fraction = value.map { ring.fraction($0) } ?? 0.7
         HStack(spacing: 16) {
-            RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: fraction)])
+            RingStackView(rings: [RingDisplay(id: ring.id, start: ring.gradient.start, end: ring.gradient.end, fraction: fraction)])
                 .frame(width: 88, height: 88)
                 .overlay {
                     Image(systemName: ring.symbol)
                         .font(.title2)
-                        .foregroundStyle(ring.color.color)
+                        .foregroundStyle(ring.accent)
                 }
                 .animation(.smooth, value: fraction)
             VStack(alignment: .leading, spacing: 4) {
@@ -439,19 +443,23 @@ struct PeriodPicker: View {
 
 struct ColorRow: View {
     @Binding var selection: RingColor
+    /// A freely picked colour; picking a palette colour clears it.
+    @Binding var custom: RingTint?
 
     var body: some View {
         HStack {
             ForEach(RingColor.allCases, id: \.self) { color in
+                let isSelected = custom == nil && selection == color
                 Button {
                     selection = color
+                    custom = nil
                 } label: {
                     Circle()
                         .fill(LinearGradient(colors: [color.gradient.start, color.gradient.end],
                                              startPoint: .bottomLeading, endPoint: .topTrailing))
                         .frame(width: 30, height: 30)
                         .overlay {
-                            if selection == color {
+                            if isSelected {
                                 Circle().strokeBorder(.background, lineWidth: 3)
                                 Circle().strokeBorder(color.color, lineWidth: 1.5).padding(-3)
                             }
@@ -460,7 +468,7 @@ struct ColorRow: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(color.title)
-                .accessibilityAddTraits(selection == color ? .isSelected : [])
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
         .padding(.vertical, 4)
@@ -469,7 +477,7 @@ struct ColorRow: View {
 
 struct SymbolGrid: View {
     @Binding var selection: String
-    let color: RingColor
+    let color: Color
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 40), spacing: 8)], spacing: 8) {
@@ -482,7 +490,7 @@ struct SymbolGrid: View {
                         .font(.title3)
                         .frame(width: 40, height: 40)
                         .foregroundStyle(selection == symbol ? .white : .primary)
-                        .background(selection == symbol ? AnyShapeStyle(color.color.gradient)
+                        .background(selection == symbol ? AnyShapeStyle(color.gradient)
                                                         : AnyShapeStyle(.fill.tertiary), in: .circle)
                 }
                 .buttonStyle(.plain)
@@ -497,5 +505,14 @@ struct SymbolGrid: View {
 #Preview {
     NavigationStack {
         RingEditorView(ring: .new(), isNew: true) { _ in }
+    }
+}
+
+extension RingTint {
+    /// The sRGB components of a colour picked in the colour picker.
+    init(_ color: Color) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        self.init(red: Double(min(1, max(0, r))), green: Double(min(1, max(0, g))), blue: Double(min(1, max(0, b))))
     }
 }

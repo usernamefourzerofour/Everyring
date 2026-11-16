@@ -167,7 +167,7 @@ struct RingRow: View {
                 .font(.title3)
                 .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
-                .background(ring.color.color.gradient, in: .circle)
+                .background(ring.accent.gradient, in: .circle)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -217,7 +217,7 @@ struct CelebrationBanner: View {
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
-                .background(ring.color.color.gradient, in: .circle)
+                .background(ring.accent.gradient, in: .circle)
                 .symbolEffect(.bounce, value: ring.id)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Ring closed!")

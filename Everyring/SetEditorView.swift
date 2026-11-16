@@ -30,7 +30,7 @@ struct SetEditorView: View {
                 Section {
                     if !draft.rings.isEmpty {
                         RingStackView(rings: draft.rings.map {
-                            RingDisplay(id: $0.id, color: $0.color, fraction: model.value(for: $0) > 0
+                            RingDisplay(id: $0.id, start: $0.gradient.start, end: $0.gradient.end, fraction: model.value(for: $0) > 0
                                         ? $0.fraction(model.value(for: $0)) : 0.7)
                         })
                         .frame(height: 140)
@@ -125,7 +125,7 @@ struct RingLabel: View {
                 .font(.body)
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
-                .background(ring.color.color.gradient, in: .circle)
+                .background(ring.accent.gradient, in: .circle)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ring.name)

@@ -140,6 +140,13 @@ enum RingColor: String, Codable, CaseIterable, Sendable {
     case sunrise, tangerine, magenta, violet, indigo, lagoon, fern, citrus
 }
 
+/// A colour picked freely for a ring (sRGB, 0–1).
+struct RingTint: Codable, Hashable, Sendable {
+    var red: Double
+    var green: Double
+    var blue: Double
+}
+
 /// Whether a ring's goal is something to reach or a limit to stay under.
 enum GoalKind: String, Codable, CaseIterable, Sendable {
     /// Reach at least the goal (steps, exercise). Closes at 100 % and may wrap around.
@@ -159,9 +166,11 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var goal: Double
     var period: RingPeriod
     var goalKind: GoalKind = .reach
+    /// A freely picked colour that replaces `color` when set.
+    var customTint: RingTint?
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
-         period: RingPeriod, goalKind: GoalKind = .reach) {
+         period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil) {
         self.id = id
         self.name = name
         self.color = color
@@ -170,10 +179,11 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.goal = goal
         self.period = period
         self.goalKind = goalKind
+        self.customTint = customTint
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, color, symbol, metric, goal, period, goalKind
+        case id, name, color, symbol, metric, goal, period, goalKind, customTint
     }
 
     init(from decoder: Decoder) throws {
@@ -187,6 +197,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         period = try c.decode(RingPeriod.self, forKey: .period)
         // Rings saved before limits existed are goals to reach.
         goalKind = try c.decodeIfPresent(GoalKind.self, forKey: .goalKind) ?? .reach
+        customTint = try c.decodeIfPresent(RingTint.self, forKey: .customTint)
     }
 
     var isLimit: Bool { goalKind == .limit }

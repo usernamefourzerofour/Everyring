@@ -261,7 +261,7 @@ struct RingsWidgetView: View {
                 } currentValueLabel: {
                     Text(first.fraction, format: .percent.precision(.fractionLength(0)))
                 }
-                .tint(first.ring.color.color)
+                .tint(first.ring.accent)
             }
             .accessibilityLabel(first.ring.accessibilityText(first.value, now: entry.date, calendar: entry.calendar))
     }

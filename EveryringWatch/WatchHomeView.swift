@@ -71,7 +71,7 @@ struct WatchRingRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: ring.symbol)
-                .foregroundStyle(ring.color.color)
+                .foregroundStyle(ring.accent)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 0) {
                 Text(ring.name)

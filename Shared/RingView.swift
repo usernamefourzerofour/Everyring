@@ -41,25 +41,56 @@ extension Color {
 /// One ring to draw.
 struct RingDisplay: Identifiable, Hashable {
     var id: UUID
-    var color: RingColor
+    var start: Color
+    var end: Color
     /// Fraction of the goal; may exceed 1 (the ring wraps around).
     var fraction: Double
     /// A limit ring past its limit: drawn in the warning colours.
     var warning = false
 
+    init(id: UUID, start: Color, end: Color, fraction: Double, warning: Bool = false) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.fraction = fraction
+        self.warning = warning
+    }
+
+    init(id: UUID, color: RingColor, fraction: Double, warning: Bool = false) {
+        self.init(id: id, start: color.gradient.start, end: color.gradient.end, fraction: fraction, warning: warning)
+    }
+
     /// Warm red, used only for limits that were exceeded (no ring colour can be picked to look like it).
     static let warningGradient = (start: Color(hex: 0xC4282D), end: Color(hex: 0xFF6A5C))
 }
 
+extension RingTint {
+    var color: Color { Color(red: red, green: green, blue: blue) }
+
+    /// The ring's gradient from a picked colour: a darker start and a lighter end, like the palette's.
+    var gradient: (start: Color, end: Color) {
+        func mix(_ c: Double, _ toward: Double, _ amount: Double) -> Double { c + (toward - c) * amount }
+        return (Color(red: mix(red, 0, 0.18), green: mix(green, 0, 0.18), blue: mix(blue, 0, 0.18)),
+                Color(red: mix(red, 1, 0.22), green: mix(green, 1, 0.22), blue: mix(blue, 1, 0.22)))
+    }
+}
+
 extension Ring {
+    /// The ring's gradient: from a freely picked colour, or the palette's.
+    var gradient: (start: Color, end: Color) { customTint?.gradient ?? color.gradient }
+
+    /// The ring's main colour for icons, text and highlights.
+    var accent: Color { customTint.map { $0.gradient.end } ?? color.color }
+
     /// The ring as drawn for `value`.
     func display(_ value: Double) -> RingDisplay {
-        RingDisplay(id: id, color: color, fraction: fraction(value), warning: isOverLimit(value))
+        let (start, end) = gradient
+        return RingDisplay(id: id, start: start, end: end, fraction: fraction(value), warning: isOverLimit(value))
     }
 
     /// The colour for the ring's text and icons at `value`: the warning colour past a limit.
     func tint(_ value: Double) -> Color {
-        isOverLimit(value) ? RingDisplay.warningGradient.end : color.color
+        isOverLimit(value) ? RingDisplay.warningGradient.end : accent
     }
 }
 
@@ -95,7 +126,8 @@ struct RingStackView: View {
             ZStack {
                 ForEach(Array(rings.enumerated()), id: \.element.id) { index, ring in
                     let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + Self.gapUnits)
-                    SingleRing(color: ring.color, fraction: ring.fraction, lineWidth: lw, trackOpacity: trackOpacity,
+                    SingleRing(start: ring.start, end: ring.end, fraction: ring.fraction, lineWidth: lw,
+                               trackOpacity: trackOpacity,
                                warning: ring.warning)
                         .frame(width: radius * 2, height: radius * 2)
                 }
@@ -109,14 +141,15 @@ struct RingStackView: View {
 /// One ring: a track, a gradient arc with round caps, and past 100 % a full lap plus the end cap with a shadow over the
 /// ring's start, like a ring that wraps around itself.
 struct SingleRing: View {
-    var color: RingColor
+    var start: Color
+    var end: Color
     var fraction: Double
     var lineWidth: CGFloat
     var trackOpacity = 0.18
     var warning = false
 
     var body: some View {
-        let (start, end) = warning ? RingDisplay.warningGradient : color.gradient
+        let (start, end) = warning ? RingDisplay.warningGradient : (self.start, self.end)
         let f = max(0, fraction)
         let wraps = f > 1
         // Position of the ring end within its last lap.
