@@ -6,11 +6,15 @@ struct SetEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: RingSet
     @State private var confirmDelete = false
+    @State private var path: [Route] = []
     private let isNew: Bool
     private let onSaved: (RingSet) -> Void
 
     private enum Route: Hashable {
+        /// Step 1 of a new ring: pick the Health metric.
         case newRing
+        /// Step 2: the ring editor with that metric's defaults.
+        case newRingEditor(HealthMetric)
         case ring(Ring.ID)
     }
 
@@ -21,7 +25,7 @@ struct SetEditorView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section {
                     if !draft.rings.isEmpty {
@@ -67,8 +71,12 @@ struct SetEditorView: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .newRing:
-                    RingEditorView(ring: .new(usedColors: draft.rings.map(\.color)), isNew: true) { ring in
+                    MetricPickerView { metric in path.append(.newRingEditor(metric)) }
+                case .newRingEditor(let metric):
+                    RingEditorView(ring: .new(metric: metric, usedColors: draft.rings.map(\.color)), isNew: true) { ring in
                         if draft.canAddRing { draft.rings.append(ring) }
+                        // The editor closes itself; then also leave the metric list, back to the set.
+                        DispatchQueue.main.async { path.removeAll() }
                     }
                 case .ring(let id):
                     if let ring = draft.rings.first(where: { $0.id == id }) {

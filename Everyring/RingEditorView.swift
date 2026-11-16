@@ -193,9 +193,37 @@ struct RingPreview: View {
     }
 }
 
+/// The Health metrics by category. Picks a metric for an existing ring (`selection`), or starts a new ring (`onPick`).
 struct MetricPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @Binding var selection: HealthMetric
+    private let current: HealthMetric?
+    private let onPick: (HealthMetric) -> Void
+    private let dismissesOnPick: Bool
+    private let title: LocalizedStringKey
+
+    /// Changes the metric of a ring being edited, then goes back.
+    init(selection: Binding<HealthMetric>) {
+        current = selection.wrappedValue
+        onPick = { metric in
+            // Keep a chosen workout kind when switching between workout measures.
+            if case .workouts(_, let kind) = selection.wrappedValue, case .workouts(let measure, _) = metric {
+                selection.wrappedValue = .workouts(measure,
+                                                   kind: measure == .distance && kind?.hasDistance == false ? nil : kind)
+            } else {
+                selection.wrappedValue = metric
+            }
+        }
+        dismissesOnPick = true
+        title = "Metric"
+    }
+
+    /// The first step of a new ring: the caller moves on to the ring editor.
+    init(onPick: @escaping (HealthMetric) -> Void) {
+        current = nil
+        self.onPick = onPick
+        dismissesOnPick = false
+        title = "New Ring"
+    }
 
     var body: some View {
         List {
@@ -203,13 +231,8 @@ struct MetricPickerView: View {
                 Section(category.title) {
                     ForEach(category.metrics, id: \.self) { metric in
                         Button {
-                            // Keep a chosen workout kind when switching between workout measures.
-                            if case .workouts(_, let kind) = selection, case .workouts(let measure, _) = metric {
-                                selection = .workouts(measure, kind: measure == .distance && kind?.hasDistance == false ? nil : kind)
-                            } else {
-                                selection = metric
-                            }
-                            dismiss()
+                            onPick(metric)
+                            if dismissesOnPick { dismiss() }
                         } label: {
                             HStack {
                                 Label(metric.title, systemImage: metric.defaultSymbol)
@@ -219,6 +242,10 @@ struct MetricPickerView: View {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(.tint)
                                         .accessibilityLabel("Selected")
+                                } else if !dismissesOnPick {
+                                    Image(systemName: "chevron.forward")
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
                                 }
                             }
                         }
@@ -226,13 +253,14 @@ struct MetricPickerView: View {
                 }
             }
         }
-        .navigationTitle("Metric")
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func isSelected(_ metric: HealthMetric) -> Bool {
-        if case .workouts(let a, _) = selection, case .workouts(let b, _) = metric { return a == b }
-        return selection == metric
+        guard let current else { return false }
+        if case .workouts(let a, _) = current, case .workouts(let b, _) = metric { return a == b }
+        return current == metric
     }
 }
 
