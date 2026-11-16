@@ -89,7 +89,7 @@ struct MoreMetricsTests {
     @Test func suggestedGoals() {
         #expect(HealthMetric.quantity(.protein).suggestedGoal(for: .today, locale: us) == 60)
         #expect(HealthMetric.events(.toothbrushing).suggestedGoal(for: .today, locale: us) == 2)
-        #expect(HealthMetric.quantity(.restingEnergy).suggestedGoal(for: .today, locale: us) == 1_600)
+        #expect(HealthMetric.quantity(.restingEnergy).suggestedGoal(for: .today, locale: us) == 1_500)
     }
 
     @Test func codableRoundTrip() throws {
