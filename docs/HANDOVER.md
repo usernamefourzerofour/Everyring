@@ -187,3 +187,6 @@ Manual logging, notifications, iCloud sync, sharing/social, quarter and year per
 - Configuration and cache are Codable JSON in the App Group container (not SwiftData): small, easy to send to the Watch
   and to read from widgets.
 - Work happens directly on `main`.
+- Every summable Health type is offered as a ring, except medical ones (insulin delivery, inhaler usage) and number
+  of times fallen: Everyring can't vouch for their precision and must not give medical advice (decided 2026-11-16).
+- Rings can be goals to reach or limits to stay under (turn red when exceeded).
