@@ -13,6 +13,8 @@ extension HealthMetric {
         case .meters: UnitLength.meters
         case .kilocalories: UnitEnergy.kilocalories
         case .liters: UnitVolume.liters
+        case .grams: UnitMass.grams
+        case .milligrams: UnitMass.milligrams
         case .count, .minutes, .hours: nil
         }
     }
@@ -36,6 +38,11 @@ extension HealthMetric {
             return kilojouleRegions.contains(locale.region?.identifier ?? "") ? UnitEnergy.kilojoules : UnitEnergy.kilocalories
         case .liters:
             return locale.measurementSystem == .us ? UnitVolume.fluidOunces : UnitVolume.liters
+        case .grams:
+            // Nutrition labels use grams everywhere.
+            return UnitMass.grams
+        case .milligrams:
+            return UnitMass.milligrams
         case .count, .minutes, .hours:
             return nil
         }
@@ -87,6 +94,8 @@ extension HealthMetric {
             switch self {
             case .steps: return String(localized: "steps")
             case .flightsClimbed: return String(localized: "flights")
+            case .quantity(let kind): return kind.countNoun ?? String(localized: "times")
+            case .events: return String(localized: "times")
             default: return String(localized: "workouts")
             }
         }
@@ -97,7 +106,7 @@ extension HealthMetric {
         switch baseUnit {
         case .count:
             return String(localized: "\(number(value, locale: locale)) \(unitName(style: style, locale: locale))")
-        case .meters, .kilocalories, .liters:
+        case .meters, .kilocalories, .liters, .grams, .milligrams:
             let unit = displayUnit(locale: locale)!
             let digits = fractionDigits(locale: locale)
             return Measurement(value: max(0, toDisplay(value, locale: locale)), unit: unit)

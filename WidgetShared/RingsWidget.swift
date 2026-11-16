@@ -138,8 +138,27 @@ struct RingsWidgetView: View {
 
     // MARK: Home Screen
 
+    /// Rings with a compact legend: each ring's icon and percentage.
     private var small: some View {
-        rings
+        HStack(spacing: 8) {
+            rings
+            VStack(alignment: .leading, spacing: entry.items.count > 4 ? 1 : 3) {
+                ForEach(entry.items) { item in
+                    HStack(spacing: 3) {
+                        Image(systemName: item.ring.symbol)
+                            .font(.system(size: 10, weight: .semibold))
+                            .frame(width: 14)
+                        Text(item.fraction, format: .percent.precision(.fractionLength(0)))
+                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(item.ring.color.color)
+                }
+            }
+            .fixedSize()
+            .accessibilityHidden(true)
+        }
     }
 
     private var medium: some View {

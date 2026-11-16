@@ -12,9 +12,13 @@ enum HealthMetric: Codable, Hashable, Sendable {
     case sleep, mindfulMinutes, timeInDaylight
     // Nutrition
     case water
+    /// More cumulative quantities (resting energy, nutrients, more distances, …).
+    case quantity(QuantityKind)
+    /// Counted Health events (toothbrushing, handwashing).
+    case events(EventKind)
 
     enum BaseUnit: String, Codable, Sendable {
-        case count, kilocalories, minutes, hours, meters, liters
+        case count, kilocalories, minutes, hours, meters, liters, grams, milligrams
     }
 
     var baseUnit: BaseUnit {
@@ -31,6 +35,8 @@ enum HealthMetric: Codable, Hashable, Sendable {
             case .distance: .meters
             }
         case .water: .liters
+        case .quantity(let kind): kind.baseUnit
+        case .events: .count
         }
     }
 
@@ -58,6 +64,8 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .mindfulMinutes: String(localized: "Mindful minutes")
         case .timeInDaylight: String(localized: "Time in daylight")
         case .water: String(localized: "Water")
+        case .quantity(let kind): kind.title
+        case .events(let kind): kind.title
         }
     }
 }
@@ -71,6 +79,10 @@ enum WorkoutMeasure: String, Codable, CaseIterable, Sendable {
 enum WorkoutKind: String, Codable, CaseIterable, Sendable {
     case running, walking, hiking, cycling, swimming, rowing, elliptical
     case strength, hiit, yoga, pilates, dance, crossTraining
+    case coreTraining, flexibility, mixedCardio, stairs
+    case tennis, badminton, tableTennis, pickleball, soccer, basketball, golf
+    case climbing, martialArts, boxing
+    case downhillSkiing, snowboarding, crossCountrySkiing, paddling, skating
 
     var title: String {
         switch self {
@@ -87,13 +99,33 @@ enum WorkoutKind: String, Codable, CaseIterable, Sendable {
         case .pilates: String(localized: "Pilates")
         case .dance: String(localized: "Dance")
         case .crossTraining: String(localized: "Cross training")
+        case .coreTraining: String(localized: "Core training")
+        case .flexibility: String(localized: "Flexibility")
+        case .mixedCardio: String(localized: "Mixed cardio")
+        case .stairs: String(localized: "Stairs")
+        case .tennis: String(localized: "Tennis")
+        case .badminton: String(localized: "Badminton")
+        case .tableTennis: String(localized: "Table tennis")
+        case .pickleball: String(localized: "Pickleball")
+        case .soccer: String(localized: "Football")
+        case .basketball: String(localized: "Basketball")
+        case .golf: String(localized: "Golf")
+        case .climbing: String(localized: "Climbing")
+        case .martialArts: String(localized: "Martial arts")
+        case .boxing: String(localized: "Boxing")
+        case .downhillSkiing: String(localized: "Downhill skiing")
+        case .snowboarding: String(localized: "Snowboarding")
+        case .crossCountrySkiing: String(localized: "Cross-country skiing")
+        case .paddling: String(localized: "Paddling")
+        case .skating: String(localized: "Skating")
         }
     }
 
     /// Kinds where a distance goal makes sense.
     var hasDistance: Bool {
         switch self {
-        case .running, .walking, .hiking, .cycling, .swimming, .rowing: true
+        case .running, .walking, .hiking, .cycling, .swimming, .rowing, .downhillSkiing, .snowboarding,
+             .crossCountrySkiing, .paddling, .skating: true
         default: false
         }
     }

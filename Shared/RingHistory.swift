@@ -87,6 +87,73 @@ struct RingHistory: Hashable, Sendable {
     }
 }
 
+/// One page of a ring's history: a calendar month, or a year for monthly rings.
+struct HistoryPage: Hashable, Sendable {
+    var range: DateInterval
+    /// Fixed rings: the periods that overlap the page (and have started), newest first.
+    var periods: [PeriodRecord] = []
+    /// Rolling rings: the window value per day of the page up to today, oldest first.
+    var days: [DayValue] = []
+
+    /// Pages are months, except for rings that reset every month: those page by year.
+    static func unit(for period: RingPeriod) -> Calendar.Component {
+        if case .thisMonth = period { .year } else { .month }
+    }
+
+    /// The page `offset` pages from the current one (0 = this month or year, -1 = the one before, …).
+    static func range(for period: RingPeriod, offset: Int, now: Date, calendar: Calendar) -> DateInterval {
+        let unit = unit(for: period)
+        let date = calendar.date(byAdding: unit, value: offset, to: now) ?? now
+        return calendar.dateInterval(of: unit, for: date) ?? DateInterval(start: date, duration: 86_400)
+    }
+
+    /// The earliest day whose value the page needs.
+    static func requiredStart(for ring: Ring, range: DateInterval, now: Date, calendar: Calendar) -> Date {
+        let lastDay = min(range.end.addingTimeInterval(-1), now)
+        if case .rollingDays(let n) = ring.period {
+            return calendar.date(byAdding: .day, value: -(n - 1), to: calendar.startOfDay(for: range.start)) ?? range.start
+        }
+        return min(ring.period.interval(containing: range.start, calendar: calendar).start, calendar.startOfDay(for: lastDay))
+    }
+
+    static func make(for ring: Ring, daily: [Date: Double], range: DateInterval, now: Date,
+                     calendar: Calendar) -> HistoryPage {
+        var page = HistoryPage(range: range)
+        let current = ring.period.interval(now: now, calendar: calendar)
+        let closed = { (value: Double) in Streak.isClosed(value: value, goal: ring.goal) }
+        if ring.period.isRolling {
+            var day = calendar.startOfDay(for: range.start)
+            let today = calendar.startOfDay(for: now)
+            while day < range.end && day <= today {
+                let window = day == today ? current : ring.period.interval(containing: day, calendar: calendar)
+                page.days.append(DayValue(day: day, value: RingHistory.sum(daily, in: window, calendar: calendar)))
+                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                day = next
+            }
+        } else {
+            var interval = ring.period.interval(containing: min(range.end.addingTimeInterval(-1), now), calendar: calendar)
+            while interval.end > range.start {
+                if interval.start <= now {
+                    let isCurrent = interval.start == current.start
+                    let value = RingHistory.sum(daily, in: isCurrent ? current : interval, calendar: calendar)
+                    page.periods.append(PeriodRecord(interval: interval, value: value, closed: closed(value),
+                                                     isCurrent: isCurrent))
+                }
+                interval = ring.period.previous(interval, calendar: calendar)
+            }
+        }
+        return page
+    }
+
+    /// "November 2026", or "2026" for a year page.
+    func title(calendar: Calendar) -> String {
+        var style = calendar.dateInterval(of: .year, for: range.start) == range
+            ? Date.FormatStyle.dateTime.year() : Date.FormatStyle.dateTime.month(.wide).year()
+        style.timeZone = calendar.timeZone
+        return range.start.formatted(style)
+    }
+}
+
 extension RingPeriod {
     /// A finished or current period's name in a history list: "Mon 16 Nov", "16 Nov – 22 Nov", "November 2026".
     func label(for interval: DateInterval, calendar: Calendar) -> String {

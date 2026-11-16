@@ -8,6 +8,9 @@ struct RingDetailView: View {
     @State private var history: RingHistory?
     @State private var loading = true
     @State private var editing = false
+    /// 0 = this month (or year for monthly rings), -1 = the one before, …
+    @State private var pageOffset = 0
+    @State private var page: HistoryPage?
 
     var body: some View {
         if let ring = model.ring(id: ringID) {
@@ -38,9 +41,7 @@ struct RingDetailView: View {
 
                     StreakCard(ring: ring, streak: history?.streak, loading: loading)
 
-                    if let history {
-                        HistoryCard(ring: ring, history: history, calendar: model.calendar)
-                    }
+                    HistoryCard(ring: ring, page: page, offset: $pageOffset, calendar: model.calendar)
                 }
                 .padding()
                 .frame(maxWidth: 600)
@@ -56,6 +57,9 @@ struct RingDetailView: View {
                                    onSave: { model.update($0) },
                                    onDelete: { model.deleteRing(id: ring.id) })
                 }
+            }
+            .task(id: PageKey(ring: ring, offset: pageOffset)) {
+                page = await model.historyPage(for: ring, offset: pageOffset)
             }
             .task(id: ring) {
                 loading = true
@@ -119,29 +123,77 @@ private struct StreakNumber: View {
 
 // MARK: History
 
+private struct PageKey: Hashable {
+    var ring: Ring
+    var offset: Int
+}
+
 struct HistoryCard: View {
     let ring: Ring
-    let history: RingHistory
+    let page: HistoryPage?
+    @Binding var offset: Int
     let calendar: Calendar
+
+    /// How far back you can page: two years of months, or ten years.
+    private var oldestOffset: Int { HistoryPage.unit(for: ring.period) == .year ? -9 : -23 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("History", systemImage: "calendar")
-                .font(.headline)
-                .foregroundStyle(ring.color.color)
-            switch ring.period {
-            case .rollingDays(let n):
-                RollingChart(ring: ring, days: history.days)
-                Text("The value of the last \(n) days, as it stood at the end of each day.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            case .today:
-                DayGrid(ring: ring, records: history.periods, calendar: calendar)
-            default:
-                PeriodList(ring: ring, records: history.periods, calendar: calendar)
+            HStack {
+                Label("History", systemImage: "calendar")
+                    .font(.headline)
+                    .foregroundStyle(ring.color.color)
+                Spacer()
+                pager
+            }
+            if let page {
+                switch ring.period {
+                case .rollingDays(let n):
+                    RollingChart(ring: ring, days: page.days)
+                    Text("The value of the last \(n) days, as it stood at the end of each day.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                case .today:
+                    DayGrid(ring: ring, records: page.periods, range: page.range, calendar: calendar)
+                default:
+                    PeriodList(ring: ring, records: page.periods, calendar: calendar)
+                }
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 120)
             }
         }
         .card()
+    }
+
+    private var pager: some View {
+        let isYear = HistoryPage.unit(for: ring.period) == .year
+        return HStack(spacing: 4) {
+            Button {
+                offset -= 1
+            } label: {
+                Image(systemName: "chevron.backward")
+                    .frame(width: 32, height: 32)
+            }
+            .disabled(offset <= oldestOffset)
+            .accessibilityLabel(isYear ? "Previous year" : "Previous month")
+
+            Text(page?.title(calendar: calendar) ?? "")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .frame(minWidth: 110)
+                .contentTransition(.numericText())
+
+            Button {
+                offset += 1
+            } label: {
+                Image(systemName: "chevron.forward")
+                    .frame(width: 32, height: 32)
+            }
+            .disabled(offset >= 0)
+            .accessibilityLabel(isYear ? "Next year" : "Next month")
+        }
+        .buttonStyle(.borderless)
+        .tint(ring.color.color)
     }
 }
 
@@ -189,11 +241,11 @@ struct RollingChart: View {
 struct DayGrid: View {
     let ring: Ring
     let records: [PeriodRecord]
+    let range: DateInterval
     let calendar: Calendar
 
     var body: some View {
         let byDay = Dictionary(records.map { ($0.interval.start, $0) }, uniquingKeysWith: { a, _ in a })
-        let days = gridDays
         let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
         LazyVGrid(columns: columns, spacing: 8) {
             ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
@@ -202,31 +254,45 @@ struct DayGrid: View {
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
-            ForEach(days, id: \.self) { day in
-                if let record = byDay[day] {
+            ForEach(gridDays, id: \.self) { day in
+                if day < range.start || day >= range.end {
+                    Color.clear.frame(height: 30)
+                        .accessibilityHidden(true)
+                } else if let record = byDay[day] {
                     VStack(spacing: 2) {
                         RingStackView(rings: [RingDisplay(id: ring.id, color: ring.color, fraction: ring.fraction(record.value))])
                             .frame(width: 30, height: 30)
-                        Text(calendar.component(.day, from: day), format: .number)
-                            .font(.caption2.monospacedDigit())
-                            .fontWeight(record.isCurrent ? .bold : .regular)
-                            .foregroundStyle(record.isCurrent ? .primary : .secondary)
+                        dayNumber(day, bold: record.isCurrent)
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibilityText(record))
                 } else {
-                    Color.clear.frame(height: 30)
-                        .accessibilityHidden(true)
+                    // A day still to come.
+                    VStack(spacing: 2) {
+                        Circle()
+                            .strokeBorder(ring.color.color.opacity(0.12), lineWidth: 3.75)
+                            .frame(width: 30, height: 30)
+                        dayNumber(day, bold: false)
+                            .opacity(0.5)
+                    }
+                    .accessibilityHidden(true)
                 }
             }
         }
     }
 
-    /// From the week start before the oldest record through the end of the current week.
+    private func dayNumber(_ day: Date, bold: Bool) -> some View {
+        Text(calendar.component(.day, from: day), format: .number)
+            .font(.caption2.monospacedDigit())
+            .fontWeight(bold ? .bold : .regular)
+            .foregroundStyle(bold ? .primary : .secondary)
+    }
+
+    /// Whole weeks (starting on the week start) covering the month.
     private var gridDays: [Date] {
-        guard let oldest = records.last?.interval.start, let newest = records.first?.interval.start,
-              let first = calendar.dateInterval(of: .weekOfYear, for: oldest)?.start,
-              let last = calendar.dateInterval(of: .weekOfYear, for: newest)?.end else { return [] }
+        guard let first = calendar.dateInterval(of: .weekOfYear, for: range.start)?.start,
+              let last = calendar.dateInterval(of: .weekOfYear, for: range.end.addingTimeInterval(-1))?.end
+        else { return [] }
         var days: [Date] = []
         var day = first
         while day < last {

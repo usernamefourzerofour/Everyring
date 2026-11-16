@@ -3,7 +3,7 @@ import Foundation
 /// Groups, defaults and suggested goals for the metric picker and new rings.
 extension HealthMetric {
     enum Category: String, CaseIterable, Identifiable, Sendable {
-        case activity, distance, workouts, recovery, nutrition
+        case activity, distance, workouts, recovery, nutrition, hygiene
 
         var id: Self { self }
 
@@ -14,16 +14,20 @@ extension HealthMetric {
             case .workouts: String(localized: "Workouts")
             case .recovery: String(localized: "Recovery and mind")
             case .nutrition: String(localized: "Nutrition")
+            case .hygiene: String(localized: "Hygiene")
             }
         }
 
         var metrics: [HealthMetric] {
+            let more = QuantityKind.allCases.filter { $0.category == self }.map(HealthMetric.quantity)
             switch self {
-            case .activity: [.steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed]
-            case .distance: [.walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance]
-            case .workouts: [.workouts(.count, kind: nil), .workouts(.minutes, kind: nil), .workouts(.distance, kind: nil)]
-            case .recovery: [.sleep, .mindfulMinutes, .timeInDaylight]
-            case .nutrition: [.water]
+            case .activity: return [.steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed] + more
+            case .distance:
+                return [.walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance] + more
+            case .workouts: return [.workouts(.count, kind: nil), .workouts(.minutes, kind: nil), .workouts(.distance, kind: nil)]
+            case .recovery: return [.sleep, .mindfulMinutes, .timeInDaylight]
+            case .nutrition: return [.water] + more
+            case .hygiene: return EventKind.allCases.map(HealthMetric.events)
             }
         }
     }
@@ -35,6 +39,8 @@ extension HealthMetric {
         case .workouts: .workouts
         case .sleep, .mindfulMinutes, .timeInDaylight: .recovery
         case .water: .nutrition
+        case .quantity(let kind): kind.category
+        case .events: .hygiene
         }
     }
 
@@ -54,6 +60,8 @@ extension HealthMetric {
         case .mindfulMinutes: "brain.head.profile"
         case .timeInDaylight: "sun.max"
         case .water: "drop"
+        case .quantity(let kind): kind.symbol
+        case .events(let kind): kind.symbol
         }
     }
 
@@ -63,6 +71,8 @@ extension HealthMetric {
         case .exerciseMinutes, .sleep: .rollingDays(7)
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance, .workouts, .mindfulMinutes:
             .thisWeek
+        case .quantity(let kind): kind.defaultPeriod
+        case .events: .today
         }
     }
 
@@ -85,6 +95,8 @@ extension HealthMetric {
         case .mindfulMinutes: 10
         case .timeInDaylight: 30
         case .water: 2
+        case .quantity(let kind): kind.dailyBaseline
+        case .events(let kind): kind.dailyBaseline
         }
     }
 
@@ -126,6 +138,25 @@ extension WorkoutKind {
         case .pilates: "figure.pilates"
         case .dance: "figure.dance"
         case .crossTraining: "figure.cross.training"
+        case .coreTraining: "figure.core.training"
+        case .flexibility: "figure.flexibility"
+        case .mixedCardio: "figure.mixed.cardio"
+        case .stairs: "figure.stair.stepper"
+        case .tennis: "figure.tennis"
+        case .badminton: "figure.badminton"
+        case .tableTennis: "figure.table.tennis"
+        case .pickleball: "figure.pickleball"
+        case .soccer: "figure.soccer"
+        case .basketball: "figure.basketball"
+        case .golf: "figure.golf"
+        case .climbing: "figure.climbing"
+        case .martialArts: "figure.martial.arts"
+        case .boxing: "figure.boxing"
+        case .downhillSkiing: "figure.skiing.downhill"
+        case .snowboarding: "figure.snowboarding"
+        case .crossCountrySkiing: "figure.skiing.crosscountry"
+        case .paddling: "oar.2.crossed"
+        case .skating: "figure.skating"
         }
     }
 }

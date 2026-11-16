@@ -185,6 +185,24 @@ final class RingsModel {
         return history
     }
 
+    /// One page of the ring's history (`offset` 0 = this month, or this year for monthly rings).
+    func historyPage(for ring: Ring, offset: Int, now: Date = .now) async -> HistoryPage? {
+        let calendar = calendar
+        let range = HistoryPage.range(for: ring.period, offset: offset, now: now, calendar: calendar)
+        let start = HistoryPage.requiredStart(for: ring, range: range, now: now, calendar: calendar)
+        let daily: [Date: Double]
+        if Self.isDemo {
+            daily = DemoHistory.daily(for: ring, from: start, to: now, calendar: calendar)
+        } else {
+            do {
+                daily = try await dailyValues(of: ring.metric, from: start, now: now, calendar: calendar)
+            } catch {
+                return nil
+            }
+        }
+        return HistoryPage.make(for: ring, daily: daily, range: range, now: now, calendar: calendar)
+    }
+
     private func dailyValues(of metric: HealthMetric, from start: Date, now: Date,
                              calendar: Calendar) async throws -> [Date: Double] {
         // Past days rarely change: within an hour, only re-read yesterday and today.

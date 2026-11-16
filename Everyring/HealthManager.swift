@@ -15,7 +15,8 @@ extension HealthMetric {
         case .wheelchairDistance: HKQuantityType(.distanceWheelchair)
         case .timeInDaylight: HKQuantityType(.timeInDaylight)
         case .water: HKQuantityType(.dietaryWater)
-        case .standHours, .workouts, .sleep, .mindfulMinutes: nil
+        case .quantity(let kind): HKQuantityType(kind.identifier)
+        case .standHours, .workouts, .sleep, .mindfulMinutes, .events: nil
         }
     }
 
@@ -26,6 +27,7 @@ extension HealthMetric {
         case .standHours: return [HKCategoryType(.appleStandHour)]
         case .sleep: return [HKCategoryType(.sleepAnalysis)]
         case .mindfulMinutes: return [HKCategoryType(.mindfulSession)]
+        case .events(let kind): return [HKCategoryType(kind.identifier)]
         case .workouts(let measure, _):
             var types: Set<HKObjectType> = [HKObjectType.workoutType()]
             if measure == .distance { types.formUnion(Self.workoutDistanceTypes) }
@@ -37,7 +39,9 @@ extension HealthMetric {
     /// Distance types a workout can carry statistics for.
     static var workoutDistanceTypes: Set<HKQuantityType> {
         [HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceCycling), HKQuantityType(.distanceSwimming),
-         HKQuantityType(.distanceWheelchair), HKQuantityType(.distanceRowing)]
+         HKQuantityType(.distanceWheelchair), HKQuantityType(.distanceRowing), HKQuantityType(.distancePaddleSports),
+         HKQuantityType(.distanceSkatingSports), HKQuantityType(.distanceCrossCountrySkiing),
+         HKQuantityType(.distanceDownhillSnowSports)]
     }
 
     var hkUnit: HKUnit {
@@ -48,6 +52,41 @@ extension HealthMetric {
         case .hours: .hour()
         case .meters: .meter()
         case .liters: .liter()
+        case .grams: .gram()
+        case .milligrams: .gramUnit(with: .milli)
+        }
+    }
+}
+
+extension QuantityKind {
+    var identifier: HKQuantityTypeIdentifier {
+        switch self {
+        case .restingEnergy: .basalEnergyBurned
+        case .moveTime: .appleMoveTime
+        case .standTime: .appleStandTime
+        case .wheelchairPushes: .pushCount
+        case .rowingDistance: .distanceRowing
+        case .paddleDistance: .distancePaddleSports
+        case .skatingDistance: .distanceSkatingSports
+        case .crossCountrySkiingDistance: .distanceCrossCountrySkiing
+        case .downhillSnowDistance: .distanceDownhillSnowSports
+        case .swimmingStrokes: .swimmingStrokeCount
+        case .dietaryEnergy: .dietaryEnergyConsumed
+        case .protein: .dietaryProtein
+        case .carbohydrates: .dietaryCarbohydrates
+        case .fat: .dietaryFatTotal
+        case .fiber: .dietaryFiber
+        case .sugar: .dietarySugar
+        case .caffeine: .dietaryCaffeine
+        }
+    }
+}
+
+extension EventKind {
+    var identifier: HKCategoryTypeIdentifier {
+        switch self {
+        case .toothbrushing: .toothbrushingEvent
+        case .handwashing: .handwashingEvent
         }
     }
 }
@@ -68,6 +107,25 @@ extension WorkoutKind {
         case .pilates: [.pilates]
         case .dance: [.socialDance, .cardioDance]
         case .crossTraining: [.crossTraining]
+        case .coreTraining: [.coreTraining]
+        case .flexibility: [.flexibility]
+        case .mixedCardio: [.mixedCardio]
+        case .stairs: [.stairClimbing, .stairs, .stepTraining]
+        case .tennis: [.tennis]
+        case .badminton: [.badminton]
+        case .tableTennis: [.tableTennis]
+        case .pickleball: [.pickleball]
+        case .soccer: [.soccer]
+        case .basketball: [.basketball]
+        case .golf: [.golf]
+        case .climbing: [.climbing]
+        case .martialArts: [.martialArts]
+        case .boxing: [.boxing, .kickboxing]
+        case .downhillSkiing: [.downhillSkiing]
+        case .snowboarding: [.snowboarding]
+        case .crossCountrySkiing: [.crossCountrySkiing]
+        case .paddling: [.paddleSports]
+        case .skating: [.skatingSports]
         }
     }
 }
@@ -110,6 +168,8 @@ final class HealthManager {
             return try await sum(type, unit: metric.hkUnit, in: interval)
         }
         switch metric {
+        case .events(let kind):
+            return Double(try await categorySamples(kind.identifier, in: interval, strictStart: true).count)
         case .standHours:
             let samples = try await categorySamples(.appleStandHour, in: interval, strictStart: true)
             return Double(samples.filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }.count)
@@ -179,6 +239,9 @@ final class HealthManager {
             return result
         }
         switch metric {
+        case .events(let kind):
+            let events = try await categorySamples(kind.identifier, in: range, strictStart: true)
+            return Dictionary(grouping: events) { calendar.startOfDay(for: $0.startDate) }.mapValues { Double($0.count) }
         case .standHours:
             let stood = try await categorySamples(.appleStandHour, in: range, strictStart: true)
                 .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
