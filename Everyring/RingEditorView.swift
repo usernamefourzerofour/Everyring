@@ -177,6 +177,8 @@ struct RingEditorView: View {
             }
             // Likewise the icon: the old metric's icon follows, one the user picked stays.
             if ring.symbol == old.defaultSymbol { ring.symbol = new.defaultSymbol }
+            // And the colour: the old metric's colour follows, one the user picked stays.
+            if ring.color == old.defaultColor { ring.color = new.defaultColor }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
             if !goalEdited {

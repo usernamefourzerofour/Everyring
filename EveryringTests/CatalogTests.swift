@@ -93,8 +93,16 @@ struct CatalogTests {
         #expect(missing.isEmpty, "Unknown SF Symbols: \(missing)")
     }
 
+    @Test func newRingUsesTheMetricsColour() {
+        #expect(Ring.new(metric: .timeInDaylight).color == .citrus)
+        #expect(Ring.new(metric: .sleep).color == .indigo)
+        #expect(Ring.new(metric: .water).color == .lagoon)
+        // Taken by another ring: the first free colour.
+        #expect(Ring.new(metric: .timeInDaylight, usedColors: [.citrus, .sunrise]).color == .tangerine)
+    }
+
     @Test func newRingPicksUnusedColor() {
-        let ring = Ring.new(metric: .sleep, usedColors: [.sunrise, .tangerine])
+        let ring = Ring.new(metric: .sleep, usedColors: [.indigo, .sunrise, .tangerine])
         #expect(ring.color == .magenta)
         #expect(ring.name == "Sleep")
         #expect(ring.period == .rollingDays(7))

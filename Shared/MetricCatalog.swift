@@ -123,6 +123,48 @@ extension HealthMetric {
         return max(step, (value / step).rounded() * step)
     }
 
+    /// A colour that fits the activity: yellow for daylight, blue for sleep, turquoise for water, green for steps, …
+    var defaultColor: RingColor {
+        switch self {
+        case .steps, .walkingRunningDistance: .fern
+        case .activeEnergy: .sunrise
+        case .exerciseMinutes: .magenta
+        case .standHours: .lagoon
+        case .flightsClimbed, .cyclingDistance: .indigo
+        case .swimmingDistance: .lagoon
+        case .wheelchairDistance: .violet
+        case .workouts(_, let kind): kind?.defaultColor ?? .indigo
+        case .sleep: .indigo
+        case .mindfulMinutes: .violet
+        case .timeInDaylight: .citrus
+        case .water: .lagoon
+        case .events: .lagoon
+        case .quantity(let kind):
+            switch kind {
+            case .restingEnergy, .protein: .tangerine
+            case .moveTime: .magenta
+            case .standTime, .rowingDistance, .paddleDistance, .swimmingStrokes: .lagoon
+            case .wheelchairPushes: .violet
+            case .skatingDistance, .crossCountrySkiingDistance, .downhillSnowDistance: .indigo
+            case .dietaryEnergy, .caffeine: .sunrise
+            case .carbohydrates, .fat: .citrus
+            case .fiber: .fern
+            case .sugar: .magenta
+            }
+        case .nutrient(let kind):
+            switch kind.category {
+            case .vitamins: .citrus
+            case .minerals: .indigo
+            default:
+                switch kind {
+                case .alcoholicBeverages, .cholesterol: .magenta
+                case .sodium: .indigo
+                default: .citrus
+                }
+            }
+        }
+    }
+
     /// Calories eaten, sugar and caffeine are usually limits to stay under; everything else a goal to reach.
     var defaultGoalKind: GoalKind {
         switch self {
@@ -139,6 +181,18 @@ extension HealthMetric {
 }
 
 extension WorkoutKind {
+    var defaultColor: RingColor {
+        switch self {
+        case .running, .walking, .hiking, .golf, .soccer: .fern
+        case .strength, .hiit, .crossTraining, .boxing, .martialArts, .coreTraining: .tangerine
+        case .yoga, .pilates, .flexibility, .dance: .violet
+        case .swimming, .rowing, .paddling: .lagoon
+        case .cycling, .downhillSkiing, .snowboarding, .crossCountrySkiing, .skating, .climbing: .indigo
+        case .tennis, .badminton, .tableTennis, .pickleball, .basketball: .citrus
+        case .elliptical, .mixedCardio, .stairs: .magenta
+        }
+    }
+
     var symbol: String {
         switch self {
         case .running: "figure.run"
@@ -252,7 +306,10 @@ extension Ring {
     /// A new ring for `metric` with suggested defaults, in a colour not already used by `usedColors` if possible.
     static func new(metric: HealthMetric = .steps, usedColors: [RingColor] = [], locale: Locale = .current) -> Ring {
         let period = metric.defaultPeriod
-        let color = RingColor.allCases.first { !usedColors.contains($0) } ?? .sunrise
+        // The metric's own colour, unless another ring in the set has it.
+        let color = usedColors.contains(metric.defaultColor)
+            ? RingColor.allCases.first { !usedColors.contains($0) } ?? metric.defaultColor
+            : metric.defaultColor
         return Ring(name: metric.title, color: color, symbol: metric.defaultSymbol, metric: metric,
                     goal: metric.suggestedGoal(for: period, locale: locale), period: period,
                     goalKind: metric.defaultGoalKind)
