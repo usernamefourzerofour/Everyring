@@ -22,29 +22,43 @@ struct RingDetailView: View {
     var body: some View {
         if let ring = model.ring(id: ringID) {
             let value = model.value(for: ring)
+            // A period picked in the history: the ring and its texts show that period too, not only the chart.
+            let past = selected != nil && progress?.isPast == true ? progress : nil
+            let shown = past?.points.last?.total ?? value
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 24) {
-                    RingStackView(rings: [ring.display(value)])
+                    RingStackView(rings: [ring.display(shown)])
                         .frame(maxWidth: 240)
+                        .animation(.smooth(duration: 0.6), value: shown)
                         .overlay {
                             VStack(spacing: 2) {
                                 Image(systemName: ring.symbol)
                                     .font(.title)
-                                    .foregroundStyle(ring.tint(value))
-                                Text(ring.fraction(value), format: .percent.precision(.fractionLength(0)))
+                                    .foregroundStyle(ring.tint(shown))
+                                Text(ring.fraction(shown), format: .percent.precision(.fractionLength(0)))
                                     .font(.title2.monospacedDigit().weight(.semibold))
+                                    .contentTransition(.numericText(value: shown))
                             }
                         }
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(model.accessibilityText(for: ring))
+                        .accessibilityLabel(past.map { ring.accessibilityText(shown, calendar: model.calendar)
+                            + ", " + ring.period.label(for: $0.interval, calendar: model.calendar) }
+                            ?? model.accessibilityText(for: ring))
 
                     VStack(spacing: 6) {
-                        Text(ring.progressText(value))
+                        Text(ring.progressText(shown))
                             .font(.title3.weight(.semibold))
                             .multilineTextAlignment(.center)
-                        Text(ring.period.status(calendar: model.calendar))
-                            .foregroundStyle(.secondary)
+                            .contentTransition(.numericText(value: shown))
+                        if let past {
+                            Text(ring.period.label(for: past.interval, calendar: model.calendar))
+                                .foregroundStyle(ring.color.color)
+                                .fontWeight(.medium)
+                        } else {
+                            Text(ring.period.status(calendar: model.calendar))
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     if let history, !history.hasData {
