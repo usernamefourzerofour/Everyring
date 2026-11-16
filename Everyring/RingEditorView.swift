@@ -162,7 +162,12 @@ struct RingEditorView: View {
             }
         }
         .onChange(of: ring.metric) { old, new in
-            if !nameEdited { ring.name = new.title }
+            // A name that is still the old metric's own name follows the metric; one the user wrote stays.
+            let nameIsDefault = ring.name.trimmingCharacters(in: .whitespaces).isEmpty || ring.name == old.title
+            if !nameEdited || nameIsDefault {
+                ring.name = new.title
+                nameEdited = false
+            }
             if !nameEdited || ring.symbol == old.defaultSymbol { ring.symbol = new.defaultSymbol }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
