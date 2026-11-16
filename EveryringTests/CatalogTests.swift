@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Testing
 @testable import Everyring
 
@@ -76,6 +77,20 @@ struct CatalogTests {
         let miles = HealthMetric.walkingRunningDistance.toDisplay(
             HealthMetric.walkingRunningDistance.suggestedGoal(for: .thisWeek, locale: us), locale: us)
         #expect(abs(miles - 20) < 0.0001)
+    }
+
+    @Test func iconListHasEveryDefaultOnce() {
+        let symbols = Ring.symbols
+        #expect(Set(symbols).count == symbols.count)
+        for metric in HealthMetric.Category.allCases.flatMap(\.metrics) { #expect(symbols.contains(metric.defaultSymbol)) }
+        for kind in WorkoutKind.allCases { #expect(symbols.contains(kind.symbol)) }
+        #expect(Ring.symbols(including: "custom.icon").first == "custom.icon")
+        #expect(Ring.symbols(including: "figure.walk").count == symbols.count)
+    }
+
+    @Test func iconsExistOnThisSystem() {
+        let missing = Ring.symbols.filter { UIImage(systemName: $0) == nil }
+        #expect(missing.isEmpty, "Unknown SF Symbols: \(missing)")
     }
 
     @Test func newRingPicksUnusedColor() {

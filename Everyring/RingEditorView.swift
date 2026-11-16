@@ -458,7 +458,8 @@ struct SymbolGrid: View {
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 40), spacing: 8)], spacing: 8) {
-            ForEach(Ring.symbols, id: \.self) { symbol in
+            // Only icons this system has (newer SF Symbols would show as empty circles on older ones).
+            ForEach(Ring.symbols(including: selection).filter { UIImage(systemName: $0) != nil }, id: \.self) { symbol in
                 Button {
                     selection = symbol
                 } label: {

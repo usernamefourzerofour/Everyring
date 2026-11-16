@@ -211,13 +211,35 @@ extension RingPeriod {
 
 extension Ring {
     /// SF Symbols offered in the ring editor.
-    static let symbols = [
-        "figure.walk", "figure.run", "figure.hiking", "figure.outdoor.cycle", "figure.pool.swim", "figure.roll",
-        "figure.stairs", "figure.stand", "figure.strengthtraining.traditional", "figure.yoga", "figure.dance",
-        "figure.rower", "figure.highintensity.intervaltraining", "dumbbell", "flame", "bolt.heart", "heart",
-        "shoeprints.fill", "bed.double", "moon.zzz", "brain.head.profile", "sun.max", "drop", "leaf", "mountain.2",
-        "timer", "star", "trophy",
-    ]
+    /// Every metric's and workout kind's own icon, then more activities and general icons. No duplicates.
+    static let symbols: [String] = {
+        let metrics = HealthMetric.Category.allCases.flatMap(\.metrics).map(\.defaultSymbol)
+        let workouts = WorkoutKind.allCases.map(\.symbol)
+        let more = [
+            // More activities
+            "figure.walk.motion", "figure.run.circle", "figure.indoor.cycle", "figure.open.water.swim",
+            "figure.strengthtraining.functional", "figure.cooldown", "figure.mind.and.body", "figure.jumprope",
+            "figure.elliptical", "figure.step.training", "figure.stairs", "figure.surfing", "figure.sailing",
+            "figure.fishing", "figure.equestrian.sports", "figure.archery", "figure.bowling", "figure.volleyball",
+            "figure.handball", "figure.hockey", "figure.rugby", "figure.american.football", "figure.baseball",
+            "figure.cricket", "figure.squash", "figure.racquetball", "figure.fencing", "figure.gymnastics",
+            "figure.wrestling", "figure.kickboxing", "figure.taichi", "figure.barre", "figure.play", "figure.wave",
+            "figure.and.child.holdinghands", "figure.walk.treadmill", "figure.run.treadmill", "figure.disc.sports",
+            "figure.curling", "figure.water.fitness", "figure.hunting", "figure.lacrosse",
+            // Health and general
+            "dumbbell", "flame", "bolt.heart", "heart", "heart.circle", "lungs", "shoeprints.fill", "bed.double",
+            "moon.zzz", "brain.head.profile", "sun.max", "drop", "leaf", "mountain.2", "tree", "bicycle",
+            "timer", "stopwatch", "star", "trophy", "medal", "target", "flag.checkered", "bolt", "sparkles",
+            "pills", "cross.case", "takeoutbag.and.cup.and.straw", "wineglass", "mug", "carrot", "fish", "fork.knife",
+        ]
+        var seen = Set<String>()
+        return (metrics + workouts + more).filter { seen.insert($0).inserted }
+    }()
+
+    /// The icons to choose from, with `current` first if it isn't in the list (e.g. one picked in an older version).
+    static func symbols(including current: String) -> [String] {
+        symbols.contains(current) || current.isEmpty ? symbols : [current] + symbols
+    }
 
     /// A new ring for `metric` with suggested defaults, in a colour not already used by `usedColors` if possible.
     static func new(metric: HealthMetric = .steps, usedColors: [RingColor] = [], locale: Locale = .current) -> Ring {
