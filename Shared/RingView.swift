@@ -156,7 +156,7 @@ struct RingStartLabel: View {
 
     var body: some View {
         let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
-        let size = lineWidth * 0.64
+        let size = lineWidth * 0.6
         // Rough width of icon + text, to know whether the filled arc reaches under all of it.
         let width = size * (1.3 + 0.62 * CGFloat(percent.count))
         let filledUnder = ring.fraction * 2 * .pi * radius >= width + lineWidth * 0.4
@@ -171,9 +171,10 @@ struct RingStartLabel: View {
         }
         .foregroundStyle(filledUnder ? Color.white : colour)
         .fixedSize()
-        // The label's leading edge sits a little right of 12 o'clock, on the middle of the stroke.
-        .alignmentGuide(HorizontalAlignment.center) { _ in -lineWidth * 0.25 }
+        // Centred on the stroke and turned along the ring, just after 12 o'clock, so it follows the curve instead of
+        // sticking out of small inner rings.
         .offset(y: -radius)
+        .rotationEffect(.radians(Double((width / 2 + lineWidth * 0.35) / max(radius, 1))))
         .accessibilityHidden(true)
     }
 }
