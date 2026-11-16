@@ -66,8 +66,9 @@ struct RingDetailView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             if let left = pace.perDayLeft {
-                                Text(ring.isLimit ? "\(ring.metric.format(left)) per day left within your limit"
-                                                  : "\(ring.metric.format(left)) per day to reach your goal")
+                                Text(ring.isLimit
+                                     ? LocalizedStringKey("\(ring.metric.format(left)) per day left within your limit")
+                                     : LocalizedStringKey("\(ring.metric.format(left)) per day to reach your goal"))
                                     .font(.subheadline)
                                     .foregroundStyle(ring.color.color)
                             }
