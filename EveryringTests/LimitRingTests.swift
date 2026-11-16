@@ -43,8 +43,9 @@ struct LimitRingTests {
         """
         let ring = try JSONDecoder().decode(Ring.self, from: Data(json.utf8))
         #expect(ring.goalKind == .reach)
-        let again = try JSONDecoder().decode(Ring.self, from: JSONEncoder().encode(calories))
-        #expect(again == calories)
+        let limit = calories
+        let again = try JSONDecoder().decode(Ring.self, from: JSONEncoder().encode(limit))
+        #expect(again == limit)
     }
 
     @Test func nutritionLimitsByDefault() {
