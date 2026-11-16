@@ -31,13 +31,15 @@ extension RingSet {
     /// The suggested set in onboarding; the user can edit it.
     static var starter: RingSet {
         RingSet(name: String(localized: "My rings"), rings: [
-            Ring(name: String(localized: "Steps"), color: .sunrise, symbol: "figure.walk",
-                 metric: .steps, goal: 10_000, period: .today),
-            Ring(name: String(localized: "Exercise"), color: .violet, symbol: "flame",
+            Ring(name: String(localized: "Active calories"), color: .sunrise, symbol: "flame",
+                 metric: .activeEnergy, goal: 500, period: .today),
+            Ring(name: String(localized: "Move minutes"), color: .violet, symbol: "bolt.heart",
                  metric: .exerciseMinutes, goal: 150, period: .rollingDays(7)),
-            Ring(name: String(localized: "Walk + run"), color: .lagoon, symbol: "shoeprints.fill",
-                 metric: .walkingRunningDistance, goal: 100_000, period: .thisMonth),
-            Ring(name: String(localized: "Workouts"), color: .fern, symbol: "dumbbell",
+            Ring(name: String(localized: "Stand hours"), color: .lagoon, symbol: "figure.stand",
+                 metric: .standHours, goal: 12, period: .today),
+            Ring(name: String(localized: "Steps"), color: .fern, symbol: "figure.walk",
+                 metric: .steps, goal: 10_000, period: .today),
+            Ring(name: String(localized: "Workouts"), color: .citrus, symbol: "dumbbell",
                  metric: .workouts(.count, kind: nil), goal: 3, period: .thisWeek),
         ])
     }
