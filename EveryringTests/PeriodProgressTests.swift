@@ -67,3 +67,59 @@ struct PeriodProgressTests {
         #expect(!PeriodProgress.make(for: ring(.thisWeek), buckets: [:], now: now, calendar: cph).isPast)
     }
 }
+
+struct DailyPaceTests {
+    let cph = makeCalendar()
+
+    func ring(_ period: RingPeriod, goal: Double = 70, kind: GoalKind = .reach) -> Ring {
+        var ring = Ring.new(metric: .walkingRunningDistance)
+        ring.period = period
+        ring.goal = goal
+        ring.goalKind = kind
+        return ring
+    }
+
+    @Test func weekInProgress() {
+        let now = date(2026, 11, 18, 12, in: cph)  // Wednesday: 3 days gone incl. today, 5 left incl. today
+        let r = ring(.thisWeek)
+        let pace = DailyPace.make(for: r, value: 30, interval: r.period.interval(now: now, calendar: cph), now: now,
+                                  calendar: cph)
+        #expect(pace?.days == 3)
+        #expect(pace?.average == 10)
+        #expect(pace?.daysLeft == 5)
+        #expect(pace?.perDayLeft == 8)
+    }
+
+    @Test func finishedWeekAveragesAllDays() {
+        let now = date(2026, 11, 18, 12, in: cph)
+        let r = ring(.thisWeek)
+        let lastWeek = DateInterval(start: date(2026, 11, 9, in: cph), end: date(2026, 11, 16, in: cph))
+        let pace = DailyPace.make(for: r, value: 84, interval: lastWeek, now: now, calendar: cph)
+        #expect(pace?.days == 7)
+        #expect(pace?.average == 12)
+        #expect(pace?.perDayLeft == nil)
+    }
+
+    @Test func rollingAveragesTheWindowAndOneDayHasNone() {
+        let now = date(2026, 11, 18, 12, in: cph)
+        let rolling = ring(.rollingDays(7))
+        let pace = DailyPace.make(for: rolling, value: 70, interval: rolling.period.interval(now: now, calendar: cph),
+                                  now: now, calendar: cph)
+        #expect(pace?.days == 7)
+        #expect(pace?.perDayLeft == nil)
+        let today = ring(.today)
+        #expect(DailyPace.make(for: today, value: 5, interval: today.period.interval(now: now, calendar: cph), now: now,
+                               calendar: cph) == nil)
+    }
+
+    @Test func limitShowsWhatIsLeft() {
+        let now = date(2026, 11, 18, 12, in: cph)
+        let r = ring(.thisWeek, goal: 100, kind: .limit)
+        let pace = DailyPace.make(for: r, value: 50, interval: r.period.interval(now: now, calendar: cph), now: now,
+                                  calendar: cph)
+        #expect(pace?.perDayLeft == 10)
+        let over = DailyPace.make(for: r, value: 120, interval: r.period.interval(now: now, calendar: cph), now: now,
+                                  calendar: cph)
+        #expect(over?.perDayLeft == nil)
+    }
+}

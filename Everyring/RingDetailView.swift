@@ -59,6 +59,19 @@ struct RingDetailView: View {
                             Text(ring.period.status(calendar: model.calendar))
                                 .foregroundStyle(.secondary)
                         }
+                        let interval = past?.interval ?? ring.period.interval(now: .now, calendar: model.calendar)
+                        if let pace = DailyPace.make(for: ring, value: shown, interval: interval, now: .now,
+                                                     calendar: model.calendar) {
+                            Text("≈ \(ring.metric.format(pace.average)) per day")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            if let left = pace.perDayLeft {
+                                Text(ring.isLimit ? "\(ring.metric.format(left)) per day left within your limit"
+                                                  : "\(ring.metric.format(left)) per day to reach your goal")
+                                    .font(.subheadline)
+                                    .foregroundStyle(ring.color.color)
+                            }
+                        }
                     }
 
                     if let history, !history.hasData {

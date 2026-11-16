@@ -78,3 +78,39 @@ extension DemoHistory {
         return Dictionary(uniqueKeysWithValues: zip(hours, weights.map { total * $0 / sum }))
     }
 }
+
+/// Per-day figures for periods of several days, shown under the ring.
+struct DailyPace: Hashable, Sendable {
+    /// The value per day so far (a finished period: over all its days).
+    var average: Double
+    /// Days counted in the average.
+    var days: Int
+    /// Days left in a fixed period in progress, today included; 0 otherwise.
+    var daysLeft: Int
+    /// Per remaining day: what is still needed to reach the goal, or (for a limit) what is left of it. `nil` when
+    /// the goal is already reached or the limit already exceeded, or with no days left.
+    var perDayLeft: Double?
+
+    /// `nil` for one-day periods, where the average is the value itself.
+    static func make(for ring: Ring, value: Double, interval: DateInterval, now: Date,
+                     calendar: Calendar) -> DailyPace? {
+        let wholeDays = calendar.dateComponents([.day], from: calendar.startOfDay(for: interval.start),
+                                                to: calendar.startOfDay(for: interval.end.addingTimeInterval(-1))).day.map { $0 + 1 } ?? 1
+        guard wholeDays > 1 else { return nil }
+        let inProgress = interval.end > now
+        var days = wholeDays
+        var daysLeft = 0
+        if inProgress && !ring.period.isRolling {
+            let elapsed = (calendar.dateComponents([.day], from: calendar.startOfDay(for: interval.start),
+                                                   to: calendar.startOfDay(for: now)).day ?? 0) + 1
+            days = max(1, min(wholeDays, elapsed))
+            daysLeft = max(0, wholeDays - elapsed + 1)
+        }
+        var pace = DailyPace(average: value / Double(days), days: days, daysLeft: daysLeft)
+        let remaining = ring.goal - value
+        if daysLeft > 0, remaining > 0 {
+            pace.perDayLeft = remaining / Double(daysLeft)
+        }
+        return pace
+    }
+}
