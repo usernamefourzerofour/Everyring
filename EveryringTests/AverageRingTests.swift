@@ -73,4 +73,26 @@ struct AverageRingTests {
         #expect(decoded.aggregation == .total)
         #expect(sleep(.rollingDays(30)).progressText(7.5).hasSuffix("a day"))
     }
+
+    @Test func skippingEmptyDaysDividesByDaysWithData() {
+        let now = date(2026, 11, 18, 15, in: cph)
+        var ring = sleep(.rollingDays(7))
+        // Seven nights in the window, one without the watch.
+        var values: [Date: Double] = [:]
+        for day in 12...18 where day != 15 { values[date(2026, 11, day, in: cph)] = 7 }
+        let window = ring.period.interval(now: now, calendar: cph)
+        #expect(ring.measure(daily: values, in: window, now: now, calendar: cph) == 6)
+        ring.averageSkipsEmptyDays = true
+        #expect(ring.measure(daily: values, in: window, now: now, calendar: cph) == 7)
+        #expect(ring.measure(daily: [:], in: window, now: now, calendar: cph) == 0)
+    }
+
+    @Test func chartSkipsEmptyDaysWhenAsked() {
+        let now = date(2026, 11, 18, 15, in: cph)
+        var ring = sleep(.thisWeek)
+        ring.averageSkipsEmptyDays = true
+        let buckets = [date(2026, 11, 16, in: cph): 6.0, date(2026, 11, 18, in: cph): 8]
+        let progress = PeriodProgress.make(for: ring, buckets: buckets, now: now, calendar: cph)
+        #expect(progress.points.map(\.total) == [6, 6, 7])
+    }
 }

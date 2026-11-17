@@ -99,6 +99,9 @@ struct RingEditorView: View {
                     .pickerStyle(.segmented)
                     .listRowSeparator(.hidden)
                 }
+                if ring.isAverage {
+                    Toggle("Skip days without data", isOn: $ring.averageSkipsEmptyDays)
+                }
                 HStack {
                     TextField(ring.isLimit ? "Limit" : "Goal", value: Binding(
                         get: { displayGoal },
@@ -114,7 +117,9 @@ struct RingEditorView: View {
                 if displayGoal <= 0 {
                     Text("The goal must be more than zero.")
                 } else if ring.isAverage {
-                    Text("A daily average: the ring compares your average per day over the period with the goal. Days without data count as zero.")
+                    Text(ring.averageSkipsEmptyDays
+                         ? LocalizedStringKey("A daily average: the ring compares your average per day over the period with the goal. Days without any data, such as a night without your watch, are left out.")
+                         : "A daily average: the ring compares your average per day over the period with the goal. Days without data count as zero.")
                 } else if ring.isLimit {
                     Text("A limit: the ring turns red when you go over it. A period counts when you logged something and stayed under.")
                 } else {

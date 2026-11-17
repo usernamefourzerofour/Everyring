@@ -59,16 +59,27 @@ struct RingHistory: Hashable, Sendable {
         return total
     }
 
+    /// How many days inside `interval` have a value above zero.
+    static func daysWithData(_ daily: [Date: Double], in interval: DateInterval, calendar: Calendar) -> Int {
+        var count = 0
+        var day = calendar.startOfDay(for: interval.start)
+        while day < interval.end {
+            if (daily[day] ?? 0) > 0 { count += 1 }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        return count
+    }
+
     static func make(for ring: Ring, daily: [Date: Double], now: Date = .now, calendar: Calendar) -> RingHistory {
         let period = ring.period
         let closed = ring.isMet
         let current = period.interval(now: now, calendar: calendar)
-        let currentValue = ring.measure(sum(daily, in: current, calendar: calendar), in: current, now: now,
-                                        calendar: calendar)
+        let currentValue = ring.measure(daily: daily, in: current, now: now, calendar: calendar)
 
         let lookback = period.history(now: now, count: max(period.streakLookback, shownCount(for: period)),
                                       calendar: calendar)
-        let values = lookback.map { ring.measure(sum(daily, in: $0, calendar: calendar), in: $0, now: now, calendar: calendar) }
+        let values = lookback.map { ring.measure(daily: daily, in: $0, now: now, calendar: calendar) }
         let streakCount = min(period.streakLookback, lookback.count)
         let streak = Streak(ring: ring, finished: Array(values.prefix(streakCount)), inProgress: currentValue)
 
@@ -129,8 +140,7 @@ struct HistoryPage: Hashable, Sendable {
             let today = calendar.startOfDay(for: now)
             while day < range.end && day <= today {
                 let window = day == today ? current : ring.period.interval(containing: day, calendar: calendar)
-                let total = RingHistory.sum(daily, in: window, calendar: calendar)
-                page.days.append(DayValue(day: day, value: ring.measure(total, in: window, now: now, calendar: calendar)))
+                page.days.append(DayValue(day: day, value: ring.measure(daily: daily, in: window, now: now, calendar: calendar)))
                 guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
                 day = next
             }
@@ -140,8 +150,7 @@ struct HistoryPage: Hashable, Sendable {
                 if interval.start <= now {
                     let isCurrent = interval.start == current.start
                     let span = isCurrent ? current : interval
-                    let value = ring.measure(RingHistory.sum(daily, in: span, calendar: calendar), in: span, now: now,
-                                             calendar: calendar)
+                    let value = ring.measure(daily: daily, in: span, now: now, calendar: calendar)
                     let closed = isCurrent ? ring.isMetInProgress(value) : ring.isMet(value)
                     page.periods.append(PeriodRecord(interval: interval, value: value, closed: closed,
                                                      isCurrent: isCurrent))

@@ -178,10 +178,12 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var customTint: RingTint?
     /// Total or daily average; only counts for periods of several days (see `isAverage`).
     var aggregation: GoalAggregation = .total
+    /// For a daily average: leave out days without any data (a night without the watch) instead of counting them as 0.
+    var averageSkipsEmptyDays = false
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
-         aggregation: GoalAggregation = .total) {
+         aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false) {
         self.id = id
         self.name = name
         self.color = color
@@ -192,10 +194,11 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.goalKind = goalKind
         self.customTint = customTint
         self.aggregation = aggregation
+        self.averageSkipsEmptyDays = averageSkipsEmptyDays
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation
+        case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
     }
 
     init(from decoder: Decoder) throws {
@@ -211,6 +214,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         goalKind = try c.decodeIfPresent(GoalKind.self, forKey: .goalKind) ?? .reach
         customTint = try c.decodeIfPresent(RingTint.self, forKey: .customTint)
         aggregation = try c.decodeIfPresent(GoalAggregation.self, forKey: .aggregation) ?? .total
+        averageSkipsEmptyDays = try c.decodeIfPresent(Bool.self, forKey: .averageSkipsEmptyDays) ?? false
     }
 
     var isLimit: Bool { goalKind == .limit }

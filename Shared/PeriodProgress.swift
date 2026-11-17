@@ -52,9 +52,10 @@ struct PeriodProgress: Hashable, Sendable {
         var start = interval.start
         while start < min(interval.end, now) {
             guard let next = calendar.date(byAdding: bucket, value: 1, to: start) else { break }
-            total += buckets[start] ?? 0
-            days += 1
-            points.append(Point(date: min(next, now), total: average ? total / Double(days) : total))
+            let value = buckets[start] ?? 0
+            total += value
+            if !ring.averageSkipsEmptyDays || value > 0 { days += 1 }
+            points.append(Point(date: min(next, now), total: average ? (days > 0 ? total / Double(days) : 0) : total))
             start = next
         }
         var pace: Double?
@@ -136,9 +137,24 @@ extension RingPeriod {
 }
 
 extension Ring {
+    /// Whether the average needs to know which days have data (and so daily values, not just a total).
+    var needsDailyValues: Bool { isAverage && averageSkipsEmptyDays }
+
     /// The value the ring shows for a period's total: the total itself, or for an average ring the average per day.
-    func measure(_ total: Double, in interval: DateInterval, now: Date, calendar: Calendar) -> Double {
+    /// - Parameter daysWithData: for a ring that skips empty days, how many of the period's days have data.
+    func measure(_ total: Double, in interval: DateInterval, now: Date, calendar: Calendar,
+                 daysWithData: Int? = nil) -> Double {
         guard isAverage else { return total }
+        if averageSkipsEmptyDays, let daysWithData {
+            return daysWithData > 0 ? total / Double(daysWithData) : 0
+        }
         return total / Double(period.averageDays(in: interval, now: now, calendar: calendar))
+    }
+
+    /// The value the ring shows for `interval`, from values per day (keyed by start of day).
+    func measure(daily: [Date: Double], in interval: DateInterval, now: Date, calendar: Calendar) -> Double {
+        let total = RingHistory.sum(daily, in: interval, calendar: calendar)
+        return measure(total, in: interval, now: now, calendar: calendar,
+                       daysWithData: RingHistory.daysWithData(daily, in: interval, calendar: calendar))
     }
 }
