@@ -300,10 +300,6 @@ struct MetricPickerView: View {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(.tint)
                                         .accessibilityLabel("Selected")
-                                } else if !dismissesOnPick {
-                                    Image(systemName: "chevron.forward")
-                                        .font(.footnote.weight(.semibold))
-                                        .foregroundStyle(.tertiary)
                                 }
                             }
                         }
