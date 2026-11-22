@@ -1,5 +1,8 @@
 import Charts
 import SwiftUI
+#if os(iOS)
+import FamilyControls
+#endif
 
 /// One ring: progress, period, streaks and history.
 struct RingDetailView: View {
@@ -345,6 +348,18 @@ struct NoDataCard: View {
     let ring: Ring
 
     var body: some View {
+        #if os(iOS)
+        if ring.metric == .screenTime {
+            ScreenTimeNoDataCard(ring: ring)
+        } else {
+            healthBody
+        }
+        #else
+        healthBody
+        #endif
+    }
+
+    private var healthBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("No data", systemImage: "heart.text.square")
                 .font(.headline)
@@ -364,6 +379,49 @@ struct NoDataCard: View {
         .card()
     }
 }
+
+#if os(iOS)
+/// A Screen Time ring with no minutes yet: says how the minutes arrive and checks each step on the way.
+struct ScreenTimeNoDataCard: View {
+    let ring: Ring
+
+    var body: some View {
+        let manager = ScreenTimeManager.shared
+        let selection = ScreenTimeManager.selection(of: ring)
+        let picked = (selection?.applicationTokens.count ?? 0) + (selection?.categoryTokens.count ?? 0)
+            + (selection?.webDomainTokens.count ?? 0)
+        VStack(alignment: .leading, spacing: 12) {
+            Label("No minutes yet", systemImage: "hourglass")
+                .font(.headline)
+                .foregroundStyle(ring.accent)
+            Text("Minutes arrive in steps of 5 as you use the chosen apps, so the first shows after 5 minutes. Days before the ring was made stay empty.")
+                .font(.callout)
+            VStack(alignment: .leading, spacing: 6) {
+                check(manager.isAuthorized, "Screen Time access")
+                check(picked > 0, "Apps chosen: \(picked)")
+                check(manager.isMonitoring(ring), "Followed by iOS")
+            }
+            .font(.subheadline)
+            if let error = manager.lastError {
+                Text(error)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+        .card()
+    }
+
+    private func check(_ ok: Bool, _ title: LocalizedStringKey) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(ok ? .green : .red)
+        }
+    }
+}
+#endif
 
 struct StreakCard: View {
     let ring: Ring

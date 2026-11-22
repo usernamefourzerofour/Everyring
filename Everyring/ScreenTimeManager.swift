@@ -19,10 +19,22 @@ final class ScreenTimeManager {
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
     }
 
+    /// Why the last attempt to follow a ring failed, if it did (shown on the ring's page when it has no minutes yet).
+    private(set) var lastError: String? {
+        get { UserDefaults.standard.string(forKey: "screenTime.lastError") }
+        set { UserDefaults.standard.set(newValue, forKey: "screenTime.lastError") }
+    }
+
+    /// The rings iOS is following right now.
+    func isMonitoring(_ ring: Ring) -> Bool {
+        DeviceActivityCenter().activities.contains(DeviceActivityName(ScreenTimeLog.activityName(ring: ring.id)))
+    }
+
     /// Follows the screen time of every Screen Time ring with chosen apps, and stops following removed ones.
     func update(for library: RingLibrary) {
         guard isAuthorized else { return }
         let center = DeviceActivityCenter()
+        var failure: String?
         var wanted: Set<DeviceActivityName> = []
         for ring in library.sets.flatMap(\.rings) {
             guard ring.metric == .screenTime, let selection = Self.selection(of: ring),
@@ -41,8 +53,13 @@ final class ScreenTimeManager {
                                                   intervalEnd: DateComponents(hour: 23, minute: 59, second: 59),
                                                   repeats: true)
             center.stopMonitoring([name])
-            try? center.startMonitoring(name, during: schedule, events: events)
+            do {
+                try center.startMonitoring(name, during: schedule, events: events)
+            } catch {
+                failure = String(describing: error)
+            }
         }
+        lastError = failure
         let stale = center.activities.filter { $0.rawValue.hasPrefix("ring.") && !wanted.contains($0) }
         if !stale.isEmpty { center.stopMonitoring(stale) }
     }
