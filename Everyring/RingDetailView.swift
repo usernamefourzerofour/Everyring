@@ -501,6 +501,10 @@ struct ScreenTimePeriodCard: View {
 struct ScreenTimeCalendarCard: View {
     let ring: Ring
     @State private var offset = 0
+    /// Two Screen Time reports on one page sometimes leave the second one blank: this one starts a moment after the
+    /// page, and can be reloaded by hand.
+    @State private var showsReport = false
+    @State private var reload = 0
     private let calendar = Calendar.current
 
     private var month: Date {
@@ -525,10 +529,16 @@ struct ScreenTimeCalendarCard: View {
                     .monospacedDigit()
                 Button { move(1) } label: { Image(systemName: "chevron.forward") }
                     .disabled(offset >= 0)
+                Button { reload += 1 } label: { Image(systemName: "arrow.clockwise") }
+                    .accessibilityLabel("Reload")
             }
-            DeviceActivityReport(.calendar, filter: ring.screenTimeFilter(DateInterval(start: shown, end: end), hourly: false))
-                .id(offset)
-                .frame(height: 300)
+            if showsReport {
+                DeviceActivityReport(.calendar, filter: ring.screenTimeFilter(DateInterval(start: shown, end: end), hourly: false))
+                    .id("\(offset)-\(reload)")
+                    .frame(height: 300)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 300)
+            }
             Label("History comes straight from Screen Time, also from before the ring was added. The ring, widgets and watch count from when it was added.",
                   systemImage: "info.circle")
                 .font(.footnote)
@@ -536,6 +546,10 @@ struct ScreenTimeCalendarCard: View {
         }
         .card()
         .onAppear { ring.screenTimeReportStyle(month: month).save() }
+        .task {
+            try? await Task.sleep(for: .milliseconds(700))
+            showsReport = true
+        }
     }
 
     private func move(_ step: Int) {

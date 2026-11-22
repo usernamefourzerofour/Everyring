@@ -205,17 +205,22 @@ struct CalendarView: View {
     }
 
     var body: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
-        VStack(spacing: 8) {
-            LazyVGrid(columns: columns, spacing: 6) {
+        // A plain grid (not lazy): the report is drawn once, in another process.
+        let rows = stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<min($0 + 7, cells.count)]) }
+        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
+            GridRow {
                 ForEach(weekdays.indices, id: \.self) { i in
-                    Text(weekdays[i]).font(.caption2).foregroundStyle(.secondary)
+                    Text(weekdays[i]).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
                 }
-                ForEach(cells.indices, id: \.self) { i in
-                    if let day = cells[i] {
-                        DayRing(day: day, minutes: days[day], style: style, top: days.values.max() ?? 1)
-                    } else {
-                        Color.clear.frame(height: 40)
+            }
+            ForEach(rows.indices, id: \.self) { r in
+                GridRow {
+                    ForEach(0..<7, id: \.self) { c in
+                        if c < rows[r].count, let day = rows[r][c] {
+                            DayRing(day: day, minutes: days[day], style: style, top: days.values.max() ?? 1)
+                        } else {
+                            Color.clear.frame(height: 36)
+                        }
                     }
                 }
             }
