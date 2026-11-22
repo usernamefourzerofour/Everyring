@@ -109,6 +109,9 @@ struct HistoryPage: Hashable, Sendable {
     var periods: [PeriodRecord] = []
     /// Rolling rings: the window value per day of the page up to today, oldest first.
     var days: [DayValue] = []
+    /// Month pages, any ring: the ring's value as it stood at the end of each day up to today (today: now), oldest
+    /// first. For the calendar of mini rings.
+    var dayValues: [DayValue] = []
 
     /// Pages are months, except for rings that reset every month: those page by year.
     static func unit(for period: RingPeriod) -> Calendar.Component {
@@ -135,6 +138,9 @@ struct HistoryPage: Hashable, Sendable {
                      calendar: Calendar) -> HistoryPage {
         var page = HistoryPage(range: range)
         let current = ring.period.interval(now: now, calendar: calendar)
+        if unit(for: ring.period) == .month {
+            page.dayValues = dayValues(for: ring, daily: daily, range: range, now: now, calendar: calendar)
+        }
         if ring.period.isRolling {
             var day = calendar.startOfDay(for: range.start)
             let today = calendar.startOfDay(for: now)
@@ -159,6 +165,26 @@ struct HistoryPage: Hashable, Sendable {
             }
         }
         return page
+    }
+
+    /// The ring's value at the end of each day of `range` up to now: a day's own value, the rolling window ending
+    /// that day, or a longer period's value so far.
+    static func dayValues(for ring: Ring, daily: [Date: Double], range: DateInterval, now: Date,
+                          calendar: Calendar) -> [DayValue] {
+        var result: [DayValue] = []
+        let today = calendar.startOfDay(for: now)
+        let current = ring.period.interval(now: now, calendar: calendar)
+        var day = calendar.startOfDay(for: range.start)
+        while day < range.end && day <= today {
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            let isToday = day == today
+            // As it stood at the end of the day (today: now).
+            let asOf = isToday ? now : next.addingTimeInterval(-1)
+            let interval = isToday && ring.period.isRolling ? current : ring.period.interval(containing: day, calendar: calendar)
+            result.append(DayValue(day: day, value: ring.measure(daily: daily, in: interval, now: asOf, calendar: calendar)))
+            day = next
+        }
+        return result
     }
 
     /// "November 2026" ("Nov 2026" when `short`), or "2026" for a year page.

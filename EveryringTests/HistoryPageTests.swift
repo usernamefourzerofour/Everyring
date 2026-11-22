@@ -123,3 +123,30 @@ struct NutrientTests {
         #expect(HealthMetric.nutrient(.copper).suggestedGoal(for: .today, locale: us) == 0.9)
     }
 }
+
+struct DayValuesTests {
+    let cph = makeCalendar()
+
+    @Test func everyRingGetsADayCalendar() {
+        let now = date(2026, 11, 18, 15, in: cph)
+        var daily: [Date: Double] = [:]
+        for day in 1...18 { daily[date(2026, 11, day, in: cph)] = 1_000 }
+        let range = HistoryPage.range(for: .thisWeek, offset: 0, now: now, calendar: cph)
+        // A week ring: the week so far at the end of each day.
+        let week = Ring(name: "Steps", color: .fern, symbol: "figure.walk", metric: .steps, goal: 70_000, period: .thisWeek)
+        let page = HistoryPage.make(for: week, daily: daily, range: range, now: now, calendar: cph)
+        #expect(page.dayValues.count == 18)
+        // Monday 16th: 1,000; Tuesday: 2,000; Wednesday (today): 3,000.
+        #expect(page.dayValues.suffix(3).map(\.value) == [1_000, 2_000, 3_000])
+        // A rolling ring: the window ending each day.
+        var rolling = week
+        rolling.period = .rollingDays(7)
+        let rollingPage = HistoryPage.make(for: rolling, daily: daily, range: range, now: now, calendar: cph)
+        #expect(rollingPage.dayValues.last?.value == 7_000)
+        // Monthly rings page by year: no day calendar.
+        var monthly = week
+        monthly.period = .thisMonth
+        let yearRange = HistoryPage.range(for: .thisMonth, offset: 0, now: now, calendar: cph)
+        #expect(HistoryPage.make(for: monthly, daily: daily, range: yearRange, now: now, calendar: cph).dayValues.isEmpty)
+    }
+}

@@ -459,19 +459,28 @@ struct HistoryCard: View {
                 pager
             }
             if let page {
+                // A calendar of mini rings for every ring (monthly rings page by year: their list has the rings).
+                if !page.dayValues.isEmpty {
+                    DayGrid(ring: ring, days: page.dayValues, range: page.range, calendar: calendar,
+                            selected: selected, selection: selection(for:), onSelect: onSelect)
+                    if ring.period.nominalDays > 1 {
+                        Text(ring.period.isRolling
+                             ? LocalizedStringKey("Each ring shows the last \(ring.period.nominalDays) days as they stood at the end of that day.")
+                             : "Each ring shows the period so far, as it stood at the end of that day.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 switch ring.period {
-                case .rollingDays(let n):
+                case .rollingDays:
                     RollingChart(ring: ring, days: page.days, selectedEnd: selected?.end) { day in
                         let window = ring.period.interval(containing: day, calendar: calendar)
                         onSelect(window, calendar.isDateInToday(day))
                     }
-                    Text("The value of the last \(n) days, as it stood at the end of each day.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 case .today:
-                    DayGrid(ring: ring, records: page.periods, range: page.range, calendar: calendar,
-                            selected: selected, onSelect: onSelect)
+                    EmptyView()
                 default:
+                    if !page.dayValues.isEmpty { Divider() }
                     PeriodList(ring: ring, records: page.periods, calendar: calendar,
                                selected: selected, onSelect: onSelect)
                 }
@@ -486,6 +495,18 @@ struct HistoryCard: View {
             }
         }
         .card()
+    }
+
+    /// What tapping a day in the calendar picks: that day, the rolling window ending that day, or the period it's in.
+    private func selection(for day: Date) -> (interval: DateInterval, isCurrent: Bool) {
+        let now = Date.now
+        if ring.period.isRolling {
+            let isToday = calendar.isDate(day, inSameDayAs: now)
+            return (isToday ? ring.period.interval(now: now, calendar: calendar)
+                            : ring.period.interval(containing: day, calendar: calendar), isToday)
+        }
+        let interval = ring.period.interval(containing: day, calendar: calendar)
+        return (interval, interval.contains(now))
     }
 
     private var pager: some View {
@@ -585,14 +606,17 @@ struct RollingChart: View {
 /// Daily rings as a calendar: one mini ring per day, weeks in rows starting on the week start.
 struct DayGrid: View {
     let ring: Ring
-    let records: [PeriodRecord]
+    /// The ring's value at the end of each day.
+    let days: [DayValue]
     let range: DateInterval
     let calendar: Calendar
     var selected: DateInterval?
+    /// The period a day stands for (the day, the window ending it, or the period containing it).
+    var selection: (Date) -> (interval: DateInterval, isCurrent: Bool)
     var onSelect: (DateInterval, Bool) -> Void = { _, _ in }
 
     var body: some View {
-        let byDay = Dictionary(records.map { ($0.interval.start, $0) }, uniquingKeysWith: { a, _ in a })
+        let byDay = Dictionary(days.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
         let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
         LazyVGrid(columns: columns, spacing: 8) {
             ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
@@ -605,15 +629,20 @@ struct DayGrid: View {
                 if day < range.start || day >= range.end {
                     Color.clear.frame(height: 30)
                         .accessibilityHidden(true)
-                } else if let record = byDay[day] {
-                    let isSelected = selected == nil ? record.isCurrent : selected == record.interval
+                } else if let value = byDay[day] {
+                    let (interval, isCurrent) = selection(day)
+                    let isToday = calendar.isDateInToday(day)
+                    let isSelected = selected.map { $0 == interval } ?? false
+                    // Days the ring leaves out (weekends for a weekdays ring) are drawn faint.
+                    let counts = ring.counts(day, calendar: calendar)
                     Button {
-                        onSelect(record.interval, record.isCurrent)
+                        onSelect(interval, isCurrent)
                     } label: {
                         VStack(spacing: 2) {
-                            RingStackView(rings: [ring.display(record.value)])
+                            RingStackView(rings: [ring.display(value)])
                                 .frame(width: 30, height: 30)
-                            dayNumber(day, bold: record.isCurrent || isSelected)
+                                .opacity(counts ? 1 : 0.35)
+                            dayNumber(day, bold: isToday || isSelected)
                         }
                         .padding(.vertical, 3)
                         .frame(maxWidth: .infinity)
@@ -621,7 +650,7 @@ struct DayGrid: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(accessibilityText(record))
+                    .accessibilityLabel(accessibilityText(day: day, value: value, counts: counts))
                     .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 } else {
                     // A day still to come.
@@ -666,10 +695,12 @@ struct DayGrid: View {
         return Array(symbols[start...] + symbols[..<start])
     }
 
-    private func accessibilityText(_ record: PeriodRecord) -> String {
-        let label = ring.period.label(for: record.interval, calendar: calendar)
-        let state = record.closed ? String(localized: "closed") : String(localized: "not closed")
-        return "\(label), \(ring.progressText(record.value)), \(state)"
+    private func accessibilityText(day: Date, value: Double, counts: Bool) -> String {
+        var style = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide)
+        style.timeZone = calendar.timeZone
+        let state = ring.isMet(value) ? String(localized: "closed") : String(localized: "not closed")
+        let text = "\(day.formatted(style)), \(ring.progressText(value)), \(state)"
+        return counts ? text : text + ", " + String(localized: "doesn't count")
     }
 }
 
