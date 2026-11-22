@@ -199,4 +199,4 @@ Manual logging, notifications, iCloud sync, sharing/social, quarter and year per
 - Rings of several days can count a total, a daily average, or the days that reach a daily target ("10,000 steps on 5 days"); and can count only weekdays or weekends.
 - Any ring can be limited to data from chosen apps and devices.
 - Sleep stages (core, deep, REM) are rings of their own, counted on the night they belong to.
-- No "ring closed" banner or haptic: Everyring is meant to be read from widgets, where you see a closed ring yourself. Instead a setting can fade closed rings (pale, matte, see-through) so the ones still to do stand out (decided 2026-11-22).
+- No "ring closed" banner or haptic: Everyring is meant to be read from widgets, where you see a closed ring yourself. Instead each ring can fade when closed (pale, matte, see-through) so the ones still to do stand out; a setting of each ring, not of the app (decided 2026-11-22).

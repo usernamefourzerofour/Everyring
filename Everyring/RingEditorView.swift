@@ -263,7 +263,7 @@ struct RingEditorView: View {
                 }
             }
 
-            Section("Appearance") {
+            Section {
                 TextField("Name", text: Binding(
                     get: { ring.name },
                     set: { ring.name = $0; nameEdited = true }
@@ -274,6 +274,15 @@ struct RingEditorView: View {
                     set: { ring.customTint = RingTint($0) }
                 ), supportsOpacity: false)
                 SymbolGrid(selection: $ring.symbol, color: ring.accent)
+                if !ring.isLimit {
+                    Toggle("Fade when closed", isOn: $ring.fadesWhenClosed)
+                }
+            } header: {
+                Text("Appearance")
+            } footer: {
+                if !ring.isLimit {
+                    Text("Once the goal is reached, the ring turns pale and matte in the app, the widgets and on the watch, so rings still to do stand out.")
+                }
             }
 
             if let onDelete, !isNew {

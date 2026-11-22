@@ -320,13 +320,16 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var minimumWorkoutMinutes = 0
     /// Workout rings: only workouts at most this long (0: no limit).
     var maximumWorkoutMinutes = 0
+    /// Drawn pale and matte once the goal is reached, so rings still to do stand out (never a limit).
+    var fadesWhenClosed = false
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
          aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false, dailyTarget: Double = 0,
          days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [],
          onlyDuringWorkouts: Bool = false, sources: [String] = [],
-         minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0) {
+         minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0,
+         fadesWhenClosed: Bool = false) {
         self.id = id
         self.name = name
         self.color = color
@@ -346,11 +349,13 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.sources = sources
         self.minimumWorkoutMinutes = minimumWorkoutMinutes
         self.maximumWorkoutMinutes = maximumWorkoutMinutes
+        self.fadesWhenClosed = fadesWhenClosed
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
         case dailyTarget, days, customDays, leftOutWorkouts, onlyDuringWorkouts, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
+        case fadesWhenClosed
     }
 
     init(from decoder: Decoder) throws {
@@ -375,6 +380,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         sources = try c.decodeIfPresent([String].self, forKey: .sources) ?? []
         minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
         maximumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .maximumWorkoutMinutes) ?? 0
+        fadesWhenClosed = try c.decodeIfPresent(Bool.self, forKey: .fadesWhenClosed) ?? false
     }
 
     /// Whether the ring's value must stay under its goal. A days-reaching ring always counts days up to its goal; its

@@ -24,14 +24,6 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Fade closed rings", isOn: $model.library.fadesClosedRings)
-            } header: {
-                Text("Rings")
-            } footer: {
-                Text("Rings that reached their goal turn pale and matte, in the app, the widgets and on the watch, so the ones still to do stand out. Limits never fade.")
-            }
-
-            Section {
                 Text("Everyring only reads from Apple Health and never writes to it. To change what it can read, open the Health app, tap your profile picture, then Apps → Everyring.")
                     .font(.callout)
             } header: {

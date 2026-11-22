@@ -16,25 +16,36 @@ enum AppGroup {
 struct RingLibrary: Codable, Hashable, Sendable {
     var sets: [RingSet]
     var weekStart: WeekStart = .system
-    /// Rings that reached their goal turn pale and matte, so the ones still to do stand out.
-    var fadesClosedRings = false
 
     static let starter = RingLibrary(sets: [.starter])
 
-    init(sets: [RingSet], weekStart: WeekStart = .system, fadesClosedRings: Bool = false) {
+    init(sets: [RingSet], weekStart: WeekStart = .system) {
         self.sets = sets
         self.weekStart = weekStart
-        self.fadesClosedRings = fadesClosedRings
     }
 
-    private enum CodingKeys: String, CodingKey { case sets, weekStart, fadesClosedRings }
+    private enum CodingKeys: String, CodingKey {
+        case sets, weekStart
+        /// Build 14 had "fade closed rings" for all rings; it is now a setting of each ring.
+        case fadesClosedRings
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sets = try c.decode([RingSet].self, forKey: .sets)
         weekStart = try c.decodeIfPresent(WeekStart.self, forKey: .weekStart) ?? .system
-        // Libraries saved before the setting existed.
-        fadesClosedRings = try c.decodeIfPresent(Bool.self, forKey: .fadesClosedRings) ?? false
+        // The old setting for all rings: every ring keeps fading.
+        if try c.decodeIfPresent(Bool.self, forKey: .fadesClosedRings) == true {
+            for s in sets.indices {
+                for r in sets[s].rings.indices { sets[s].rings[r].fadesWhenClosed = true }
+            }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(sets, forKey: .sets)
+        try c.encode(weekStart, forKey: .weekStart)
     }
 
     /// The calendar all periods are computed in.

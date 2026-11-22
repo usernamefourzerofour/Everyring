@@ -90,8 +90,8 @@ extension Ring {
     /// The ring's main colour for icons, text and highlights.
     var accent: Color { customTint.map { $0.gradient.end } ?? color.color }
 
-    /// The ring as drawn for `value`; with `fadesWhenClosed`, pale once its goal is reached (never a limit).
-    func display(_ value: Double, fadesWhenClosed: Bool = false) -> RingDisplay {
+    /// The ring as drawn for `value`: pale once its goal is reached if the ring fades when closed (never a limit).
+    func display(_ value: Double) -> RingDisplay {
         let (start, end) = gradient
         return RingDisplay(id: id, start: start, end: end, fraction: fraction(value), warning: isOverLimit(value),
                            symbol: symbol, faded: fadesWhenClosed && !isLimit && isMetInProgress(value))
