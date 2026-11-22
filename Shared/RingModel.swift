@@ -25,6 +25,8 @@ enum HealthMetric: Codable, Hashable, Sendable {
     case nutrient(NutrientKind)
     /// Symptoms, reproductive health, insulin, falls, heart notifications (see `SensitiveKind`).
     case sensitive(SensitiveKind)
+    /// Screen time in chosen apps and categories, from Apple's Screen Time (not Health; see `ScreenTimeLog`).
+    case screenTime
 
     enum BaseUnit: String, Codable, Sendable {
         case count, kilocalories, minutes, hours, meters, liters, grams, milligrams, micrograms, internationalUnits
@@ -48,6 +50,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .events: .count
         case .nutrient(let kind): kind.baseUnit
         case .sensitive(let kind): kind.baseUnit
+        case .screenTime: .minutes
         }
     }
 
@@ -74,6 +77,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .events(let kind): kind.title
         case .nutrient(let kind): kind.title
         case .sensitive(let kind): kind.title
+        case .screenTime: String(localized: "Screen Time")
         }
     }
 }
@@ -353,6 +357,8 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var maximumWorkoutMinutes = 0
     /// How the ring looks once its goal is reached (a limit never closes, so always shows).
     var whenClosed: ClosedAppearance = .show
+    /// Screen Time rings: the apps, categories and websites followed (an encoded `FamilyActivitySelection`).
+    var screenTimeSelection: Data?
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
@@ -360,7 +366,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
          days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [],
          activity: ActivityScope = .all, sources: [String] = [],
          minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0,
-         whenClosed: ClosedAppearance = .show) {
+         whenClosed: ClosedAppearance = .show, screenTimeSelection: Data? = nil) {
         self.id = id
         self.name = name
         self.color = color
@@ -381,6 +387,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.minimumWorkoutMinutes = minimumWorkoutMinutes
         self.maximumWorkoutMinutes = maximumWorkoutMinutes
         self.whenClosed = whenClosed
+        self.screenTimeSelection = screenTimeSelection
     }
 
     /// Keys of earlier builds, read only to carry their settings over.
@@ -389,7 +396,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
         case dailyTarget, days, customDays, leftOutWorkouts, activity, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
-        case whenClosed
+        case whenClosed, screenTimeSelection
     }
 
     init(from decoder: Decoder) throws {
@@ -418,6 +425,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
         maximumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .maximumWorkoutMinutes) ?? 0
         whenClosed = try c.decodeIfPresent(ClosedAppearance.self, forKey: .whenClosed) ?? .show
+        screenTimeSelection = try c.decodeIfPresent(Data.self, forKey: .screenTimeSelection)
     }
 
     /// Whether the ring's value must stay under its goal. A days-reaching ring always counts days up to its goal; its

@@ -72,3 +72,35 @@ struct HeartMinuteSettingsTests {
         #expect(HealthMetric.heartMinutes.supportsWorkoutLeaveOut)
     }
 }
+
+struct ScreenTimeLogTests {
+    let cph = makeCalendar()
+
+    @Test func readingsBecomeDaysAndHours() {
+        let ring = UUID()
+        var log = ScreenTimeLog()
+        log.record(ring: ring, minutes: 5, at: date(2026, 11, 18, 9, 10, in: cph), calendar: cph)
+        log.record(ring: ring, minutes: 10, at: date(2026, 11, 18, 9, 40, in: cph), calendar: cph)
+        log.record(ring: ring, minutes: 30, at: date(2026, 11, 18, 14, 5, in: cph), calendar: cph)
+        // A late, lower threshold never takes the day back.
+        log.record(ring: ring, minutes: 15, at: date(2026, 11, 18, 15, 0, in: cph), calendar: cph)
+        log.record(ring: ring, minutes: 5, at: date(2026, 11, 19, 8, 0, in: cph), calendar: cph)
+        #expect(log.daily(ring: ring, calendar: cph) == [date(2026, 11, 18, in: cph): 30, date(2026, 11, 19, in: cph): 5])
+        let day = DateInterval(start: date(2026, 11, 18, in: cph), end: date(2026, 11, 19, in: cph))
+        #expect(log.hourly(ring: ring, in: day, calendar: cph)
+                == [date(2026, 11, 18, 9, in: cph): 10, date(2026, 11, 18, 14, in: cph): 20])
+    }
+
+    @Test func namesRoundTrip() {
+        let ring = UUID()
+        #expect(ScreenTimeLog.ring(fromActivity: ScreenTimeLog.activityName(ring: ring)) == ring)
+        #expect(ScreenTimeLog.minutes(fromEvent: ScreenTimeLog.eventName(minutes: 45)) == 45)
+        #expect(ScreenTimeLog.thresholds.first == 5 && ScreenTimeLog.thresholds.last == 960)
+    }
+
+    @Test func screenTimeMetric() {
+        #expect(HealthMetric.screenTime.defaultGoalKind == .limit)
+        #expect(!HealthMetric.screenTime.readsHealth)
+        #expect(HealthMetric.screenTime.category == .screenTime)
+    }
+}

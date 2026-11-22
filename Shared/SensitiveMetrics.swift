@@ -200,6 +200,18 @@ extension HealthMetric.Category {
         #endif
     }
 
+    /// Screen Time rings need Apple's Family Controls entitlement: only offered in builds with `SCREEN_TIME` (set in
+    /// project.yml together with the entitlement once Apple has approved it).
+    static var showsScreenTime: Bool {
+        #if SCREEN_TIME
+        true
+        #else
+        false
+        #endif
+    }
+
     /// The categories the metric list offers.
-    static var offered: [Self] { allCases.filter { !$0.isSensitive || showsSensitive } }
+    static var offered: [Self] {
+        allCases.filter { (!$0.isSensitive || showsSensitive) && ($0 != .screenTime || showsScreenTime) }
+    }
 }

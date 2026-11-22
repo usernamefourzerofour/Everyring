@@ -18,7 +18,7 @@ extension HealthMetric {
         case .quantity(let kind): HKQuantityType(kind.identifier)
         case .nutrient(let kind): HKQuantityType(kind.identifier)
         case .sensitive(let kind): kind.quantityIdentifier.map { HKQuantityType($0) }
-        case .standHours, .heartMinutes, .workouts, .sleep, .sleepStage, .mindfulMinutes, .events: nil
+        case .standHours, .heartMinutes, .workouts, .sleep, .sleepStage, .mindfulMinutes, .events, .screenTime: nil
         }
     }
 
@@ -583,6 +583,19 @@ final class HealthManager {
             samples.reduce(into: [:]) { result, sample in result[key(sample.startDate), default: 0] += value(sample) }
         }
 
+        if case .screenTime = metric, let ring = filter.ring {
+            // Not from Health: what the Screen Time monitor recorded.
+            let log = ScreenTimeLog.load()
+            switch bucket {
+            case .hour: return log.hourly(ring: ring, in: range, calendar: calendar)
+            case .day: return log.daily(ring: ring, calendar: calendar).filter { range.contains($0.key) }
+            case .whole:
+                let total = log.daily(ring: ring, calendar: calendar)
+                    .filter { range.contains($0.key) || calendar.isDate($0.key, inSameDayAs: range.start) }
+                    .values.reduce(0, +)
+                return [range.start: total]
+            }
+        }
         if case .heartMinutes = metric {
             // Buckets: the whole range, each day or each hour.
             var buckets: [DateInterval] = []

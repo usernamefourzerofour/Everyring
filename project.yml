@@ -46,6 +46,8 @@ targets:
     dependencies:
       - target: EveryringWidget
       - target: EveryringWatch
+      # Screen Time: uncomment once Apple has approved the Family Controls entitlement (see docs/TODO.md).
+      # - target: EveryringScreenTimeMonitor
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring
@@ -53,6 +55,9 @@ targets:
         # Offers medical, reproductive and symptom types in the metric list (Shared/SensitiveMetrics.swift). For
         # TestFlight only: remove this line before an App Store release unless it is decided they may stay.
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SENSITIVE_METRICS"
+        # Screen Time rings: once Apple has approved Family Controls, add SCREEN_TIME here, the entitlement
+        # com.apple.developer.family-controls to this target and to EveryringScreenTimeMonitor, and the dependency
+        # above. Until then the app builds and ships without it.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   # Home Screen and Lock Screen widgets (iPhone + iPad). Draw from the App Group cache; no HealthKit access.
@@ -141,6 +146,30 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.watchkitapp.widget
+
+  # Screen Time monitor (DeviceActivityMonitor): records each Screen Time ring's minutes at thresholds into the App
+  # Group. Not embedded in the app yet: it needs the Family Controls entitlement, which Apple must approve first.
+  EveryringScreenTimeMonitor:
+    type: app-extension
+    platform: iOS
+    sources: [EveryringScreenTimeMonitor, Shared/ScreenTime]
+    entitlements:
+      path: EveryringScreenTimeMonitor/EveryringScreenTimeMonitor.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dk.erik.everyring]
+    info:
+      path: EveryringScreenTimeMonitor/Info.plist
+      properties:
+        CFBundleDisplayName: Everyring Screen Time
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ScreenTimeMonitor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.screentime
+        TARGETED_DEVICE_FAMILY: "1,2"
 
   EveryringTests:
     type: bundle.unit-test

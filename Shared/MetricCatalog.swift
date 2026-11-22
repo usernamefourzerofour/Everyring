@@ -3,7 +3,7 @@ import Foundation
 /// Groups, defaults and suggested goals for the metric picker and new rings.
 extension HealthMetric {
     enum Category: String, CaseIterable, Identifiable, Sendable {
-        case activity, distance, workouts, recovery, nutrition, vitamins, minerals, hygiene, symptoms, reproductive, medical
+        case activity, distance, workouts, recovery, nutrition, vitamins, minerals, hygiene, screenTime, symptoms, reproductive, medical
 
         var id: Self { self }
 
@@ -17,6 +17,7 @@ extension HealthMetric {
             case .vitamins: String(localized: "Vitamins")
             case .minerals: String(localized: "Minerals")
             case .hygiene: String(localized: "Hygiene")
+            case .screenTime: String(localized: "Screen Time")
             case .symptoms: String(localized: "Symptoms")
             case .reproductive: String(localized: "Reproductive health")
             case .medical: String(localized: "Medical")
@@ -35,6 +36,7 @@ extension HealthMetric {
             case .nutrition: return [.water] + more
             case .vitamins, .minerals: return more
             case .hygiene: return EventKind.allCases.map(HealthMetric.events)
+            case .screenTime: return [.screenTime]
             case .symptoms, .reproductive, .medical:
                 return SensitiveKind.allCases.filter { $0.category == self }.map(HealthMetric.sensitive)
             }
@@ -52,6 +54,7 @@ extension HealthMetric {
         case .events: .hygiene
         case .nutrient(let kind): kind.category
         case .sensitive(let kind): kind.category
+        case .screenTime: .screenTime
         }
     }
 
@@ -79,6 +82,7 @@ extension HealthMetric {
         case .events(let kind): kind.symbol
         case .nutrient(let kind): kind.symbol
         case .sensitive(let kind): kind.symbol
+        case .screenTime: "iphone"
         }
     }
 
@@ -93,6 +97,7 @@ extension HealthMetric {
         case .quantity(let kind): kind.defaultPeriod
         case .events, .nutrient: .today
         case .sensitive(let kind): kind.defaultPeriod
+        case .screenTime: .today
         }
     }
 
@@ -124,6 +129,7 @@ extension HealthMetric {
         case .events(let kind): kind.dailyBaseline
         case .nutrient(let kind): kind.dailyBaseline
         case .sensitive(let kind): kind.dailyBaseline
+        case .screenTime: 120
         }
     }
 
@@ -187,6 +193,7 @@ extension HealthMetric {
                 }
             }
         case .sensitive(let kind): kind.defaultColor
+        case .screenTime: .violet
         }
     }
 
@@ -196,6 +203,8 @@ extension HealthMetric {
         case .quantity(.dietaryEnergy), .quantity(.sugar), .quantity(.caffeine): .limit
         case .nutrient(let kind): kind.defaultGoalKind
         case .sensitive(let kind): kind.defaultGoalKind
+        // Screen time is something to have less of.
+        case .screenTime: .limit
         default: .reach
         }
     }
@@ -246,6 +255,9 @@ extension HealthMetric {
         default: false
         }
     }
+
+    /// Read from Apple Health (Screen Time comes from Apple's Screen Time instead): has Health sources to pick from.
+    var readsHealth: Bool { self != .screenTime }
 
     /// Sleep and mindful minutes have no meaningful build-up hour by hour.
     var hasHourlyBuildUp: Bool {

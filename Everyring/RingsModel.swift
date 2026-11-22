@@ -16,6 +16,7 @@ final class RingsModel {
             BackgroundUpdater.shared.start(library: library)
             #if os(iOS)
             PhoneSync.shared.send(library)
+            ScreenTimeManager.shared.update(for: library)
             #endif
             // Wait for an editor sheet to finish closing: Health can't show its access sheet over a closing one.
             Task {
@@ -47,6 +48,7 @@ final class RingsModel {
         // Save the starter set on first launch so the widgets (and the watch) can read it.
         if library == nil, stored == nil { try? RingStore.save(self.library) }
         PhoneSync.shared.activate()
+        ScreenTimeManager.shared.update(for: self.library)
         #endif
         self.health.heartMinuteSettings = self.library.heartMinutes
         BackgroundUpdater.shared.start(library: self.library)

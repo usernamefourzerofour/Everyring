@@ -6,17 +6,17 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 
 - **Top priority: make the direction of ring progress clear.** Start each ring with a lighter colour at 12 o’clock and build to the strongest colour at the moving tip. Keep the tip visible where the ends overlap. Check the 98% sleep-ring example, exactly 100%, and rings beyond one full lap.
 
-- **High priority (Erik will use it): Screen Time rings.** Screen time is not in Apple Health; it comes from Apple's
-  Screen Time API (FamilyControls with `.individual` authorization, DeviceActivity). Limits to design around:
-  - Needs the **Family Controls entitlement**, which Apple must approve before App Store distribution (request form).
-    Check early whether it works on TestFlight / development without approval.
-  - **Real numbers can only be shown inside the app**, in a `DeviceActivityReport` extension view: the app itself can't
-    read the usage, so it can't write it to the App Group for widgets or send it to the watch.
-  - **Widgets:** approximate with a `DeviceActivityMonitor` extension and usage thresholds (e.g. every 15 min), which
-    the extension writes to the App Group. Show it as approximate.
-  - iPhone and iPad only (no watch data). Rings for total screen time or chosen apps/categories (social, games), today
-    or per week, usually as limits ("stay under 2 hr").
-  - Start with a small prototype on TestFlight to see what the API allows, then decide on the design.
+- **High priority (Erik will use it): Screen Time rings — built, waiting for Apple.** The code is done (metric
+  `.screenTime`, app/category picker, `ScreenTimeManager`, the `EveryringScreenTimeMonitor` extension recording minutes at
+  thresholds into `ScreenTimeLog` in the App Group: every 5 min up to 4 hr, 10 up to 8, 30 up to 16; history starts
+  when the ring is made; no watch data). It is switched off until Apple approves the **Family Controls (Distribution)**
+  entitlement. Steps:
+  1. Erik requests it: developer.apple.com → Account → request "Family Controls (Distribution)" for
+     `dk.erik.everyring` and `dk.erik.everyring.screentime`.
+  2. Once approved, in project.yml: add `com.apple.developer.family-controls: true` to the Everyring and
+     EveryringScreenTimeMonitor entitlements, `SCREEN_TIME` to the app's compilation conditions, and the
+     EveryringScreenTimeMonitor dependency; run `set_up_signing` again (new bundle ID and capability).
+  3. Later: a DeviceActivityReport extension to show exact minutes inside the app (the numbers can't leave it).
 
 - **Graph widget from Heart Minutes.** Done: "Ring and Chart" (one ring and a chart of its period, small/medium/large).
   Maybe later: the zone bar on the large widget for Heart Minutes rings.

@@ -69,6 +69,8 @@ struct HealthFilter: Hashable, Sendable {
     var minimumWorkoutMinutes = 0
     /// 0: no limit.
     var maximumWorkoutMinutes = 0
+    /// Screen Time rings: which ring's recorded screen time to read.
+    var ring: UUID?
 
     static let none = HealthFilter()
 }
@@ -80,7 +82,8 @@ extension Ring {
                      leftOutWorkouts: metric.supportsWorkoutLeaveOut ? leftOutWorkouts : [],
                      activity: metric.supportsWorkoutLeaveOut ? activity : .all,
                      minimumWorkoutMinutes: usesWorkoutLengths ? minimumWorkoutMinutes : 0,
-                     maximumWorkoutMinutes: usesWorkoutLengths ? maximumWorkoutMinutes : 0)
+                     maximumWorkoutMinutes: usesWorkoutLengths ? maximumWorkoutMinutes : 0,
+                     ring: metric == .screenTime ? id : nil)
     }
 
     /// Workout rings, and activity rings that count only during or only outside workouts, can limit which workouts

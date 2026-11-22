@@ -1,3 +1,4 @@
+import FamilyControls
 import SwiftUI
 
 /// Edits one ring: metric → goal → period → name, colour and icon, with a live preview.
@@ -187,6 +188,10 @@ struct RingEditorView: View {
                     }
                     workoutLengthPickers
                 }
+                if ring.metric == .screenTime {
+                    ScreenTimeRows(selection: $ring.screenTimeSelection)
+                }
+                if ring.metric.readsHealth {
                 NavigationLink {
                     SourcesView(metric: ring.metric, selection: $ring.sources)
                 } label: {
@@ -197,9 +202,13 @@ struct RingEditorView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                }
             } header: {
                 Text("Health data")
             } footer: {
+                if ring.metric == .screenTime {
+                    Text("Screen time is counted in steps (every 5 minutes at first), as Apple tells Everyring about it, and only from when the ring is made. The apps you pick stay private: Everyring never sees their names.")
+                }
                 if ring.metric.supportsWorkoutLeaveOut {
                     switch ring.activity {
                     case .all: EmptyView()
@@ -948,5 +957,60 @@ struct WeekdayPicker: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// Screen Time rings: access to Screen Time and the apps, categories and websites the ring follows.
+private struct ScreenTimeRows: View {
+    @Binding var selection: Data?
+    @State private var picking = false
+    @State private var authorized = ScreenTimeManager.shared.isAuthorized
+    @State private var problem: String?
+
+    var body: some View {
+        let current = selection.flatMap { try? JSONDecoder().decode(FamilyActivitySelection.self, from: $0) }
+            ?? FamilyActivitySelection()
+        if !authorized {
+            Button("Allow Screen Time Access") {
+                Task {
+                    do {
+                        try await ScreenTimeManager.shared.requestAuthorization()
+                        authorized = ScreenTimeManager.shared.isAuthorized
+                        problem = nil
+                    } catch {
+                        problem = String(localized: "Screen Time access isn’t available: \(error.localizedDescription)")
+                    }
+                }
+            }
+            if let problem {
+                Text(problem).font(.footnote).foregroundStyle(.red)
+            }
+        } else {
+            Button {
+                picking = true
+            } label: {
+                HStack {
+                    Text("Apps and categories").foregroundStyle(.primary)
+                    Spacer()
+                    Text(summary(current)).foregroundStyle(.secondary)
+                }
+            }
+            .familyActivityPicker(isPresented: $picking, selection: Binding(
+                get: { current },
+                set: { selection = ScreenTimeManager.encode($0) }
+            ))
+        }
+    }
+
+    private func summary(_ selection: FamilyActivitySelection) -> String {
+        let apps = selection.applicationTokens.count
+        let categories = selection.categoryTokens.count
+        let sites = selection.webDomainTokens.count
+        guard apps + categories + sites > 0 else { return String(localized: "None") }
+        var parts: [String] = []
+        if categories > 0 { parts.append(categories == 1 ? String(localized: "1 category") : String(localized: "\(categories) categories")) }
+        if apps > 0 { parts.append(apps == 1 ? String(localized: "1 app") : String(localized: "\(apps) apps")) }
+        if sites > 0 { parts.append(sites == 1 ? String(localized: "1 website") : String(localized: "\(sites) websites")) }
+        return parts.joined(separator: ", ")
     }
 }
