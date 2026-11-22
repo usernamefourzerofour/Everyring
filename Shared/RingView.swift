@@ -254,7 +254,7 @@ struct SingleRing: View {
     var warning = false
 
     var body: some View {
-        let (start, end) = warning ? RingDisplay.warningGradient : (self.start, self.end)
+        let (tipColor, tailColor) = warning ? RingDisplay.warningGradient : (self.start, self.end)
         let f = max(0, fraction)
         let wraps = f > 1
         // Position of the ring end within its last lap.
@@ -263,34 +263,39 @@ struct SingleRing: View {
             let radius = min(geo.size.width, geo.size.height) / 2
             ZStack {
                 Circle()
-                    .stroke(end.opacity(trackOpacity), lineWidth: lineWidth)
+                    .stroke(tailColor.opacity(trackOpacity), lineWidth: lineWidth)
 
                 if wraps {
                     // A whole lap whose gradient ends at the tip.
                     Circle()
-                        .stroke(AngularGradient(colors: [start, end], center: .center,
+                        .stroke(AngularGradient(colors: [tailColor, tipColor], center: .center,
                                                 startAngle: .degrees(360 * tip - 360), endAngle: .degrees(360 * tip)),
                                 lineWidth: lineWidth)
                         .rotationEffect(.degrees(-90))
                     // End cap with a shadow falling on the ring behind it.
                     Circle()
-                        .fill(end)
+                        .fill(tipColor)
                         .frame(width: lineWidth, height: lineWidth)
                         .shadow(color: .black.opacity(0.35), radius: lineWidth * 0.18, x: 0, y: 0)
                         .offset(y: -radius)
                         .rotationEffect(.degrees(360 * tip))
                 } else if f > 0 {
                     Circle()
-                        .trim(from: 0, to: f)
-                        .stroke(AngularGradient(colors: [start, end], center: .center,
-                                                startAngle: .degrees(0), endAngle: .degrees(360 * max(f, 0.001))),
-                                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    // The arc's round start cap would take the end colour from the gradient; cover it.
-                    Circle()
-                        .fill(start)
+                        .fill(tailColor)
                         .frame(width: lineWidth, height: lineWidth)
                         .offset(y: -radius)
+                    Circle()
+                        .trim(from: 0, to: f)
+                        .stroke(AngularGradient(colors: [tailColor, tipColor], center: .center,
+                                                startAngle: .degrees(0), endAngle: .degrees(360 * f)),
+                                style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
+                        .rotationEffect(.degrees(-90))
+                    // Draw the leading cap last so it stays visible where the ends overlap.
+                    Circle()
+                        .fill(tipColor)
+                        .frame(width: lineWidth, height: lineWidth)
+                        .offset(y: -radius)
+                        .rotationEffect(.degrees(360 * tip))
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
