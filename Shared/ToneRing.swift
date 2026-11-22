@@ -18,6 +18,8 @@ struct ToneRing: View {
     let lineWidth: CGFloat
     /// How strong the ring is in one colour (neighbouring rings alternate).
     var emphasis = 1.0
+    /// The white dot isn't drawn while the tip is between 12 o'clock and this fraction of a lap (where a label sits).
+    var dotHiddenUntil = 0.0
 
     /// Pieces per lap: enough that the steps in colour can't be seen.
     private static let piecesPerLap = 160.0
@@ -52,12 +54,15 @@ struct ToneRing: View {
                             .mask(progress(f: f, laps: laps, pos: pos).luminanceToAlpha())
                             .widgetAccentable()
                     }
-                    // A small white dot where you have reached.
-                    let angle = (pos * 2 - 0.5) * .pi
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: lineWidth * 0.38, height: lineWidth * 0.38)
-                        .position(x: geo.size.width / 2 + radius * cos(angle), y: geo.size.height / 2 + radius * sin(angle))
+                    // A small white dot where you have reached (left out under a label).
+                    if pos > dotHiddenUntil {
+                        let angle = (pos * 2 - 0.5) * .pi
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: lineWidth * 0.38, height: lineWidth * 0.38)
+                            .position(x: geo.size.width / 2 + radius * cos(angle),
+                                      y: geo.size.height / 2 + radius * sin(angle))
+                    }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

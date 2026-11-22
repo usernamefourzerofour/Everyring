@@ -154,7 +154,10 @@ struct RingStackView: View {
                         let (deep, light) = ring.warning ? RingDisplay.warningGradient : (ring.start, ring.end)
                         ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: lw,
                                  // In one colour, neighbouring rings alternate strong and softer to tell them apart.
-                                 emphasis: index.isMultiple(of: 2) ? 1 : 0.72)
+                                 emphasis: index.isMultiple(of: 2) ? 1 : 0.72,
+                                 // The tip's dot stays behind the label: not drawn where the text is.
+                                 dotHiddenUntil: showsLabels
+                                    ? RingStartLabel(ring: ring, radius: radius, lineWidth: lw).span : 0)
                             .frame(width: (radius + lw / 2) * 2, height: (radius + lw / 2) * 2)
                         if showsLabels {
                             RingStartLabel(ring: ring, radius: radius, lineWidth: lw, monochrome: monochrome)
@@ -227,6 +230,13 @@ struct RingStartLabel: View {
         .foregroundStyle(filledUnder || monochrome ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
         .blendMode(monochrome && filledUnder ? .destinationOut : .normal)
         .accessibilityHidden(true)
+    }
+
+    /// How far round the ring the label reaches, as a fraction of a lap (with a little room after it).
+    var span: Double {
+        let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
+        let end = layout(percent: percent, size: fittedSize(percent: percent)).1
+        return (end + Double(lineWidth) * 0.4 / Double(max(radius, 1))) / (2 * .pi)
     }
 
     /// The text size: on a small inner ring a full-size label would run far around it, so shrink it to fit about 100°.
