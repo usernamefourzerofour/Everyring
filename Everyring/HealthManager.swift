@@ -375,6 +375,25 @@ final class HealthManager {
         }
     }
 
+    /// How much of `metric` in `interval` was logged during workouts and how much in everyday life.
+    func activitySplit(of metric: HealthMetric, in interval: DateInterval, filter: HealthFilter = .none) async throws -> ActivitySplit {
+        guard Self.isAvailable, let type = metric.quantityType, interval.duration > 0 else { return ActivitySplit() }
+        return try await reading(metric) {
+            let scope = try await self.scope(for: metric, filter: HealthFilter(sources: filter.sources))
+            var split = ActivitySplit(total: try await self.sum(type, unit: metric.hkUnit, in: interval, scope: scope))
+            // A workout that started the evening before can run into the period.
+            let fetch = DateInterval(start: interval.start.addingTimeInterval(-12 * 3600), end: interval.end)
+            let spans = IntervalMath.merged(try await self.workouts(kinds: nil, in: fetch)
+                .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) })
+                .compactMap { $0.intersection(with: interval) }
+                .filter { $0.duration > 0 }
+            for span in spans {
+                split.duringWorkouts += try await self.sum(type, unit: metric.hkUnit, in: span, scope: scope)
+            }
+            return split
+        }
+    }
+
     /// The nights that end inside `interval` (counted on the day you wake up), newest first.
     func nights(in interval: DateInterval, calendar: Calendar, filter: HealthFilter = .none) async throws -> [LoggedNight] {
         guard Self.isAvailable else { return [] }
@@ -657,6 +676,7 @@ protocol EmptyableResult {
 extension Dictionary: EmptyableResult { static var empty: Self { [:] } }
 extension Array: EmptyableResult { static var empty: Self { [] } }
 extension Set: EmptyableResult { static var empty: Self { [] } }
+extension ActivitySplit: EmptyableResult { static var empty: Self { ActivitySplit() } }
 
 private extension HKSample {
     var interval: DateInterval { DateInterval(start: startDate, end: max(startDate, endDate)) }

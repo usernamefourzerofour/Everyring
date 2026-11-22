@@ -20,6 +20,8 @@ struct RingDetailView: View {
     @State private var loadedRing: Ring?
     /// Activity rings: the shown period's workouts.
     @State private var workoutLog: [LoggedWorkout]?
+    /// Activity rings: how much of the shown period came from workouts.
+    @State private var activitySplit: ActivitySplit?
     /// Sleep rings: the shown period's nights.
     @State private var nightLog: [LoggedNight]?
 
@@ -89,7 +91,7 @@ struct RingDetailView: View {
                     }
 
                     if ring.metric.supportsWorkoutLeaveOut {
-                        WorkoutLogCard(ring: ring, workouts: workoutLog, calendar: model.calendar)
+                        WorkoutLogCard(ring: ring, workouts: workoutLog, split: activitySplit, calendar: model.calendar)
                     }
                     if ring.metric.isSleep {
                         NightsCard(ring: ring, nights: nightLog, calendar: model.calendar)
@@ -148,8 +150,10 @@ struct RingDetailView: View {
                 guard ring.metric.supportsWorkoutLeaveOut else { workoutLog = nil; return }
                 workoutLog = nil
                 let interval = selected ?? ring.period.interval(now: .now, calendar: model.calendar)
+                activitySplit = nil
                 workoutLog = await withTimeout { await model.workoutLog(for: ring, interval: interval) } ?? nil
                 if workoutLog == nil { workoutLog = [] }
+                activitySplit = await withTimeout { await model.activitySplit(for: ring, interval: interval) } ?? nil
             }
             .task(id: WorkoutLogKey(ring: ring, selected: selected)) {
                 guard ring.metric.isSleep else { nightLog = nil; return }
@@ -715,6 +719,8 @@ struct WorkoutLogCard: View {
     let ring: Ring
     /// `nil` while loading.
     let workouts: [LoggedWorkout]?
+    /// How much came from workouts; `nil` while loading or if it couldn't be read.
+    var split: ActivitySplit?
     let calendar: Calendar
     @State private var showsAll = false
     /// The workout whose timeline is showing.
@@ -725,6 +731,10 @@ struct WorkoutLogCard: View {
             Label("Workouts", systemImage: "figure.run")
                 .font(.headline)
                 .foregroundStyle(ring.accent)
+            if let split, split.total > 0 {
+                ActivitySplitView(ring: ring, split: split)
+                Divider()
+            }
             if let workouts {
                 if workouts.isEmpty {
                     Text("No workouts logged in this period.")
@@ -1104,5 +1114,47 @@ private struct WorkoutTimelineView: View {
     private func heartRateSummary(_ timeline: WorkoutTimeline) -> String {
         guard let average = timeline.averageHeartRate, let peak = timeline.maxHeartRate else { return "" }
         return String(localized: "Heart rate, average \(Int(average.rounded())), highest \(Int(peak.rounded())) beats per minute")
+    }
+}
+
+/// How much of the period came from workouts and how much from everyday activity, as a split bar with both amounts.
+private struct ActivitySplitView: View {
+    let ring: Ring
+    let split: ActivitySplit
+
+    var body: some View {
+        let share = split.workoutShare
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    if share > 0 {
+                        Rectangle().fill(ring.accent)
+                            .frame(width: max(3, (geo.size.width - 2) * share))
+                    }
+                    Rectangle().fill(ring.accent.opacity(0.25))
+                }
+            }
+            .frame(height: 10)
+            .clipShape(.capsule)
+            HStack(alignment: .top) {
+                part(color: ring.accent, title: "From workouts", value: split.duringWorkouts, share: share)
+                Spacer()
+                part(color: ring.accent.opacity(0.25), title: "Everyday activity", value: split.everyday, share: 1 - share)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "\(ring.metric.format(split.duringWorkouts, style: .wide)) from workouts, \(ring.metric.format(split.everyday, style: .wide)) from everyday activity"))
+    }
+
+    private func part(color: Color, title: LocalizedStringKey, value: Double, share: Double) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
+                Circle().fill(color).frame(width: 8, height: 8)
+                Text(title).font(.caption)
+            }
+            Text("\(ring.metric.format(value)) · \(share.formatted(.percent.precision(.fractionLength(0))))")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+        }
     }
 }

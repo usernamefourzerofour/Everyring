@@ -246,6 +246,17 @@ final class RingsModel {
         return try? await health.workoutLog(of: ring.metric, in: interval, filter: ring.healthFilter)
     }
 
+    /// How much of an activity ring's metric in `interval` came from workouts and how much from everyday life; `nil`
+    /// for other rings or if Health couldn't be read.
+    func activitySplit(for ring: Ring, interval: DateInterval, now: Date = .now) async -> ActivitySplit? {
+        guard ring.metric.supportsWorkoutLeaveOut else { return nil }
+        if Self.isDemo {
+            let during = DemoHistory.workouts(for: ring, in: interval, now: now, calendar: calendar).reduce(0) { $0 + $1.value }
+            return ActivitySplit(total: during * 2.4, duringWorkouts: during)
+        }
+        return try? await health.activitySplit(of: ring.metric, in: interval, filter: ring.healthFilter)
+    }
+
     /// Heart rate and the ring's metric minute by minute through `workout`; `nil` if Health couldn't be read.
     func workoutTimeline(for ring: Ring, workout: LoggedWorkout) async -> WorkoutTimeline? {
         if Self.isDemo { return DemoHistory.timeline(for: workout) }

@@ -3,7 +3,7 @@
 Guidance for Claude working on Everyring, an iPhone, iPad and Apple Watch app (Swift, SwiftUI, Swift Charts,
 WidgetKit, HealthKit, Codable JSON in an App Group) with concentric progress rings where each ring has its own period (day, week, month, custom or rolling).
 
-The full product brief is in `docs/HANDOVER.md`. Read it before larger changes.
+The full product brief is in `docs/HANDOVER.md`. Read it before larger changes. Open work is in `docs/TODO.md`.
 
 ## Working with Erik
 
@@ -28,7 +28,7 @@ The full product brief is in `docs/HANDOVER.md`. Read it before larger changes.
 | `Shared/` | Used by all targets: model (`RingSet`, `Ring`, `RingPeriod`, `HealthMetric`), period and streak engines, App Group cache, ring drawing, String Catalog, privacy manifest. |
 | `EveryringTests/` | Unit tests: period boundaries (week start, month lengths, DST, time zones), streaks, cache rules. |
 | `Design/` | App icon source and scripts. |
-| `docs/` | Brief (`HANDOVER.md`), privacy policy, support page (GitHub Pages: `/docs`). |
+| `docs/` | Brief (`HANDOVER.md`), to-do list (`TODO.md`), privacy policy, support page (GitHub Pages: `/docs`). |
 
 Names: the app, targets, scheme and project are **Everyring** / `Everyring`. Bundle IDs: `dk.erik.everyring`,
 `dk.erik.everyring.widget`, `dk.erik.everyring.watchkitapp`, `dk.erik.everyring.watchkitapp.widget`.

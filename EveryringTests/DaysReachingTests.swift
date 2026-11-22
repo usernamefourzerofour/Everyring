@@ -187,3 +187,15 @@ struct WorkoutTimelineTests {
         #expect(timeline.perMinute.allSatisfy { $0.date >= workout.start && $0.date < workout.end })
     }
 }
+
+struct ActivitySplitTests {
+    @Test func everydayIsTheRest() {
+        let split = ActivitySplit(total: 200, duringWorkouts: 80)
+        #expect(split.everyday == 120)
+        #expect(split.workoutShare == 0.4)
+        #expect(ActivitySplit().workoutShare == 0)
+        // Statistics can round so workouts exceed the total by a hair: never below zero or above 100 %.
+        #expect(ActivitySplit(total: 10, duringWorkouts: 10.2).everyday == 0)
+        #expect(ActivitySplit(total: 10, duringWorkouts: 10.2).workoutShare == 1)
+    }
+}

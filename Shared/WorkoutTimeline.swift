@@ -43,3 +43,16 @@ extension DemoHistory {
         return timeline
     }
 }
+
+/// How much of an activity metric over a period was logged during workouts and how much in everyday life.
+struct ActivitySplit: Hashable, Sendable {
+    /// The whole period's value, in the metric's base unit.
+    var total: Double = 0
+    /// The part logged while workouts ran (overlapping workouts counted once).
+    var duringWorkouts: Double = 0
+
+    /// What was logged outside workouts: walking around, taking the stairs, cycling to work.
+    var everyday: Double { max(0, total - duringWorkouts) }
+    /// The share from workouts, 0–1 (0 when nothing was logged).
+    var workoutShare: Double { total > 0 ? min(1, duringWorkouts / total) : 0 }
+}
