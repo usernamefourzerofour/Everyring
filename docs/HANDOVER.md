@@ -35,7 +35,7 @@ The public repo **github.com/usernamefourzerofour/Everyring** already exists, wi
 | iPhone + iPad widgets | WidgetKit; the user picks which ring set a widget shows (AppIntent configuration). Sizes: small, medium, large, plus Lock Screen accessory widgets |
 | Apple Watch | **Complications** (WidgetKit accessory families) plus a **small watchOS app**. Tapping the complication opens the app with ring details |
 
-- **Minimum OS:** iOS 27, iPadOS 27, watchOS 27 (decided 2026-11-15; originally 26). Use current SwiftUI APIs and system materials (Liquid Glass where it fits naturally).
+- **Minimum OS:** iOS 27, iPadOS 27, watchOS 26 (iOS decided 2026-11-15; watchOS lowered to 26 on 2026-11-22 so watches that can't get watchOS 27 work). Use current SwiftUI APIs and system materials (Liquid Glass where it fits naturally).
 - **Language:** English only for now, but put every string in a String Catalog so localization can be added later.
 
 ## 3. Data storage
@@ -178,7 +178,7 @@ Manual logging, notifications, iCloud sync, sharing/social, quarter and year per
 ## Decisions (2026-11-15)
 
 - Bundle ID `dk.erik.everyring` (+ `.widget`, `.watchkitapp`, `.watchkitapp.widget`), App Group `group.dk.erik.everyring`.
-- Minimum OS: iOS / iPadOS / watchOS 27.
+- Minimum OS: iOS / iPadOS 27, watchOS 26.
 - Workout rings can measure count, minutes or **distance**, optionally filtered by workout type (e.g. running distance).
 - The example "Heart minutes 150 in the last 7 days" uses **exercise minutes**; Heart Minutes doesn't write to Health.
 - Sleep counts on the day you wake up.
