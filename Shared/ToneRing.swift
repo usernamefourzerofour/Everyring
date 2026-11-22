@@ -149,8 +149,7 @@ struct ToneRingStack: View {
                             .minimumScaleFactor(0.4)
                             .lineLimit(1)
                         Text(verbatim: "%")
-                            .font(.system(size: diameter * 0.14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: diameter * 0.16, weight: .bold, design: .rounded))
                     }
                     .frame(width: diameter * 0.68)
                     .offset(y: diameter * 0.03)
