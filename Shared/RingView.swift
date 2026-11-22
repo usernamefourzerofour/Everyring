@@ -246,6 +246,34 @@ struct RingStartLabel: View {
         .accessibilityHidden(true)
     }
 
+    private func glyphLayer(_ glyphs: [Glyph], size: CGFloat, weight: Font.Weight) -> some View {
+        ZStack {
+            ForEach(glyphs) { glyph in
+                Group {
+                    if let symbol = glyph.symbol {
+                        Image(systemName: symbol)
+                            .font(.system(size: size * 0.9, weight: weight))
+                    } else {
+                        Text(glyph.text)
+                            .font(.system(size: size, weight: weight, design: .rounded).monospacedDigit())
+                    }
+                }
+                .fixedSize()
+                .offset(y: -radius)
+                .rotationEffect(.radians(glyph.angle))
+            }
+        }
+    }
+
+    /// Small shifts all round, so the cut-out gap is a little wider than the text itself.
+    private static func haloOffsets(size: CGFloat) -> [CGSize] {
+        let d = max(0.8, size * 0.09)
+        return [CGSize(width: -d, height: 0), CGSize(width: d, height: 0), CGSize(width: 0, height: -d),
+                CGSize(width: 0, height: d), CGSize(width: -d * 0.7, height: -d * 0.7),
+                CGSize(width: d * 0.7, height: -d * 0.7), CGSize(width: -d * 0.7, height: d * 0.7),
+                CGSize(width: d * 0.7, height: d * 0.7)]
+    }
+
     /// How far round the ring the label reaches, as a fraction of a lap (with a little room after it).
     var span: Double {
         let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
