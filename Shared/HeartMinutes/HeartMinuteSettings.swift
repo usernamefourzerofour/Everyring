@@ -33,16 +33,13 @@ struct HeartMinuteSettings: Codable, Hashable, Sendable {
 
     /// The calculation's settings, as Heart Minutes builds them from its activity mode.
     var config: ActiveMinutes.Config {
-        let requireActive: Bool
-        let source: ActiveMinutes.ActivitySource
-        let bridge: TimeInterval
         let pause = TimeInterval(min(max(pauseSeconds, 1), 600))
-        switch activityMode {
-        case .always: (requireActive, source, bridge) = (false, .either, 0)
-        case .watch: (requireActive, source, bridge) = (true, .watchMotion, 0)
-        case .watchWithPauses: (requireActive, source, bridge) = (true, .watchMotion, pause)
-        case .watchOrRing: (requireActive, source, bridge) = (true, .either, 0)
-        case .withPauses: (requireActive, source, bridge) = (true, .either, pause)
+        let (requireActive, source, bridge): (Bool, ActiveMinutes.ActivitySource, TimeInterval) = switch activityMode {
+        case .always: (false, .either, 0)
+        case .watch: (true, .watchMotion, 0)
+        case .watchWithPauses: (true, .watchMotion, pause)
+        case .watchOrRing: (true, .either, 0)
+        case .withPauses: (true, .either, pause)
         }
         return ActiveMinutes.Config(zones: zones, requireActive: requireActive, fillWorkoutGaps: workoutGaps != .sameLimit,
                                     maxGap: TimeInterval(min(max(maxGapSeconds, 1), 600)), interpolation: interpolation,

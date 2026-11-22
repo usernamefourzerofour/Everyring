@@ -725,7 +725,7 @@ final class HealthManager {
                 && (scope.maximumWorkoutDuration <= 0 || w.duration <= scope.maximumWorkoutDuration)
         }
         let leftOut = Set(scope.leftOutWorkouts)
-        func isLeftOut(_ w: HKWorkout) -> Bool { WorkoutKind(activityType: w.workoutActivityType).map(leftOut.contains) ?? false }
+        func isLeftOut(_ w: HKWorkout) -> Bool { WorkoutKind(activityType: w.workoutActivityType).map { leftOut.contains($0) } ?? false }
         let exercise = try await exerciseSamples(in: DateInterval(start: range.start.addingTimeInterval(-margin),
                                                                   end: range.end.addingTimeInterval(margin))).map(\.interval)
         let marked: [DateInterval]
