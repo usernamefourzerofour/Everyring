@@ -41,6 +41,10 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 
 ## Before the App Store
 
+- **Feature "Fade when closed" in the App Store listing.** Erik loves it. Make it part of the pitch, with the idea
+  behind it: *you should only be shown the data you need to act on.* Rings you've already closed step back, so a
+  glance at the widget shows what's left to do today. Use it in the subtitle or first lines of the description and in
+  one of the first screenshots (a widget with closed rings faded and one or two still bright).
 - Remove `SENSITIVE_METRICS` from `project.yml` (medical, reproductive and symptom types), unless it is decided they
   may stay. See `Shared/SensitiveMetrics.swift`.
 
