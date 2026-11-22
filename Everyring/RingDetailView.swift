@@ -70,6 +70,13 @@ struct RingDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                         let interval = past?.interval ?? ring.period.interval(now: .now, calendar: model.calendar)
+                        // Screen Time only counts from when the ring was made; History below shows the days before.
+                        if let tracked = ring.screenTimeDaysTracked(in: interval, now: .now, calendar: model.calendar) {
+                            Text(tracked == 1 ? String(localized: "Counted from today, when the ring was added")
+                                              : String(localized: "\(tracked) days counted, since the ring was added"))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                         if let pace = DailyPace.make(for: ring, value: shown, interval: interval, now: .now,
                                                      calendar: model.calendar) {
                             Text("≈ \(ring.metric.formatPerDay(pace.average)) per day")

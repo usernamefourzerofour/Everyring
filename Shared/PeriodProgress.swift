@@ -225,6 +225,15 @@ extension Ring {
         return total / Double(period.averageDays(in: interval, now: now, calendar: calendar))
     }
 
+    /// For a Screen Time ring: how many of the period's days it has data for, when that's fewer than the period (the
+    /// days before the ring was made don't count). Nil otherwise.
+    func screenTimeDaysTracked(in interval: DateInterval, now: Date, calendar: Calendar) -> Int? {
+        guard metric == .screenTime, let first = ScreenTimeLog.load().firstDay(ring: id, calendar: calendar) else { return nil }
+        let all = countedDays(in: interval, now: now, calendar: calendar)
+        let tracked = all.filter { $0 >= first }.count
+        return tracked < all.count ? tracked : nil
+    }
+
     /// The value the ring shows for `interval`, from values per day (keyed by start of day).
     func measure(daily: [Date: Double], in interval: DateInterval, now: Date, calendar: Calendar) -> Double {
         var days = countedDays(in: interval, now: now, calendar: calendar)
