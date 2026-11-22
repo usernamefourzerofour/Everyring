@@ -27,9 +27,11 @@ struct RingsEntry: TimelineEntry {
     struct Item: Identifiable {
         var ring: Ring
         var value: Double
+        /// The "fade closed rings" setting.
+        var fadesWhenClosed = false
         var id: Ring.ID { ring.id }
         var fraction: Double { ring.fraction(value) }
-        var display: RingDisplay { ring.display(value) }
+        var display: RingDisplay { ring.display(value, fadesWhenClosed: fadesWhenClosed) }
         var tint: Color { ring.tint(value) }
     }
 
@@ -84,7 +86,8 @@ struct RingsProvider: AppIntentTimelineProvider {
         let set = library.sets.first { $0.id == configuration.ringSet?.id } ?? library.sets.first
         let cache = ProgressCache.load()
         let items = (set?.rings ?? []).map {
-            RingsEntry.Item(ring: $0, value: cache.value(for: $0, at: date, calendar: calendar))
+            RingsEntry.Item(ring: $0, value: cache.value(for: $0, at: date, calendar: calendar),
+                            fadesWhenClosed: library.fadesClosedRings)
         }
         return RingsEntry(date: date, set: set, items: items, calendar: calendar)
     }

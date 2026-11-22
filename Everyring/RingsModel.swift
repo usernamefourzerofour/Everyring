@@ -54,7 +54,7 @@ final class RingsModel {
     func value(for ring: Ring) -> Double { values[ring.id] ?? 0 }
 
     func displays(for set: RingSet) -> [RingDisplay] {
-        set.rings.map { $0.display(value(for: $0)) }
+        set.rings.map { $0.display(value(for: $0), fadesWhenClosed: library.fadesClosedRings) }
     }
 
     // MARK: Lookup and editing
@@ -128,7 +128,6 @@ final class RingsModel {
         values.merge(snapshots.mapValues(\.value)) { $1 }
         values = values.filter { id, _ in library.sets.contains { $0.rings.contains { $0.id == id } } }
         lastUpdated = now
-        celebrateClosedRings(snapshots)
         // With the app open the value may go down (e.g. deleted samples).
         ProgressUpdater.store(snapshots, library: library, allowDecrease: true)
     }
@@ -314,45 +313,5 @@ final class RingsModel {
                                                   filter: key.filter)
         dailyCache[key] = DailyCache(from: start, fetched: now, values: values)
         return values
-    }
-
-    // MARK: Closing rings
-
-    /// A ring that just reached its goal: the home screen celebrates it with an animation and a haptic.
-    struct Celebration: Equatable {
-        let id = UUID()
-        let ring: Ring
-    }
-
-    private(set) var celebration: Celebration?
-
-    func dismissCelebration() { celebration = nil }
-
-    /// Celebrates each fixed ring once per period when it closes, and a rolling ring when it gets back above its goal.
-    private func celebrateClosedRings(_ snapshots: [Ring.ID: RingSnapshot]) {
-        let defaults = UserDefaults.standard
-        var celebrated = defaults.stringArray(forKey: "celebratedPeriods") ?? []
-        var rollingClosed = defaults.dictionary(forKey: "rollingClosed") as? [String: Bool] ?? [:]
-        var newlyClosed: [Ring] = []
-        for ring in library.sets.flatMap(\.rings) {
-            guard let snapshot = snapshots[ring.id] else { continue }
-            // Only goals to reach are celebrated; a limit is met by not doing something.
-            guard !ring.isLimit else { continue }
-            let closed = ring.isMet(snapshot.value)
-            if ring.period.isRolling {
-                let key = ring.id.uuidString
-                if closed, rollingClosed[key] == false { newlyClosed.append(ring) }
-                rollingClosed[key] = closed
-            } else if closed {
-                let key = "\(ring.id.uuidString)|\(Int(snapshot.intervalStart.timeIntervalSince1970))"
-                if !celebrated.contains(key) {
-                    celebrated.append(key)
-                    newlyClosed.append(ring)
-                }
-            }
-        }
-        defaults.set(Array(celebrated.suffix(300)), forKey: "celebratedPeriods")
-        defaults.set(rollingClosed, forKey: "rollingClosed")
-        if let ring = newlyClosed.first { celebration = Celebration(ring: ring) }
     }
 }

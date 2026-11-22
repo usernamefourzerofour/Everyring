@@ -16,8 +16,26 @@ enum AppGroup {
 struct RingLibrary: Codable, Hashable, Sendable {
     var sets: [RingSet]
     var weekStart: WeekStart = .system
+    /// Rings that reached their goal turn pale and matte, so the ones still to do stand out.
+    var fadesClosedRings = false
 
     static let starter = RingLibrary(sets: [.starter])
+
+    init(sets: [RingSet], weekStart: WeekStart = .system, fadesClosedRings: Bool = false) {
+        self.sets = sets
+        self.weekStart = weekStart
+        self.fadesClosedRings = fadesClosedRings
+    }
+
+    private enum CodingKeys: String, CodingKey { case sets, weekStart, fadesClosedRings }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sets = try c.decode([RingSet].self, forKey: .sets)
+        weekStart = try c.decodeIfPresent(WeekStart.self, forKey: .weekStart) ?? .system
+        // Libraries saved before the setting existed.
+        fadesClosedRings = try c.decodeIfPresent(Bool.self, forKey: .fadesClosedRings) ?? false
+    }
 
     /// The calendar all periods are computed in.
     func calendar(_ base: Calendar = .current) -> Calendar { weekStart.calendar(base) }

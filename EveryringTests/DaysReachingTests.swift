@@ -228,3 +228,23 @@ struct PaceTextTests {
         #expect(pace?.remaining == 1)
     }
 }
+
+struct FadedRingTests {
+    @Test func closedRingsFadeOnlyWhenAsked() {
+        let steps = Ring(name: "Steps", color: .fern, symbol: "figure.walk", metric: .steps, goal: 10_000, period: .today)
+        #expect(!steps.display(12_000).faded)
+        #expect(steps.display(12_000, fadesWhenClosed: true).faded)
+        #expect(!steps.display(8_000, fadesWhenClosed: true).faded)
+        var limit = steps
+        limit.goalKind = .limit
+        #expect(!limit.display(500, fadesWhenClosed: true).faded)
+    }
+
+    @Test func oldLibrariesDecodeWithoutTheSetting() throws {
+        let json = #"{"sets":[],"weekStart":"system"}"#
+        let library = try JSONDecoder().decode(RingLibrary.self, from: Data(json.utf8))
+        #expect(!library.fadesClosedRings)
+        let faded = RingLibrary(sets: [], fadesClosedRings: true)
+        #expect(try JSONDecoder().decode(RingLibrary.self, from: JSONEncoder().encode(faded)).fadesClosedRings)
+    }
+}

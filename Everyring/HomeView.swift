@@ -58,15 +58,6 @@ struct HomeView: View {
                     }
                 }
             }
-            .sensoryFeedback(.success, trigger: model.celebration) { _, new in new != nil }
-            .task(id: model.celebration) {
-                guard let celebration = model.celebration else { return }
-                AccessibilityNotification.Announcement(
-                    String(localized: "\(celebration.ring.name) ring closed")).post()
-                // A cancelled task (the view was rebuilt) must not hide the banner early.
-                do { try await Task.sleep(for: .seconds(3)) } catch { return }
-                if model.celebration == celebration { model.dismissCelebration() }
-            }
             .overlay(alignment: .bottom) {
                 if let error = model.error {
                     Text(error)
@@ -77,15 +68,6 @@ struct HomeView: View {
                 }
             }
         }
-        // On the navigation stack, so the banner sits over the navigation bar rather than under it.
-        .overlay(alignment: .top) {
-            if let celebration = model.celebration {
-                CelebrationBanner(ring: celebration.ring)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .onTapGesture { model.dismissCelebration() }
-            }
-        }
-        .animation(.spring(duration: 0.5), value: model.celebration)
         .sheet(item: $sheet) { sheet in
             switch sheet {
             case .newSet:
@@ -131,12 +113,6 @@ struct RingSetPage: View {
                     .frame(maxWidth: sizeClass == .regular ? 420 : 300)
                     .padding(.horizontal)
                     .animation(.smooth(duration: 0.8), value: model.displays(for: set))
-                    .keyframeAnimator(initialValue: 1.0, trigger: model.celebration) { view, scale in
-                        view.scaleEffect(scale)
-                    } keyframes: { _ in
-                        SpringKeyframe(1.06, duration: 0.25, spring: .bouncy)
-                        SpringKeyframe(1.0, duration: 0.5, spring: .smooth)
-                    }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(set.rings.map { model.accessibilityText(for: $0) }.joined(separator: "; "))
 
@@ -205,31 +181,4 @@ extension RingsModel {
 #Preview {
     HomeView()
         .environment(RingsModel(library: .starter))
-}
-
-/// "Ring closed!" shown briefly at the top when a ring reaches its goal.
-struct CelebrationBanner: View {
-    let ring: Ring
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: ring.symbol)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(ring.accent.gradient, in: .circle)
-                .symbolEffect(.bounce, value: ring.id)
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Ring closed!")
-                    .font(.headline)
-                Text(ring.name)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 14)
-        .glassEffect(.regular, in: .capsule)
-        .accessibilityElement(children: .combine)
-    }
 }

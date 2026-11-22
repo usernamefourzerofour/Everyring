@@ -50,14 +50,18 @@ struct RingDisplay: Identifiable, Hashable {
     var warning = false
     /// SF Symbol shown at the ring's start when the stack draws labels.
     var symbol: String?
+    /// A closed ring drawn pale and matte (the "fade closed rings" setting).
+    var faded = false
 
-    init(id: UUID, start: Color, end: Color, fraction: Double, warning: Bool = false, symbol: String? = nil) {
+    init(id: UUID, start: Color, end: Color, fraction: Double, warning: Bool = false, symbol: String? = nil,
+         faded: Bool = false) {
         self.id = id
         self.start = start
         self.end = end
         self.fraction = fraction
         self.warning = warning
         self.symbol = symbol
+        self.faded = faded
     }
 
     init(id: UUID, color: RingColor, fraction: Double, warning: Bool = false) {
@@ -86,11 +90,11 @@ extension Ring {
     /// The ring's main colour for icons, text and highlights.
     var accent: Color { customTint.map { $0.gradient.end } ?? color.color }
 
-    /// The ring as drawn for `value`.
-    func display(_ value: Double) -> RingDisplay {
+    /// The ring as drawn for `value`; with `fadesWhenClosed`, pale once its goal is reached (never a limit).
+    func display(_ value: Double, fadesWhenClosed: Bool = false) -> RingDisplay {
         let (start, end) = gradient
         return RingDisplay(id: id, start: start, end: end, fraction: fraction(value), warning: isOverLimit(value),
-                           symbol: symbol)
+                           symbol: symbol, faded: fadesWhenClosed && !isLimit && isMetInProgress(value))
     }
 
     /// The colour for the ring's text and icons at `value`: the warning colour past a limit.
@@ -133,13 +137,18 @@ struct RingStackView: View {
             ZStack {
                 ForEach(Array(rings.enumerated()), id: \.element.id) { index, ring in
                     let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + Self.gapUnits)
-                    SingleRing(start: ring.start, end: ring.end, fraction: ring.fraction, lineWidth: lw,
-                               trackOpacity: trackOpacity,
-                               warning: ring.warning)
-                        .frame(width: radius * 2, height: radius * 2)
-                    if showsLabels {
-                        RingStartLabel(ring: ring, radius: radius, lineWidth: lw)
+                    ZStack {
+                        SingleRing(start: ring.start, end: ring.end, fraction: ring.fraction, lineWidth: lw,
+                                   trackOpacity: trackOpacity,
+                                   warning: ring.warning)
+                            .frame(width: radius * 2, height: radius * 2)
+                        if showsLabels {
+                            RingStartLabel(ring: ring, radius: radius, lineWidth: lw)
+                        }
                     }
+                    // A closed ring steps back: matte (no colour) and see-through.
+                    .saturation(ring.faded ? 0.15 : 1)
+                    .opacity(ring.faded ? 0.3 : 1)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
