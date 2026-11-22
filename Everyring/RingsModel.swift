@@ -232,6 +232,14 @@ final class RingsModel {
         return PeriodProgress.make(for: ring, buckets: buckets, interval: interval, now: now, calendar: calendar)
     }
 
+    /// The workouts in `interval` with the exercise minutes logged during each, for an exercise-minute ring;
+    /// `nil` for other rings or if Health couldn't be read.
+    func workoutLog(for ring: Ring, interval: DateInterval, now: Date = .now) async -> [LoggedWorkout]? {
+        guard case .exerciseMinutes = ring.metric else { return nil }
+        if Self.isDemo { return DemoHistory.workouts(in: interval, now: now, calendar: calendar) }
+        return try? await health.workoutLog(in: interval)
+    }
+
     /// One page of the ring's history (`offset` 0 = this month, or this year for monthly rings).
     func historyPage(for ring: Ring, offset: Int, now: Date = .now) async -> HistoryPage? {
         let calendar = calendar

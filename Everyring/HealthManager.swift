@@ -23,7 +23,8 @@ extension HealthMetric {
 
     /// Everything this metric needs read access to.
     var readTypes: Set<HKObjectType> {
-        if case .exerciseMinutes(_?) = self { return [HKQuantityType(.appleExerciseTime), HKObjectType.workoutType()] }
+        // Exercise minutes: workouts too, to leave some out and to list them on the ring's detail screen.
+        if case .exerciseMinutes = self { return [HKQuantityType(.appleExerciseTime), HKObjectType.workoutType()] }
         if let quantityType { return [quantityType] }
         switch self {
         case .standHours: return [HKCategoryType(.appleStandHour)]
@@ -134,6 +135,11 @@ extension EventKind {
 }
 
 extension WorkoutKind {
+    init?(activityType: HKWorkoutActivityType) {
+        guard let kind = Self.allCases.first(where: { $0.activityTypes.contains(activityType) }) else { return nil }
+        self = kind
+    }
+
     var activityTypes: [HKWorkoutActivityType] {
         switch self {
         case .running: [.running]
@@ -432,17 +438,42 @@ final class HealthManager {
             .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) }
             .filter { $0.intersects(interval) }
         guard !spans.isEmpty else { return [:] }
-        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
-        let descriptor = HKSampleQueryDescriptor(
-            predicates: [.quantitySample(type: HKQuantityType(.appleExerciseTime), predicate: predicate)],
-            sortDescriptors: [SortDescriptor(\.startDate)])
         var result: [Date: Double] = [:]
-        for sample in try await descriptor.result(for: store) {
+        for sample in try await exerciseSamples(in: interval) {
             let middle = sample.startDate.addingTimeInterval(sample.endDate.timeIntervalSince(sample.startDate) / 2)
             guard interval.contains(middle), spans.contains(where: { $0.contains(middle) }) else { continue }
             result[bucket(sample.startDate), default: 0] += sample.quantity.doubleValue(for: .minute())
         }
         return result
+    }
+
+    private func exerciseSamples(in interval: DateInterval) async throws -> [HKQuantitySample] {
+        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.quantitySample(type: HKQuantityType(.appleExerciseTime), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate)])
+        return try await descriptor.result(for: store)
+    }
+
+    /// The workouts that started inside `interval`, newest first, each with the exercise minutes logged during it.
+    func workoutLog(in interval: DateInterval) async throws -> [LoggedWorkout] {
+        guard Self.isAvailable else { return [] }
+        do {
+            let workouts = try await workouts(filter: nil, in: interval)
+            guard let first = workouts.first else { return [] }
+            let spans = workouts.map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) }
+            let reach = DateInterval(start: first.startDate, end: max(first.startDate, spans.map(\.end).max() ?? first.endDate))
+            let samples = try await exerciseSamples(in: reach).map {
+                (interval: $0.interval, minutes: $0.quantity.doubleValue(for: .minute()))
+            }
+            let minutes = LoggedWorkout.minutes(of: samples, in: spans)
+            return zip(workouts, minutes).map { workout, minutes in
+                LoggedWorkout(id: workout.uuid, kind: WorkoutKind(activityType: workout.workoutActivityType),
+                              start: workout.startDate, end: workout.endDate, exerciseMinutes: minutes)
+            }.reversed()
+        } catch let error as HKError where error.code == .errorNoData {
+            return []
+        }
     }
 
     /// Workouts that start inside `interval`: all, only some kinds, or all but some.

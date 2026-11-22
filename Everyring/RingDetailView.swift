@@ -18,6 +18,8 @@ struct RingDetailView: View {
     @State private var pageRing: Ring?
     /// The ring the chart and streak were read for.
     @State private var loadedRing: Ring?
+    /// Exercise-minute rings: the shown period's workouts.
+    @State private var workoutLog: [LoggedWorkout]?
 
     var body: some View {
         if let ring = model.ring(id: ringID) {
@@ -84,6 +86,10 @@ struct RingDetailView: View {
                             .id("chart")
                     }
 
+                    if case .exerciseMinutes = ring.metric {
+                        WorkoutLogCard(ring: ring, workouts: workoutLog, calendar: model.calendar)
+                    }
+
                     StreakCard(ring: ring, streak: history?.streak, loading: loading)
 
                     HistoryCard(ring: ring, page: page, failed: pageFailed, offset: $pageOffset, calendar: model.calendar,
@@ -132,6 +138,13 @@ struct RingDetailView: View {
                 progress = await withTimeout { await model.periodProgress(for: ring) } ?? nil
                 history = await withTimeout { await model.history(for: ring) } ?? nil
                 loading = false
+            }
+            .task(id: WorkoutLogKey(ring: ring, selected: selected)) {
+                guard case .exerciseMinutes = ring.metric else { workoutLog = nil; return }
+                workoutLog = nil
+                let interval = selected ?? ring.period.interval(now: .now, calendar: model.calendar)
+                workoutLog = await withTimeout { await model.workoutLog(for: ring, interval: interval) } ?? nil
+                if workoutLog == nil { workoutLog = [] }
             }
             .task(id: selected) {
                 guard !loading || selected != nil else { return }
@@ -673,5 +686,101 @@ func withTimeout<T: Sendable>(seconds: Double = 20, _ operation: @escaping @Main
         let first = await group.next() ?? nil
         group.cancelAll()
         return first
+    }
+}
+
+private struct WorkoutLogKey: Hashable {
+    var ring: Ring
+    var selected: DateInterval?
+}
+
+/// Exercise-minute rings: the period's workouts and how many exercise minutes fell during each, so you can see where
+/// the minutes came from (and which a "leave out" setting removes).
+struct WorkoutLogCard: View {
+    let ring: Ring
+    /// `nil` while loading.
+    let workouts: [LoggedWorkout]?
+    let calendar: Calendar
+    @State private var showsAll = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Workouts", systemImage: "figure.run")
+                .font(.headline)
+                .foregroundStyle(ring.accent)
+            if let workouts {
+                if workouts.isEmpty {
+                    Text("No workouts logged in this period.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    let shown = showsAll ? workouts : Array(workouts.prefix(8))
+                    ForEach(shown) { workout in
+                        WorkoutRow(workout: workout, ring: ring, calendar: calendar)
+                        if workout.id != shown.last?.id { Divider() }
+                    }
+                    if workouts.count > shown.count {
+                        Button("Show all \(workouts.count)") { withAnimation { showsAll = true } }
+                            .font(.subheadline.weight(.semibold))
+                            .tint(ring.accent)
+                    }
+                    Text("Exercise minutes logged during each workout. The rest of your exercise minutes come from everyday activity.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .card()
+    }
+}
+
+private struct WorkoutRow: View {
+    let workout: LoggedWorkout
+    let ring: Ring
+    let calendar: Calendar
+
+    var body: some View {
+        let leftOut = workout.isLeftOut(by: ring)
+        let minutes = ring.metric.format(workout.exerciseMinutes)
+        HStack(spacing: 12) {
+            Image(systemName: workout.symbol)
+                .font(.title3)
+                .foregroundStyle(leftOut ? AnyShapeStyle(.secondary) : AnyShapeStyle(ring.accent))
+                .frame(width: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workout.title)
+                    .font(.subheadline.weight(.semibold))
+                Text("\(when) · \(duration)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(minutes)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .strikethrough(leftOut)
+                    .foregroundStyle(leftOut ? .secondary : .primary)
+                Text(leftOut ? LocalizedStringKey("Left out") : "exercise")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(leftOut
+            ? String(localized: "\(workout.title), \(when), \(duration), \(minutes) of exercise, left out")
+            : String(localized: "\(workout.title), \(when), \(duration), \(minutes) of exercise"))
+    }
+
+    private var when: String {
+        var style = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()
+        style.timeZone = calendar.timeZone
+        return workout.start.formatted(style)
+    }
+
+    private var duration: String {
+        Duration.seconds(workout.duration.rounded()).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
     }
 }

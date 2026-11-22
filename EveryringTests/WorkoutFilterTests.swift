@@ -57,4 +57,24 @@ struct WorkoutFilterTests {
         #expect(old == .exerciseMinutes())
         #expect(try JSONDecoder().decode(HealthMetric.self, from: JSONEncoder().encode(walking)) == walking)
     }
+
+    @Test func exerciseMinutesAreAssignedToTheWorkoutHoldingThem() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        func span(_ a: Double, _ b: Double) -> DateInterval { DateInterval(start: t0 + a * 60, end: t0 + b * 60) }
+        let workouts = [span(0, 30), span(60, 90)]
+        // Minutes inside the first workout, one between workouts, one straddling the second workout's start.
+        let samples = [(span(5, 6), 1.0), (span(10, 11), 1.0), (span(40, 41), 1.0), (span(59.8, 60.8), 1.0)]
+            .map { (interval: $0.0, minutes: $0.1) }
+        #expect(LoggedWorkout.minutes(of: samples, in: workouts) == [2, 1])
+    }
+
+    @Test func leftOutFollowsTheRing() {
+        let ring = Ring(name: "Exercise", color: .magenta, symbol: "bolt.heart",
+                        metric: .exerciseMinutes(excluding: .make([.walking], excludes: true)), goal: 150, period: .rollingDays(7))
+        let walk = LoggedWorkout(id: UUID(), kind: .walking, start: .now, end: .now, exerciseMinutes: 5)
+        var run = walk
+        run.kind = .running
+        #expect(walk.isLeftOut(by: ring))
+        #expect(!run.isLeftOut(by: ring))
+    }
 }
