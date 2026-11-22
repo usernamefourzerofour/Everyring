@@ -13,6 +13,8 @@ final class RingsModel {
             if library.heartMinutes != oldValue.heartMinutes { dailyCache = [:] }
             try? RingStore.save(library)
             WidgetCenter.shared.reloadAllTimelines()
+            // Watch faces list one complication per ring set: refresh that list when sets change.
+            WidgetCenter.shared.invalidateConfigurationRecommendations()
             BackgroundUpdater.shared.start(library: library)
             #if os(iOS)
             PhoneSync.shared.send(library)

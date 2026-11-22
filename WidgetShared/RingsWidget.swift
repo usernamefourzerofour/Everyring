@@ -59,9 +59,14 @@ struct RingsProvider: AppIntentTimelineProvider {
         return context.isPreview && entry.set == nil ? .preview : entry
     }
 
-    /// Watch faces list one complication per ring set.
+    /// Watch faces list one complication per ring set. Before the watch has received any sets from the iPhone, one
+    /// complication that shows the first set once it arrives, so the face editor is never empty.
     func recommendations() -> [AppIntentRecommendation<SelectRingSetIntent>] {
-        (RingStore.load()?.sets ?? []).map { set in
+        let sets = RingStore.load()?.sets ?? []
+        guard !sets.isEmpty else {
+            return [AppIntentRecommendation(intent: SelectRingSetIntent(), description: Text("Rings"))]
+        }
+        return sets.map { set in
             let intent = SelectRingSetIntent()
             intent.ringSet = RingSetEntity(set)
             return AppIntentRecommendation(intent: intent, description: Text(set.name))

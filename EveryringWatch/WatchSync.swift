@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import WidgetKit
 
 /// Receives the ring library from the iPhone. The watch keeps no editing of its own: the iPhone's library wins.
 final class WatchSync: NSObject, WCSessionDelegate {
@@ -23,6 +24,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
                 model.library = library
             } else if RingStore.load() != library {
                 try? RingStore.save(library)
+                WidgetCenter.shared.invalidateConfigurationRecommendations()
                 BackgroundUpdater.shared.start(library: library)
                 await BackgroundUpdater.shared.update(force: true)
             }
