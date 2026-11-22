@@ -508,8 +508,13 @@ struct ScreenTimePeriodCard: View {
         .onAppear {
             ring.screenTimeReportStyle().save()
             if filter == nil {
-                let interval = ring.period.interval(now: .now, calendar: .current)
-                filter = ring.screenTimeFilter(interval, hourly: ring.period.nominalDays <= 1)
+                // Like the ring itself, only from the day it was added (History shows the days before).
+                let calendar = Calendar.current
+                let period = ring.period.interval(now: .now, calendar: calendar)
+                let added = ScreenTimeLog.load().firstDay(ring: ring.id, calendar: calendar) ?? calendar.startOfDay(for: .now)
+                let start = min(max(period.start, added), period.end)
+                filter = ring.screenTimeFilter(DateInterval(start: start, end: period.end),
+                                               hourly: ring.period.nominalDays <= 1)
             }
         }
     }
