@@ -973,29 +973,44 @@ private struct ScreenTimeRows: View {
 
     var body: some View {
         Group { content }
-            .onAppear {
+            // Choosing Screen Time is the moment to ask: access first (iOS asks once), then straight to the apps,
+            // where "All Apps & Categories" is the first row. Apps can't preselect categories themselves: iOS only
+            // hands them out through its picker.
+            .task {
                 guard !loaded else { return }
                 loaded = true
                 if let stored = selection.flatMap({ try? JSONDecoder().decode(FamilyActivitySelection.self, from: $0) }) {
                     picked = stored
                 }
+                if !authorized { await requestAccess() }
+                if authorized && isEmpty(picked) { picking = true }
             }
             .onChange(of: picked) { _, new in
                 selection = ScreenTimeManager.encode(new)
             }
     }
 
+    private func isEmpty(_ selection: FamilyActivitySelection) -> Bool {
+        selection.applicationTokens.isEmpty && selection.categoryTokens.isEmpty && selection.webDomainTokens.isEmpty
+    }
+
+    private func requestAccess() async {
+        do {
+            try await ScreenTimeManager.shared.requestAuthorization()
+            authorized = ScreenTimeManager.shared.isAuthorized
+            problem = nil
+        } catch {
+            problem = String(localized: "Screen Time access isn’t available: \(error.localizedDescription)")
+        }
+    }
+
     @ViewBuilder private var content: some View {
         if !authorized {
+            // Only shown when the automatic request was refused or failed: a way to ask again.
             Button("Allow Screen Time Access") {
                 Task {
-                    do {
-                        try await ScreenTimeManager.shared.requestAuthorization()
-                        authorized = ScreenTimeManager.shared.isAuthorized
-                        problem = nil
-                    } catch {
-                        problem = String(localized: "Screen Time access isn’t available: \(error.localizedDescription)")
-                    }
+                    await requestAccess()
+                    if authorized && isEmpty(picked) { picking = true }
                 }
             }
             if let problem {
