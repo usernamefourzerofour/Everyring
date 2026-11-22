@@ -286,24 +286,6 @@ struct RingEditorView: View {
                 }
             }
 
-            // Right after the goal: what happens when it's reached (a limit never closes).
-            if !ring.isLimit {
-                Section {
-                    Picker("When closed", selection: $ring.whenClosed) {
-                        ForEach(ClosedAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("When the goal is reached")
-                } footer: {
-                    switch ring.whenClosed {
-                    case .show: Text("The ring stays as it is.")
-                    case .fade: Text("The ring turns pale and matte on the home screen, in widgets and on the watch, so rings still to do stand out.")
-                    case .hide: Text("The ring disappears from the home screen, widgets and the watch until its next period. The other rings close up and grow to fill its place.")
-                    }
-                }
-            }
-
             Section {
                 PeriodPicker(period: $ring.period)
                 if ring.period.nominalDays > 1 {
@@ -326,6 +308,24 @@ struct RingEditorView: View {
                     case .weekdays: Text("Only weekdays count: what you do at the weekend is left out.")
                     case .weekends: Text("Only weekends count: what you do on weekdays is left out.")
                     case .custom: Text("Only the days you pick count: what you do on the others is left out.")
+                    }
+                }
+            }
+
+            // Just above Appearance: how the ring looks once the goal is reached (a limit never closes).
+            if !ring.isLimit {
+                Section {
+                    Picker("When closed", selection: $ring.whenClosed) {
+                        ForEach(ClosedAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("When the goal is reached")
+                } footer: {
+                    switch ring.whenClosed {
+                    case .show: Text("The ring stays as it is.")
+                    case .fade: Text("The ring turns pale and matte on the home screen, in widgets and on the watch, so rings still to do stand out.")
+                    case .hide: Text("The ring disappears from the home screen, widgets and the watch until its next period. The other rings close up and grow to fill its place.")
                     }
                 }
             }
