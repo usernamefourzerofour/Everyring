@@ -3,7 +3,7 @@ import Foundation
 /// Groups, defaults and suggested goals for the metric picker and new rings.
 extension HealthMetric {
     enum Category: String, CaseIterable, Identifiable, Sendable {
-        case activity, distance, workouts, recovery, nutrition, vitamins, minerals, hygiene
+        case activity, distance, workouts, recovery, nutrition, vitamins, minerals, hygiene, symptoms, reproductive, medical
 
         var id: Self { self }
 
@@ -17,6 +17,9 @@ extension HealthMetric {
             case .vitamins: String(localized: "Vitamins")
             case .minerals: String(localized: "Minerals")
             case .hygiene: String(localized: "Hygiene")
+            case .symptoms: String(localized: "Symptoms")
+            case .reproductive: String(localized: "Reproductive health")
+            case .medical: String(localized: "Medical")
             }
         }
 
@@ -32,6 +35,8 @@ extension HealthMetric {
             case .nutrition: return [.water] + more
             case .vitamins, .minerals: return more
             case .hygiene: return EventKind.allCases.map(HealthMetric.events)
+            case .symptoms, .reproductive, .medical:
+                return SensitiveKind.allCases.filter { $0.category == self }.map(HealthMetric.sensitive)
             }
         }
     }
@@ -46,6 +51,7 @@ extension HealthMetric {
         case .quantity(let kind): kind.category
         case .events: .hygiene
         case .nutrient(let kind): kind.category
+        case .sensitive(let kind): kind.category
         }
     }
 
@@ -71,6 +77,7 @@ extension HealthMetric {
         case .quantity(let kind): kind.symbol
         case .events(let kind): kind.symbol
         case .nutrient(let kind): kind.symbol
+        case .sensitive(let kind): kind.symbol
         }
     }
 
@@ -82,6 +89,7 @@ extension HealthMetric {
             .thisWeek
         case .quantity(let kind): kind.defaultPeriod
         case .events, .nutrient: .today
+        case .sensitive(let kind): kind.defaultPeriod
         }
     }
 
@@ -110,6 +118,7 @@ extension HealthMetric {
         case .quantity(let kind): kind.dailyBaseline
         case .events(let kind): kind.dailyBaseline
         case .nutrient(let kind): kind.dailyBaseline
+        case .sensitive(let kind): kind.dailyBaseline
         }
     }
 
@@ -171,6 +180,7 @@ extension HealthMetric {
                 default: .citrus
                 }
             }
+        case .sensitive(let kind): kind.defaultColor
         }
     }
 
@@ -179,6 +189,7 @@ extension HealthMetric {
         switch self {
         case .quantity(.dietaryEnergy), .quantity(.sugar), .quantity(.caffeine): .limit
         case .nutrient(let kind): kind.defaultGoalKind
+        case .sensitive(let kind): kind.defaultGoalKind
         default: .reach
         }
     }

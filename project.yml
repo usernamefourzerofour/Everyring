@@ -50,6 +50,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring
         TARGETED_DEVICE_FAMILY: "1,2"
+        # Offers medical, reproductive and symptom types in the metric list (Shared/SensitiveMetrics.swift). For
+        # TestFlight only: remove this line before an App Store release unless it is decided they may stay.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SENSITIVE_METRICS"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   # Home Screen and Lock Screen widgets (iPhone + iPad). Draw from the App Group cache; no HealthKit access.

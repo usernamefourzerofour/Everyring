@@ -421,7 +421,7 @@ struct MetricPickerView: View {
 
     var body: some View {
         List {
-            ForEach(HealthMetric.Category.allCases) { category in
+            ForEach(HealthMetric.Category.offered) { category in
                 Section(category.title) {
                     ForEach(category.metrics, id: \.self) { metric in
                         Button {

@@ -115,3 +115,20 @@ struct SleepStageTests {
         #expect(!HealthMetric.sleepStage(.deep).hasHourlyBuildUp)
     }
 }
+
+struct SensitiveMetricTests {
+    @Test func sensitiveTypesAreListedButFlagged() {
+        let all = HealthMetric.Category.allCases.flatMap(\.metrics)
+        for kind in SensitiveKind.allCases { #expect(all.contains(.sensitive(kind))) }
+        #expect(HealthMetric.Category.medical.isSensitive)
+        #expect(!HealthMetric.Category.activity.isSensitive)
+    }
+
+    @Test func formats() {
+        let us = Locale(identifier: "en_US")
+        #expect(HealthMetric.sensitive(.insulinDelivery).format(12.5, locale: us) == "12.5 IU")
+        #expect(HealthMetric.sensitive(.headache).format(2, locale: us) == "2 times")
+        #expect(HealthMetric.sensitive(.headache).defaultGoalKind == .limit)
+        #expect(HealthMetric.sensitive(.menstrualFlow).format(4, locale: us) == "4 days")
+    }
+}

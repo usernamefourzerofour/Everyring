@@ -16,7 +16,7 @@ extension HealthMetric {
         case .grams: UnitMass.grams
         case .milligrams: UnitMass.milligrams
         case .micrograms: UnitMass.micrograms
-        case .count, .minutes, .hours: nil
+        case .count, .minutes, .hours, .internationalUnits: nil
         }
     }
 
@@ -47,7 +47,7 @@ extension HealthMetric {
             return UnitMass.milligrams
         case .micrograms:
             return UnitMass.micrograms
-        case .count, .minutes, .hours:
+        case .count, .minutes, .hours, .internationalUnits:
             return nil
         }
     }
@@ -65,7 +65,9 @@ extension HealthMetric {
     }
 
     private func fractionDigits(locale: Locale) -> ClosedRange<Int> {
-        guard let unit = displayUnit(locale: locale) else { return baseUnit == .hours && !isCountOfHours ? 0...1 : 0...0 }
+        guard let unit = displayUnit(locale: locale) else {
+            return (baseUnit == .hours && !isCountOfHours) || baseUnit == .internationalUnits ? 0...1 : 0...0
+        }
         // Small nutrient amounts (0.9 mg copper, 2.4 µg B12) need a decimal too.
         let oneDecimal: [Dimension] = [UnitLength.kilometers, UnitLength.miles, UnitVolume.liters, UnitMass.grams,
                                        UnitMass.milligrams, UnitMass.micrograms]
@@ -103,6 +105,8 @@ extension HealthMetric {
             case .quantity(let kind): return kind.countNoun ?? String(localized: "times")
             case .nutrient(let kind): return kind.countNoun ?? String(localized: "times")
             case .events: return String(localized: "times")
+            case .sensitive(let kind):
+                return kind.baseUnit == .internationalUnits ? String(localized: "IU") : kind.countNoun
             default: return String(localized: "workouts")
             }
         }
@@ -111,7 +115,7 @@ extension HealthMetric {
     /// E.g. "6,512 steps", "14.2 km", "512 kcal", "45 min", "7 hr 30 min", "1.5 L".
     func format(_ value: Double, style: UnitStyle = .short, locale: Locale = .current) -> String {
         switch baseUnit {
-        case .count:
+        case .count, .internationalUnits:
             return String(localized: "\(number(value, locale: locale)) \(unitName(style: style, locale: locale))")
         case .meters, .kilocalories, .liters, .grams, .milligrams, .micrograms:
             let unit = displayUnit(locale: locale)!

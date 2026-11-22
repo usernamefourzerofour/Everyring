@@ -187,8 +187,11 @@ Manual logging, notifications, iCloud sync, sharing/social, quarter and year per
 - Configuration and cache are Codable JSON in the App Group container (not SwiftData): small, easy to send to the Watch
   and to read from widgets.
 - Work happens directly on `main`.
-- Every summable Health type is offered as a ring, except medical ones (insulin delivery, inhaler usage) and number
-  of times fallen: Everyring can't vouch for their precision and must not give medical advice (decided 2026-11-16).
+- Every summable Health type is offered as a ring. Medical, reproductive and symptom types (insulin, inhaler, falls,
+  heart/breathing/hearing notifications, sexual activity, cycle tracking, symptoms) are only offered in builds with the
+  `SENSITIVE_METRICS` compilation condition, set for TestFlight in project.yml. Before an App Store release, remove it
+  unless it is decided they may stay: Everyring can't vouch for their precision and must not give medical advice
+  (decided 2026-11-16, revised 2026-11-22).
 - Rings can be goals to reach or limits to stay under (turn red when exceeded).
 - Rings of several days can count a total or a daily average (goal per day, e.g. 8 h sleep a night over the last 30 days). The average divides by all the days of a finished period or rolling window, and by the days so far (today included) in a fixed period in progress; days without data count as zero by default; a ring setting can leave them out instead.
 - Workout rings can count only some workout types or all but some, and can ignore short workouts.

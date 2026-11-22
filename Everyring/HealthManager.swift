@@ -17,6 +17,7 @@ extension HealthMetric {
         case .water: HKQuantityType(.dietaryWater)
         case .quantity(let kind): HKQuantityType(kind.identifier)
         case .nutrient(let kind): HKQuantityType(kind.identifier)
+        case .sensitive(let kind): kind.quantityIdentifier.map { HKQuantityType($0) }
         case .standHours, .workouts, .sleep, .sleepStage, .mindfulMinutes, .events: nil
         }
     }
@@ -29,6 +30,7 @@ extension HealthMetric {
         case .sleep, .sleepStage: return HKCategoryType(.sleepAnalysis)
         case .mindfulMinutes: return HKCategoryType(.mindfulSession)
         case .events(let kind): return HKCategoryType(kind.identifier)
+        case .sensitive(let kind): return kind.categoryIdentifier.map { HKCategoryType($0) }
         case .workouts: return HKObjectType.workoutType()
         default: return nil
         }
@@ -44,6 +46,7 @@ extension HealthMetric {
         case .sleep, .sleepStage: return [HKCategoryType(.sleepAnalysis)]
         case .mindfulMinutes: return [HKCategoryType(.mindfulSession)]
         case .events(let kind): return [HKCategoryType(kind.identifier)]
+        case .sensitive(let kind): return kind.categoryIdentifier.map { [HKCategoryType($0)] } ?? []
         case .workouts(let measure, _):
             var types: Set<HKObjectType> = [HKObjectType.workoutType()]
             if measure == .distance { types.formUnion(Self.workoutDistanceTypes) }
@@ -71,6 +74,7 @@ extension HealthMetric {
         case .grams: .gram()
         case .milligrams: .gramUnit(with: .milli)
         case .micrograms: .gramUnit(with: .micro)
+        case .internationalUnits: .internationalUnit()
         }
     }
 }
@@ -145,6 +149,89 @@ extension SleepStage {
         case .deep: .asleepDeep
         case .rem: .asleepREM
         }
+    }
+}
+
+extension SensitiveKind {
+    /// Insulin, inhaler and falls are quantities; everything else is a category whose entries are counted.
+    var quantityIdentifier: HKQuantityTypeIdentifier? {
+        switch self {
+        case .insulinDelivery: .insulinDelivery
+        case .inhalerUsage: .inhalerUsage
+        case .timesFallen: .numberOfTimesFallen
+        default: nil
+        }
+    }
+
+    var categoryIdentifier: HKCategoryTypeIdentifier? {
+        switch self {
+        case .abdominalCramps: .abdominalCramps
+        case .acne: .acne
+        case .appetiteChanges: .appetiteChanges
+        case .bladderIncontinence: .bladderIncontinence
+        case .bloating: .bloating
+        case .breastPain: .breastPain
+        case .chestTightnessOrPain: .chestTightnessOrPain
+        case .chills: .chills
+        case .constipation: .constipation
+        case .coughing: .coughing
+        case .diarrhea: .diarrhea
+        case .dizziness: .dizziness
+        case .drySkin: .drySkin
+        case .fainting: .fainting
+        case .fatigue: .fatigue
+        case .fever: .fever
+        case .generalizedBodyAche: .generalizedBodyAche
+        case .hairLoss: .hairLoss
+        case .headache: .headache
+        case .heartburn: .heartburn
+        case .hotFlashes: .hotFlashes
+        case .lossOfSmell: .lossOfSmell
+        case .lossOfTaste: .lossOfTaste
+        case .lowerBackPain: .lowerBackPain
+        case .memoryLapse: .memoryLapse
+        case .moodChanges: .moodChanges
+        case .nausea: .nausea
+        case .nightSweats: .nightSweats
+        case .pelvicPain: .pelvicPain
+        case .rapidPoundingOrFlutteringHeartbeat: .rapidPoundingOrFlutteringHeartbeat
+        case .runnyNose: .runnyNose
+        case .shortnessOfBreath: .shortnessOfBreath
+        case .sinusCongestion: .sinusCongestion
+        case .skippedHeartbeat: .skippedHeartbeat
+        case .sleepChanges: .sleepChanges
+        case .soreThroat: .soreThroat
+        case .vaginalDryness: .vaginalDryness
+        case .vomiting: .vomiting
+        case .wheezing: .wheezing
+        case .sexualActivity: .sexualActivity
+        case .menstrualFlow: .menstrualFlow
+        case .intermenstrualBleeding: .intermenstrualBleeding
+        case .contraceptive: .contraceptive
+        case .lactation: .lactation
+        case .ovulationTest: .ovulationTestResult
+        case .pregnancyTest: .pregnancyTestResult
+        case .highHeartRateEvent: .highHeartRateEvent
+        case .lowHeartRateEvent: .lowHeartRateEvent
+        case .irregularHeartRhythmEvent: .irregularHeartRhythmEvent
+        case .lowCardioFitnessEvent: .lowCardioFitnessEvent
+        case .sleepApneaEvent: .sleepApneaEvent
+        case .walkingSteadinessEvent: .appleWalkingSteadinessEvent
+        case .environmentalAudioExposureEvent: .environmentalAudioExposureEvent
+        case .headphoneAudioExposureEvent: .headphoneAudioExposureEvent
+        case .insulinDelivery, .inhalerUsage, .timesFallen: nil
+        }
+    }
+
+    /// Whether an entry with this category value counts: a symptom marked "not present" (or appetite "no change")
+    /// doesn't, nor a period day logged as "no flow".
+    func counts(_ value: Int) -> Bool {
+        if isSymptom {
+            // Severity "not present", presence "not present" and appetite "no change" are all 1.
+            return value != HKCategoryValueSeverity.notPresent.rawValue
+        }
+        if self == .menstrualFlow { return value != HKCategoryValueVaginalBleeding.none.rawValue }
+        return true
     }
 }
 
@@ -364,6 +451,11 @@ final class HealthManager {
         switch metric {
         case .events(let kind):
             return counted(try await categorySamples(kind.identifier, in: range, scope: scope, strictStart: true))
+        case .sensitive(let kind):
+            guard let identifier = kind.categoryIdentifier else { return [:] }
+            let entries = try await categorySamples(identifier, in: range, scope: scope, strictStart: true)
+                .filter { kind.counts($0.value) }
+            return counted(entries)
         case .standHours:
             let stood = try await categorySamples(.appleStandHour, in: range, scope: scope, strictStart: true)
                 .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }

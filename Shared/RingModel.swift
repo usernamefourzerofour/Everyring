@@ -21,9 +21,11 @@ enum HealthMetric: Codable, Hashable, Sendable {
     case events(EventKind)
     /// Fats, cholesterol, sodium, vitamins, minerals and alcoholic drinks.
     case nutrient(NutrientKind)
+    /// Symptoms, reproductive health, insulin, falls, heart notifications (see `SensitiveKind`).
+    case sensitive(SensitiveKind)
 
     enum BaseUnit: String, Codable, Sendable {
-        case count, kilocalories, minutes, hours, meters, liters, grams, milligrams, micrograms
+        case count, kilocalories, minutes, hours, meters, liters, grams, milligrams, micrograms, internationalUnits
     }
 
     var baseUnit: BaseUnit {
@@ -43,6 +45,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .quantity(let kind): kind.baseUnit
         case .events: .count
         case .nutrient(let kind): kind.baseUnit
+        case .sensitive(let kind): kind.baseUnit
         }
     }
 
@@ -67,6 +70,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .quantity(let kind): kind.title
         case .events(let kind): kind.title
         case .nutrient(let kind): kind.title
+        case .sensitive(let kind): kind.title
         }
     }
 }
