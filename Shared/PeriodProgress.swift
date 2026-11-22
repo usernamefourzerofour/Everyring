@@ -96,7 +96,7 @@ struct PeriodProgress: Hashable, Sendable {
                     days.append((day, min(next, interval.end), ring.counts(day, calendar: calendar)))
                     day = next
                 }
-                let countedTotal = Double(max(1, days.filter(\.counted).count))
+                let countedTotal = Double(max(1, days.filter { $0.counted }.count))
                 var sum = 0.0
                 pacePoints = [Point(date: interval.start, total: 0)]
                 var soFar = 0.0
