@@ -8,24 +8,22 @@ struct HeartMinuteSettingsView: View {
     @State private var healthAge: Int?
     @State private var confirmReset = false
 
-    private typealias D = HeartMinuteSettings
-
     var body: some View {
         @Bindable var model = model
         let settings = model.library.heartMinutes
         let defaults = HeartMinuteSettings()
         Form {
             Section {
-                NavigationLink {
-                    BackgroundActivityView()
-                } label: {
-                    ResetRow(changed: settings.activityMode != defaults.activityMode || settings.pauseSeconds != defaults.pauseSeconds,
-                             info: String(localized: "When your heart rate during the day (outside workouts) counts:") + "\n\n"
-                                + ActiveMinutes.ActivityMode.allCases.map { "• \($0.title): \($0.explanation)" }.joined(separator: "\n")
-                                + "\n\n" + String(localized: "Measurements during workouts always count.")) {
-                        model.library.heartMinutes.activityMode = defaults.activityMode
-                        model.library.heartMinutes.pauseSeconds = defaults.pauseSeconds
-                    } content: {
+                ResetRow(changed: settings.activityMode != defaults.activityMode || settings.pauseSeconds != defaults.pauseSeconds,
+                         info: String(localized: "When your heart rate during the day (outside workouts) counts:") + "\n\n"
+                            + ActiveMinutes.ActivityMode.allCases.map { "• \($0.title): \($0.explanation)" }.joined(separator: "\n")
+                            + "\n\n" + String(localized: "Measurements during workouts always count.")) {
+                    model.library.heartMinutes.activityMode = defaults.activityMode
+                    model.library.heartMinutes.pauseSeconds = defaults.pauseSeconds
+                } content: {
+                    NavigationLink {
+                        BackgroundActivityView()
+                    } label: {
                         LabeledContent("Background activity", value: settings.activityMode.shortTitle)
                     }
                 }
