@@ -250,3 +250,31 @@ struct FadedRingTests {
         #expect(try JSONDecoder().decode(RingLibrary.self, from: JSONEncoder().encode(faded)).fadesClosedRings)
     }
 }
+
+struct CustomDaysTests {
+    let cph = makeCalendar()
+
+    @Test func customDaysCount() {
+        // Monday, Wednesday and Friday.
+        let now = date(2026, 11, 22, 20, in: cph)
+        var ring = Ring(name: "Gym", color: .fern, symbol: "dumbbell", metric: .exerciseMinutes, goal: 90, period: .thisWeek,
+                        days: .custom, customDays: [2, 4, 6])
+        let week = ring.period.interval(now: now, calendar: cph)
+        let daily = Dictionary(uniqueKeysWithValues: (16...22).map { (date(2026, 11, $0, in: cph), 30.0) })
+        #expect(ring.measure(daily: daily, in: week, now: now, calendar: cph) == 90)
+        #expect(ring.countedDaysPerWeek(calendar: cph) == 3)
+        ring.days = .weekdays
+        #expect(ring.countedDaysPerWeek(calendar: cph) == 5)
+    }
+
+    @Test func chartShadesAndPacesOnlyCountedDays() {
+        let now = date(2026, 11, 22, 20, in: cph)
+        let ring = Ring(name: "Gym", color: .fern, symbol: "dumbbell", metric: .exerciseMinutes, goal: 90, period: .thisWeek,
+                        days: .custom, customDays: [2, 4, 6])
+        let progress = PeriodProgress.make(for: ring, buckets: [:], now: now, calendar: cph)
+        // Tue, Thu, Sat and Sun are shaded.
+        #expect(progress.leftOutDays.count == 4)
+        // Pace: 30 after Monday, flat on Tuesday, 60 after Wednesday, …, 90 from Friday on.
+        #expect(progress.pacePoints.map(\.total) == [0, 30, 30, 60, 60, 90, 90, 90])
+    }
+}

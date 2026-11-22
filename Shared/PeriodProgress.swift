@@ -20,6 +20,10 @@ struct PeriodProgress: Hashable, Sendable {
     var paceNow: Double?
     /// A finished period picked in the history (not the one in progress).
     var isPast = false
+    /// The even pace from nothing to the goal over the period, flat over days that don't count.
+    var pacePoints: [Point] = []
+    /// Days the ring leaves out (weekends for a weekdays ring), shaded in the chart.
+    var leftOutDays: [DateInterval] = []
 
     /// Whether the chart counts hours (one-day periods) or days.
     static func bucket(for period: RingPeriod) -> Calendar.Component {
@@ -55,7 +59,7 @@ struct PeriodProgress: Hashable, Sendable {
         while start < min(interval.end, now) {
             guard let next = calendar.date(byAdding: bucket, value: 1, to: start) else { break }
             // Days the ring leaves out (e.g. weekends for a weekdays ring) add nothing.
-            let counted = ring.effectiveDays.includes(start, calendar: calendar)
+            let counted = ring.counts(start, calendar: calendar)
             let value = counted ? buckets[start] ?? 0 : 0
             if daysReaching {
                 if counted && ring.dayMeetsTarget(value) && (ring.goalKind != .limit || start < today) { total += 1 }
@@ -70,11 +74,49 @@ struct PeriodProgress: Hashable, Sendable {
             }
             start = next
         }
-        var pace: Double?
-        if !ring.period.isRolling, !average, interval.duration > 0 {
-            pace = ring.goal * min(1, max(0, now.timeIntervalSince(interval.start) / interval.duration))
+        // The days the ring leaves out, to shade in the chart.
+        var leftOut: [DateInterval] = []
+        if bucket == .day && ring.effectiveDays != .everyDay {
+            var day = calendar.startOfDay(for: interval.start)
+            while day < interval.end {
+                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                if !ring.counts(day, calendar: calendar) { leftOut.append(DateInterval(start: day, end: min(next, interval.end))) }
+                day = next
+            }
         }
-        return PeriodProgress(interval: interval, points: points, bucket: bucket, paceNow: pace, isPast: isPast)
+        // An even pace to the goal; days that don't count add nothing, so the line stays flat over them.
+        var pace: Double?
+        var pacePoints: [Point] = []
+        if !ring.period.isRolling, !average, interval.duration > 0 {
+            if bucket == .day {
+                var days: [(start: Date, end: Date, counted: Bool)] = []
+                var day = calendar.startOfDay(for: interval.start)
+                while day < interval.end {
+                    guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                    days.append((day, min(next, interval.end), ring.counts(day, calendar: calendar)))
+                    day = next
+                }
+                let countedTotal = Double(max(1, days.filter(\.counted).count))
+                var sum = 0.0
+                pacePoints = [Point(date: interval.start, total: 0)]
+                var soFar = 0.0
+                for day in days {
+                    // The share of this day that has passed (today: partly).
+                    let passed = min(1, max(0, now.timeIntervalSince(day.start) / day.end.timeIntervalSince(day.start)))
+                    if day.counted {
+                        sum += 1
+                        soFar += passed
+                    }
+                    pacePoints.append(Point(date: day.end, total: ring.goal * sum / countedTotal))
+                }
+                pace = ring.goal * soFar / countedTotal
+            } else {
+                pacePoints = [Point(date: interval.start, total: 0), Point(date: interval.end, total: ring.goal)]
+                pace = ring.goal * min(1, max(0, now.timeIntervalSince(interval.start) / interval.duration))
+            }
+        }
+        return PeriodProgress(interval: interval, points: points, bucket: bucket, paceNow: pace, isPast: isPast,
+                              pacePoints: pacePoints, leftOutDays: leftOut)
     }
 }
 
@@ -167,7 +209,7 @@ extension Ring {
         var result: [Date] = []
         var day = calendar.startOfDay(for: interval.start)
         while day <= last {
-            if effectiveDays.includes(day, calendar: calendar) { result.append(day) }
+            if counts(day, calendar: calendar) { result.append(day) }
             guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
             day = next
         }

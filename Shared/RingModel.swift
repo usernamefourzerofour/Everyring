@@ -256,20 +256,23 @@ enum GoalAggregation: String, Codable, CaseIterable, Sendable {
 
 /// Which days of a period of several days count.
 enum DayFilter: String, Codable, CaseIterable, Sendable {
-    case everyDay, weekdays, weekends
+    /// `custom`: the days in `Ring.customDays`.
+    case everyDay, weekdays, weekends, custom
 
     var title: String {
         switch self {
         case .everyDay: String(localized: "Every day")
         case .weekdays: String(localized: "Weekdays")
         case .weekends: String(localized: "Weekends")
+        case .custom: String(localized: "Custom")
         }
     }
 
-    /// Whether the day that contains `date` counts (weekends as the calendar's locale defines them).
+    /// Whether the day that contains `date` counts (weekends as the calendar's locale defines them). `custom` needs
+    /// the ring's days: use `Ring.counts(_:calendar:)`.
     func includes(_ date: Date, calendar: Calendar) -> Bool {
         switch self {
-        case .everyDay: true
+        case .everyDay, .custom: true
         case .weekdays: !calendar.isDateInWeekend(date)
         case .weekends: calendar.isDateInWeekend(date)
         }
@@ -305,6 +308,8 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var dailyTarget: Double = 0
     /// Which days of a period of several days count.
     var days: DayFilter = .everyDay
+    /// For `days == .custom`: the weekdays that count, as `Calendar` weekday numbers (1 = Sunday … 7 = Saturday).
+    var customDays: [Int] = []
     /// Activity metrics: leave out what was logged during workouts of these kinds (empty: leave out nothing).
     var leftOutWorkouts: [WorkoutKind] = []
     /// Only data from these apps and devices (bundle identifiers; empty: all sources).
@@ -317,7 +322,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
          aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false, dailyTarget: Double = 0,
-         days: DayFilter = .everyDay, leftOutWorkouts: [WorkoutKind] = [], sources: [String] = [],
+         days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [], sources: [String] = [],
          minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0) {
         self.id = id
         self.name = name
@@ -332,6 +337,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.averageSkipsEmptyDays = averageSkipsEmptyDays
         self.dailyTarget = dailyTarget
         self.days = days
+        self.customDays = customDays
         self.leftOutWorkouts = leftOutWorkouts
         self.sources = sources
         self.minimumWorkoutMinutes = minimumWorkoutMinutes
@@ -340,7 +346,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
-        case dailyTarget, days, leftOutWorkouts, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
+        case dailyTarget, days, customDays, leftOutWorkouts, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
     }
 
     init(from decoder: Decoder) throws {
@@ -359,6 +365,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         averageSkipsEmptyDays = try c.decodeIfPresent(Bool.self, forKey: .averageSkipsEmptyDays) ?? false
         dailyTarget = try c.decodeIfPresent(Double.self, forKey: .dailyTarget) ?? 0
         days = try c.decodeIfPresent(DayFilter.self, forKey: .days) ?? .everyDay
+        customDays = try c.decodeIfPresent([Int].self, forKey: .customDays) ?? []
         leftOutWorkouts = try c.decodeIfPresent([WorkoutKind].self, forKey: .leftOutWorkouts) ?? []
         sources = try c.decodeIfPresent([String].self, forKey: .sources) ?? []
         minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
@@ -377,6 +384,28 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
 
     /// The days that count: only periods of several days can leave days out.
     var effectiveDays: DayFilter { period.nominalDays > 1 ? days : .everyDay }
+
+    /// Whether the day that contains `date` counts for the ring.
+    func counts(_ date: Date, calendar: Calendar) -> Bool {
+        switch effectiveDays {
+        case .custom: customDays.contains(calendar.component(.weekday, from: date))
+        case let filter: filter.includes(date, calendar: calendar)
+        }
+    }
+
+    /// How many days of a week count (7 for every day).
+    func countedDaysPerWeek(calendar: Calendar) -> Int {
+        switch effectiveDays {
+        case .everyDay: 7
+        case .custom: Set(customDays).count
+        case .weekdays, .weekends:
+            // Weekends as the locale defines them: count them in any one week.
+            (0..<7).filter { offset in
+                let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: .now)) ?? .now
+                return effectiveDays.includes(day, calendar: calendar)
+            }.count
+        }
+    }
 
     /// Whether a day's value meets `dailyTarget` (reached, or for a limit: logged and stayed under).
     func dayMeetsTarget(_ value: Double) -> Bool {

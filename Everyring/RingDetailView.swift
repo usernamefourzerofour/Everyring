@@ -220,23 +220,30 @@ struct ProgressChartCard: View {
                         .foregroundStyle(lineColor)
                         .symbolSize(60)
                 }
+                // Days the ring leaves out (weekends for a weekdays ring), shaded behind everything.
+                ForEach(progress.leftOutDays, id: \.start) { day in
+                    RectangleMark(xStart: .value("Start", day.start), xEnd: .value("End", day.end))
+                        .foregroundStyle(Color.secondary.opacity(0.12))
+                }
                 if progress.paceNow != nil {
-                    // Even pace from nothing at the start to the goal at the end.
+                    // Even pace from nothing at the start to the goal at the end, flat over days that don't count.
                     // An explicit colour: a series without one gets Swift Charts' default blue.
                     let paceColor = ring.accent.opacity(0.55)
-                    LineMark(x: .value("Time", progress.interval.start), y: .value("Total", 0.0),
-                             series: .value("Series", "Pace"))
-                        .foregroundStyle(paceColor)
-                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [3, 4]))
-                    LineMark(x: .value("Time", progress.interval.end), y: .value("Total", goal),
-                             series: .value("Series", "Pace"))
-                        .foregroundStyle(paceColor)
-                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [3, 4]))
-                        .annotation(position: .bottom, alignment: .trailing, spacing: 4) {
-                            Text("Even pace")
-                                .font(.caption2)
-                                .foregroundStyle(ring.accent)
-                        }
+                    ForEach(progress.pacePoints) { point in
+                        LineMark(x: .value("Time", point.date), y: .value("Total", ring.toDisplay(point.total)),
+                                 series: .value("Series", "Pace"))
+                            .foregroundStyle(paceColor)
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [3, 4]))
+                    }
+                    if let last = progress.pacePoints.last {
+                        PointMark(x: .value("Time", last.date), y: .value("Total", ring.toDisplay(last.total)))
+                            .symbolSize(0)
+                            .annotation(position: .bottom, alignment: .trailing, spacing: 4) {
+                                Text("Even pace")
+                                    .font(.caption2)
+                                    .foregroundStyle(ring.accent)
+                            }
+                    }
                 }
                 RuleMark(y: .value("Goal", goal))
                     .foregroundStyle(ring.isLimit ? RingDisplay.warningGradient.end : Color.secondary)
@@ -263,6 +270,12 @@ struct ProgressChartCard: View {
             Text(summary)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            if !progress.leftOutDays.isEmpty {
+                Label("Shaded days don't count.", systemImage: "square.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .labelStyle(ShadedDayLabelStyle())
+            }
         }
         .card()
     }
@@ -1235,5 +1248,17 @@ private struct StageDurations: View {
         }
         .opacity(dimmed ? 0.5 : 1)
         .fixedSize()
+    }
+}
+
+/// "▢ Shaded days don't count." with a swatch in the chart's shading.
+private struct ShadedDayLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.secondary.opacity(0.25))
+                .frame(width: 12, height: 12)
+            configuration.title
+        }
     }
 }

@@ -63,11 +63,8 @@ struct RingEditorView: View {
     /// The most days a days-reaching goal can ask for in one period (about: a month counts 30 days).
     private var maxDays: Int {
         let n = Double(ring.period.nominalDays)
-        switch ring.effectiveDays {
-        case .everyDay: return Int(n)
-        case .weekdays: return max(1, Int((n * 5 / 7).rounded(.up)))
-        case .weekends: return max(1, Int((n * 2 / 7).rounded(.up)))
-        }
+        let perWeek = Double(ring.countedDaysPerWeek(calendar: Calendar.current))
+        return perWeek >= 7 ? Int(n) : max(1, Int((n * perWeek / 7).rounded(.up)))
     }
 
     /// A days-reaching goal to start from: most days of the period (5 days a week).
@@ -235,6 +232,9 @@ struct RingEditorView: View {
                     Picker("Days", selection: $ring.days) {
                         ForEach(DayFilter.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
+                    if ring.days == .custom {
+                        WeekdayPicker(selection: $ring.customDays)
+                    }
                 }
             } header: {
                 Text("Period")
@@ -247,6 +247,7 @@ struct RingEditorView: View {
                     case .everyDay: EmptyView()
                     case .weekdays: Text("Only weekdays count: what you do at the weekend is left out.")
                     case .weekends: Text("Only weekends count: what you do on weekdays is left out.")
+                    case .custom: Text("Only the days you pick count: what you do on the others is left out.")
                     }
                 }
             }
@@ -348,7 +349,14 @@ struct RingEditorView: View {
             // A longest length at or below the new shortest would leave no workouts.
             if ring.maximumWorkoutMinutes != 0 && ring.maximumWorkoutMinutes <= shortest { ring.maximumWorkoutMinutes = 0 }
         }
-        .onChange(of: ring.days) {
+        .onChange(of: ring.days) { _, days in
+            // Start custom days from the weekdays.
+            if days == .custom && ring.customDays.isEmpty {
+                ring.customDays = (1...7).filter { $0 != 1 && $0 != 7 }
+            }
+            if ring.isDaysReaching { displayGoal = min(displayGoal, Double(maxDays)) }
+        }
+        .onChange(of: ring.customDays) {
             if ring.isDaysReaching { displayGoal = min(displayGoal, Double(maxDays)) }
         }
         .onChange(of: ring.aggregation) { old, new in
@@ -828,5 +836,41 @@ struct SourcesView: View {
         .navigationTitle("Sources")
         .navigationBarTitleDisplayMode(.inline)
         .task { sources = await model.sources(for: metric) }
+    }
+}
+
+/// Seven round day buttons ("M T W T F S S", from the calendar's first weekday) for picking which days count. At least
+/// one day stays picked.
+struct WeekdayPicker: View {
+    @Binding var selection: [Int]
+    private let calendar = Calendar.current
+
+    var body: some View {
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let names = calendar.standaloneWeekdaySymbols
+        let order = (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }
+        HStack(spacing: 6) {
+            ForEach(order, id: \.self) { weekday in
+                let on = selection.contains(weekday)
+                Button {
+                    if on {
+                        if selection.count > 1 { selection.removeAll { $0 == weekday } }
+                    } else {
+                        selection.append(weekday)
+                        selection.sort()
+                    }
+                } label: {
+                    Text(symbols[weekday - 1])
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .foregroundStyle(on ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                        .background(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.fill.tertiary), in: .circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(names[weekday - 1])
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
