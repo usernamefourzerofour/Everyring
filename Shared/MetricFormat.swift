@@ -115,6 +115,16 @@ extension HealthMetric {
         }
     }
 
+    /// A rate per day: like `format`, but small counts keep one decimal ("0.3 workouts", "2.5 times") instead of
+    /// rounding down to a whole number.
+    func formatPerDay(_ value: Double, style: UnitStyle = .short, locale: Locale = .current) -> String {
+        let isCount = baseUnit == .count || isCountOfHours
+        guard isCount, value < 10 else { return format(value, style: style, locale: locale) }
+        let text = max(0, value).formatted(.number.precision(.fractionLength(0...1)).locale(locale))
+        let one = 1.formatted(.number.locale(locale))
+        return String(localized: "\(text) \(unitName(style: style, locale: locale, singular: text == one))")
+    }
+
     /// "1 step", "2 steps": a number with its count noun.
     private func counted(_ value: Double, style: UnitStyle, locale: Locale) -> String {
         let text = number(value, locale: locale)
