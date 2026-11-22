@@ -82,7 +82,7 @@ struct RingEditorView: View {
                 RingPreview(ring: edited, value: previewValue)
             }
 
-            Section("Health data") {
+            Section {
                 NavigationLink {
                     MetricPickerView(selection: $ring.metric)
                 } label: {
@@ -96,9 +96,14 @@ struct RingEditorView: View {
                     }
                 }
                 if ring.metric.supportsWorkoutLeaveOut {
+                    Picker("Activity", selection: $ring.onlyDuringWorkouts) {
+                        Text("All activity").tag(false)
+                        Text("Only during workouts").tag(true)
+                    }
                     let leftOut = WorkoutFilter.make(ring.leftOutWorkouts, excludes: true)
                     NavigationLink {
                         WorkoutFilterView(measure: .minutes, excludeOnly: true, metricTitle: ring.metric.title,
+                                          onlyDuringWorkouts: ring.onlyDuringWorkouts,
                                           filter: Binding(get: { leftOut },
                                                           set: { ring.leftOutWorkouts = $0?.kinds ?? [] }))
                     } label: {
@@ -157,6 +162,12 @@ struct RingEditorView: View {
                         Text(ring.sources.isEmpty ? String(localized: "All") : String(localized: "\(ring.sources.count) selected"))
                             .foregroundStyle(.secondary)
                     }
+                }
+            } header: {
+                Text("Health data")
+            } footer: {
+                if ring.metric.supportsWorkoutLeaveOut && ring.onlyDuringWorkouts {
+                    Text("Counts only what was logged while a workout ran. Everyday activity, like walking around or taking the stairs, is left out.")
                 }
             }
 
@@ -315,7 +326,10 @@ struct RingEditorView: View {
             if ring.customTint == nil && ring.color == old.defaultColor { ring.color = new.defaultColor }
             // Sources and left-out workouts belong to the old metric's data.
             if !old.isSameKind(as: new) { ring.sources = [] }
-            if !new.supportsWorkoutLeaveOut { ring.leftOutWorkouts = [] }
+            if !new.supportsWorkoutLeaveOut {
+                ring.leftOutWorkouts = []
+                ring.onlyDuringWorkouts = false
+            }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
             if !goalEdited {
@@ -703,14 +717,18 @@ struct WorkoutFilterView: View {
     var excludeOnly = false
     /// For `excludeOnly`: what is left out, "Steps".
     var metricTitle = ""
+    /// For `excludeOnly`: the ring counts only activity during workouts (so everyday activity is already left out).
+    var onlyDuringWorkouts = false
     @Binding var filter: WorkoutFilter?
     @State private var kinds: Set<WorkoutKind>
     @State private var excludes: Bool
 
-    init(measure: WorkoutMeasure, excludeOnly: Bool = false, metricTitle: String = "", filter: Binding<WorkoutFilter?>) {
+    init(measure: WorkoutMeasure, excludeOnly: Bool = false, metricTitle: String = "", onlyDuringWorkouts: Bool = false,
+         filter: Binding<WorkoutFilter?>) {
         self.measure = measure
         self.excludeOnly = excludeOnly
         self.metricTitle = metricTitle
+        self.onlyDuringWorkouts = onlyDuringWorkouts
         _filter = filter
         _kinds = State(initialValue: Set(filter.wrappedValue?.kinds ?? []))
         _excludes = State(initialValue: excludeOnly || filter.wrappedValue?.excludes == true)
@@ -759,7 +777,9 @@ struct WorkoutFilterView: View {
                     .accessibilityAddTraits(kinds.contains(kind) ? .isSelected : [])
                 }
             } footer: {
-                if excludeOnly {
+                if excludeOnly && onlyDuringWorkouts {
+                    Text("\(metricTitle) logged during workouts of the types you pick is left out. The ring counts only your other workouts.")
+                } else if excludeOnly {
                     Text("\(metricTitle) logged during workouts of the types you pick is left out. Everything else still counts, including everyday activity and workouts you didn't record.")
                 }
             }

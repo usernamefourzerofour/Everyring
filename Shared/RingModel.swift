@@ -312,6 +312,8 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var customDays: [Int] = []
     /// Activity metrics: leave out what was logged during workouts of these kinds (empty: leave out nothing).
     var leftOutWorkouts: [WorkoutKind] = []
+    /// Activity metrics: count only what was logged while a workout ran, leaving out everyday activity.
+    var onlyDuringWorkouts = false
     /// Only data from these apps and devices (bundle identifiers; empty: all sources).
     var sources: [String] = []
     /// Workout rings: only workouts at least this long (0: all).
@@ -322,7 +324,8 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
          aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false, dailyTarget: Double = 0,
-         days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [], sources: [String] = [],
+         days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [],
+         onlyDuringWorkouts: Bool = false, sources: [String] = [],
          minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0) {
         self.id = id
         self.name = name
@@ -339,6 +342,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.days = days
         self.customDays = customDays
         self.leftOutWorkouts = leftOutWorkouts
+        self.onlyDuringWorkouts = onlyDuringWorkouts
         self.sources = sources
         self.minimumWorkoutMinutes = minimumWorkoutMinutes
         self.maximumWorkoutMinutes = maximumWorkoutMinutes
@@ -346,7 +350,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
-        case dailyTarget, days, customDays, leftOutWorkouts, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
+        case dailyTarget, days, customDays, leftOutWorkouts, onlyDuringWorkouts, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
     }
 
     init(from decoder: Decoder) throws {
@@ -367,6 +371,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         days = try c.decodeIfPresent(DayFilter.self, forKey: .days) ?? .everyDay
         customDays = try c.decodeIfPresent([Int].self, forKey: .customDays) ?? []
         leftOutWorkouts = try c.decodeIfPresent([WorkoutKind].self, forKey: .leftOutWorkouts) ?? []
+        onlyDuringWorkouts = try c.decodeIfPresent(Bool.self, forKey: .onlyDuringWorkouts) ?? false
         sources = try c.decodeIfPresent([String].self, forKey: .sources) ?? []
         minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
         maximumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .maximumWorkoutMinutes) ?? 0

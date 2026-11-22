@@ -483,6 +483,7 @@ final class HealthManager {
         /// 0: no limit.
         var maximumWorkoutDuration: TimeInterval = 0
         var leftOutWorkouts: [WorkoutKind] = []
+        var onlyDuringWorkouts = false
 
         func apply(_ predicate: NSPredicate) -> NSPredicate {
             guard let sources else { return predicate }
@@ -493,7 +494,8 @@ final class HealthManager {
     private func scope(for metric: HealthMetric, filter: HealthFilter) async throws -> Scope {
         var scope = Scope(minimumWorkoutDuration: Double(filter.minimumWorkoutMinutes) * 60,
                           maximumWorkoutDuration: Double(filter.maximumWorkoutMinutes) * 60,
-                          leftOutWorkouts: filter.leftOutWorkouts)
+                          leftOutWorkouts: filter.leftOutWorkouts,
+                          onlyDuringWorkouts: filter.onlyDuringWorkouts)
         if !filter.sources.isEmpty, let type = metric.sampleType {
             let wanted = Set(filter.sources)
             scope.sources = try await sources(of: type).filter { wanted.contains($0.bundleIdentifier) }
@@ -520,6 +522,20 @@ final class HealthManager {
             samples.reduce(into: [:]) { result, sample in result[key(sample.startDate), default: 0] += value(sample) }
         }
 
+        if let type = metric.quantityType, scope.onlyDuringWorkouts {
+            // Only what was logged while workouts ran (except the left-out kinds); everyday activity is left out.
+            let fetch = DateInterval(start: range.start.addingTimeInterval(-12 * 3600), end: range.end)
+            let kinds = WorkoutFilter.make(scope.leftOutWorkouts, excludes: true)
+            let spans = IntervalMath.merged(try await workouts(filter: kinds, in: fetch)
+                .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) })
+                .compactMap { $0.intersection(with: range) }
+                .filter { $0.duration > 0 }
+            var result: [Date: Double] = [:]
+            for span in spans {
+                result[key(span.start), default: 0] += try await sum(type, unit: metric.hkUnit, in: span, scope: scope)
+            }
+            return result
+        }
         if let type = metric.quantityType {
             var result = try await quantities(type, unit: metric.hkUnit, in: range, by: bucket, scope: scope, key: key)
             // Leave out what was logged while workouts of the left-out kinds ran (Health doesn't tie it to them).

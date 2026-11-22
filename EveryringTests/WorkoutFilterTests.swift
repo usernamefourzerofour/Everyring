@@ -71,4 +71,16 @@ struct WorkoutFilterTests {
         #expect(ring.healthFilter.minimumWorkoutMinutes == 0)
         #expect(ring.healthFilter.maximumWorkoutMinutes == 0)
     }
+
+    @Test func onlyDuringWorkoutsForActivityRings() {
+        var ring = Ring(name: "Steps", color: .fern, symbol: "figure.walk", metric: .steps, goal: 5_000,
+                        period: .today, onlyDuringWorkouts: true)
+        #expect(ring.healthFilter.onlyDuringWorkouts)
+        ring.metric = .flightsClimbed
+        #expect(ring.healthFilter.onlyDuringWorkouts)
+        ring.metric = .sleep
+        #expect(!ring.healthFilter.onlyDuringWorkouts)
+        #expect(HealthMetric.quantity(.moveTime).supportsWorkoutLeaveOut)
+        #expect(!HealthMetric.quantity(.restingEnergy).supportsWorkoutLeaveOut)
+    }
 }

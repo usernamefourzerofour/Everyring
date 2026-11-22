@@ -218,10 +218,18 @@ extension HealthMetric {
         }
     }
 
-    /// Activity measured all day, where what was logged during workouts can be left out (and the workouts listed).
+    /// Activity measured all day, where what was logged during workouts can be left out or counted alone (and the
+    /// workouts listed).
     var supportsWorkoutLeaveOut: Bool {
         switch self {
-        case .steps, .activeEnergy, .exerciseMinutes, .walkingRunningDistance: true
+        case .steps, .activeEnergy, .exerciseMinutes, .flightsClimbed, .walkingRunningDistance, .cyclingDistance,
+             .swimmingDistance, .wheelchairDistance: true
+        case .quantity(let kind):
+            switch kind {
+            case .moveTime, .wheelchairPushes, .rowingDistance, .paddleDistance, .skatingDistance,
+                 .crossCountrySkiingDistance, .downhillSnowDistance, .swimmingStrokes: true
+            default: false
+            }
         default: false
         }
     }
