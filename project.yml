@@ -2,7 +2,7 @@ name: Everyring
 options:
   bundleIdPrefix: dk.erik
   developmentLanguage: en
-  deploymentTarget: { iOS: "27.0", watchOS: "27.0" }
+  deploymentTarget: { iOS: "27.0", watchOS: "26.0" }
 settings:
   base:
     # The same version numbers for all targets (Apple requires it for the watch app and extensions).
