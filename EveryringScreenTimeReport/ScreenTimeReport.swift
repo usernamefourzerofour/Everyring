@@ -66,6 +66,7 @@ struct PeriodReport: DeviceActivityReportScene {
     private static let named = 4
 
     func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async -> PeriodBreakdown {
+        let unattributed = "\u{0}unattributed"
         var perSlot: [Date: [String: Double]] = [:]
         var perApp: [String: (token: ApplicationToken?, minutes: Double)] = [:]
         var hourly = false
@@ -73,22 +74,33 @@ struct PeriodReport: DeviceActivityReportScene {
             for await segment in device.activitySegments {
                 if segment.dateInterval.duration < 2 * 3600 { hourly = true }
                 let slot = segment.dateInterval.start
+                var counted = 0.0
+                defer {
+                    // Websites and anything Screen Time doesn't put under an app: in "Other", so each bar adds up to
+                    // the segment's whole time.
+                    let rest = segment.totalActivityDuration / 60 - counted
+                    if rest >= 0.5 {
+                        perSlot[slot, default: [:]][unattributed, default: 0] += rest
+                        perApp[unattributed] = (nil, (perApp[unattributed]?.minutes ?? 0) + rest)
+                    }
+                }
                 for await category in segment.categories {
                     for await app in category.applications {
                         let name = app.application.localizedDisplayName ?? app.application.bundleIdentifier ?? "?"
                         let minutes = app.totalActivityDuration / 60
+                        counted += minutes
                         perSlot[slot, default: [:]][name, default: 0] += minutes
                         perApp[name] = (app.application.token, (perApp[name]?.minutes ?? 0) + minutes)
                     }
                 }
             }
         }
-        let ranked = perApp.sorted { $0.value.minutes > $1.value.minutes }
+        let ranked = perApp.filter { $0.key != unattributed }.sorted { $0.value.minutes > $1.value.minutes }
         let named = Set(ranked.prefix(Self.named).map(\.key))
         let other = String(localized: "Other")
         var breakdown = PeriodBreakdown(hourly: hourly)
         breakdown.apps = ranked.prefix(Self.named).map { .init(token: $0.value.token, name: $0.key, minutes: $0.value.minutes) }
-        let rest = ranked.dropFirst(Self.named).map(\.value.minutes).reduce(0, +)
+        let rest = ranked.dropFirst(Self.named).map(\.value.minutes).reduce(0, +) + (perApp[unattributed]?.minutes ?? 0)
         if rest >= 1 { breakdown.apps.append(.init(token: nil, name: other, minutes: rest)) }
         for (slot, apps) in perSlot {
             for (name, minutes) in apps where minutes > 0 {
