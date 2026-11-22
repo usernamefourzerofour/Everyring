@@ -908,6 +908,14 @@ enum StageStyle {
 
     static let awake = Color(hex: 0xFFB86B)
     static let unspecified = Color.secondary.opacity(0.35)
+
+    static func title(_ stage: SleepStage) -> String {
+        switch stage {
+        case .deep: String(localized: "Deep")
+        case .core: String(localized: "Core")
+        case .rem: String(localized: "REM")
+        }
+    }
 }
 
 private struct NightRow: View {
@@ -941,6 +949,7 @@ private struct NightRow: View {
             }
             StageBar(night: night, highlighted: highlightedStage)
                 .frame(height: 8)
+            StageDurations(night: night, highlighted: highlightedStage)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText(value: value, met: met))
@@ -1014,7 +1023,7 @@ private struct StageLegend: View {
     var body: some View {
         HStack(spacing: 12) {
             ForEach([SleepStage.deep, .core, .rem], id: \.self) { stage in
-                item(StageStyle.color(stage), stage == .rem ? "REM" : stage == .deep ? String(localized: "Deep") : String(localized: "Core"))
+                item(StageStyle.color(stage), StageStyle.title(stage))
             }
             item(StageStyle.awake, String(localized: "Awake"))
         }
@@ -1178,5 +1187,52 @@ private struct ActivitySplitView: View {
             Text("\(ring.metric.format(value)) · \(share.formatted(.percent.precision(.fractionLength(0))))")
                 .font(.subheadline.weight(.semibold).monospacedDigit())
         }
+    }
+}
+
+/// Each stage's time under the bar: "Deep 52m · Core 4h 31m · REM 2h 10m · Awake 12m".
+private struct StageDurations: View {
+    let night: LoggedNight
+    var highlighted: SleepStage?
+
+    var body: some View {
+        let parts = items
+        if !parts.isEmpty {
+            // On one line when it fits, otherwise two columns.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { ForEach(parts, id: \.title) { item($0) } }
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                          alignment: .leading, spacing: 4) {
+                    ForEach(parts, id: \.title) { item($0) }
+                }
+            }
+            .font(.caption2)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private var items: [(title: String, time: TimeInterval, color: Color, stage: SleepStage?)] {
+        var result: [(title: String, time: TimeInterval, color: Color, stage: SleepStage?)] = []
+        for stage in [SleepStage.deep, .core, .rem] {
+            if let time = night.stages[stage], time > 0 {
+                result.append((StageStyle.title(stage), time, StageStyle.color(stage), stage))
+            }
+        }
+        guard !result.isEmpty else { return [] }
+        if night.awake >= 60 { result.append((String(localized: "Awake"), night.awake, StageStyle.awake, nil)) }
+        return result
+    }
+
+    private func item(_ part: (title: String, time: TimeInterval, color: Color, stage: SleepStage?)) -> some View {
+        let dimmed = highlighted != nil && part.stage != highlighted
+        return HStack(spacing: 4) {
+            Circle().fill(part.color).frame(width: 7, height: 7)
+            Text(part.title).foregroundStyle(.secondary)
+            Text(Duration.seconds(part.time.rounded()).formatted(.units(allowed: [.hours, .minutes], width: .narrow)))
+                .monospacedDigit()
+                .fontWeight(part.stage == highlighted && highlighted != nil ? .bold : .semibold)
+        }
+        .opacity(dimmed ? 0.5 : 1)
+        .fixedSize()
     }
 }
