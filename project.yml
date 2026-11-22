@@ -173,8 +173,9 @@ targets:
 
   # Screen Time report (DeviceActivityReport): draws Apple's own Screen Time history for a Screen Time ring's apps on
   # the ring's page. Sealed by iOS: it can show the numbers but never hand them to the app.
+  # An ExtensionKit extension (App Store Connect refuses it as an NSExtension): embedded in Everyring.app/Extensions.
   EveryringScreenTimeReport:
-    type: app-extension
+    type: extensionkit-extension
     platform: iOS
     sources: [EveryringScreenTimeReport, Shared/ScreenTime]
     entitlements:
@@ -188,8 +189,8 @@ targets:
         CFBundleDisplayName: Everyring Screen Time Report
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.deviceactivityui.report-extension
+        EXAppExtensionAttributes:
+          EXExtensionPointIdentifier: com.apple.deviceactivityui.report-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.screentimereport
