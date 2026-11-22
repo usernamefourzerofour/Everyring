@@ -77,3 +77,20 @@ struct ProgressCacheTests {
         #expect(ProgressCache.load(from: url) == cache)
     }
 }
+
+struct ChartPointTests {
+    @Test func reducedKeepsEnds() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 0)
+        let points = (0..<500).map { ChartPoint(t: t0.addingTimeInterval(Double($0) * 60), v: Double($0)) }
+        let reduced = ChartPoint.reduced(points, max: 64)
+        #expect(reduced.count == 64)
+        #expect(reduced.first == points.first && reduced.last == points.last)
+        #expect(ChartPoint.reduced(Array(points.prefix(20))).count == 20)
+    }
+
+    @Test func oldCachesDecodeWithoutPoints() throws {
+        let json = #"{"value":5,"intervalStart":0,"intervalEnd":86400,"updated":0}"#
+        let snapshot = try JSONDecoder().decode(RingSnapshot.self, from: Data(json.utf8))
+        #expect(snapshot.points == nil)
+    }
+}

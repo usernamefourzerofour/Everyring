@@ -150,8 +150,23 @@ final class RingsModel {
             for (index, ring) in set.rings.enumerated() {
                 let interval = ring.period.interval(now: now, calendar: calendar)
                 let made = ring.goal * Self.demoFractions[index % 5]
-                result[ring.id] = RingSnapshot(value: ring.isDaysReaching ? made.rounded(.down) : made,
-                                               intervalStart: interval.start, intervalEnd: interval.end, updated: now)
+                let value = ring.isDaysReaching ? made.rounded(.down) : made
+                // A made-up chart that ends at the value, for the chart widget.
+                let chart = PeriodProgress.chartInterval(for: ring, now: now, calendar: calendar)
+                let buckets: [Date: Double]
+                if PeriodProgress.bucket(for: ring.period) == .hour {
+                    buckets = DemoHistory.hourly(total: value, from: interval.start, to: now, calendar: calendar)
+                } else if ring.needsDailyValues {
+                    buckets = DemoHistory.daily(for: ring, from: chart.start, to: now, calendar: calendar)
+                } else {
+                    let days = DemoHistory.daily(for: ring, from: chart.start, to: now, calendar: calendar).keys
+                    let share = ring.isAverage ? value : value / Double(max(1, days.count))
+                    buckets = Dictionary(uniqueKeysWithValues: days.map { ($0, share) })
+                }
+                let points = PeriodProgress.make(for: ring, buckets: buckets, interval: chart, now: now, calendar: calendar)
+                    .points.map { ChartPoint(t: $0.date, v: $0.total) }
+                result[ring.id] = RingSnapshot(value: value, intervalStart: interval.start, intervalEnd: interval.end,
+                                               updated: now, points: ChartPoint.reduced(points))
             }
         }
         return result

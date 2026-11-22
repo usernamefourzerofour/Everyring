@@ -6,6 +6,22 @@ struct RingSnapshot: Codable, Hashable, Sendable {
     var intervalStart: Date
     var intervalEnd: Date
     var updated: Date
+    /// How the value built up through the period (as on the detail screen's chart), for the chart widget. Missing in
+    /// caches written before the chart widget.
+    var points: [ChartPoint]? = nil
+}
+
+/// One point of a ring's chart: the running value at a time, in the metric's base unit.
+struct ChartPoint: Codable, Hashable, Sendable {
+    var t: Date
+    var v: Double
+
+    /// At most `max` points, always keeping the first and the last (a widget has a small budget).
+    static func reduced(_ points: [ChartPoint], max: Int = 64) -> [ChartPoint] {
+        guard points.count > max, max > 1 else { return points }
+        let step = Double(points.count - 1) / Double(max - 1)
+        return (0..<max).map { points[Int((Double($0) * step).rounded())] }
+    }
 }
 
 /// The latest value per ring, cached in the App Group by the app (and its background updates) so widgets and
@@ -55,6 +71,13 @@ struct ProgressCache: Codable, Hashable, Sendable {
         if ring.period.isRolling { return snapshot.value }
         return ring.period.interval(containing: date, calendar: calendar).start == snapshot.intervalStart
             ? snapshot.value : 0
+    }
+
+    /// The ring's chart for the period containing `date`; empty when the cached chart is for another period.
+    func points(for ring: Ring, at date: Date, calendar: Calendar) -> [ChartPoint] {
+        guard let snapshot = rings[ring.id], let points = snapshot.points else { return [] }
+        if ring.period.isRolling { return points }
+        return ring.period.interval(containing: date, calendar: calendar).start == snapshot.intervalStart ? points : []
     }
 
     /// When fixed rings start a new period after `date` (within `horizon`), so a widget timeline can reset them on time.

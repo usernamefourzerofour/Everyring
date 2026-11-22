@@ -18,9 +18,8 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
     or per week, usually as limits ("stay under 2 hr").
   - Start with a small prototype on TestFlight to see what the API allows, then decide on the design.
 
-- **Graph widget from Heart Minutes.** Bring Heart Minutes' graph widget over: a widget that shows a ring's
-  history as a chart (bars or a line per day, with the goal), in Everyring's own look and for any ring. Fits Erik's
-  wish for few widgets: one widget with a setting for which ring, not one widget per metric.
+- **Graph widget from Heart Minutes.** Done: "Ring and Chart" (one ring and a chart of its period, small/medium/large).
+  Maybe later: the zone bar on the large widget for Heart Minutes rings.
 - **Rings on the watch:** should the watch also write icon and percentage on its rings, like the iPhone? (Asked,
   not answered yet.)
 

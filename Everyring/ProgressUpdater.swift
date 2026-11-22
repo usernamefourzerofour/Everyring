@@ -19,19 +19,34 @@ enum ProgressUpdater {
         var result = Result()
         for ring in library.sets.flatMap(\.rings) {
             let interval = ring.period.interval(now: now, calendar: calendar)
+            let chart = PeriodProgress.chartInterval(for: ring, now: now, calendar: calendar)
+            let end = max(interval.start, min(interval.end, now))
+            func chartPoints(_ buckets: [Date: Double]) -> [ChartPoint] {
+                ChartPoint.reduced(PeriodProgress.make(for: ring, buckets: buckets, interval: chart, now: now, calendar: calendar)
+                    .points.map { ChartPoint(t: $0.date, v: $0.total) })
+            }
             do {
                 let value: Double
-                if ring.needsDailyValues {
-                    // Counting days one by one (left-out days, days reaching a target, days with data) needs each day.
-                    let daily = try await health.dailyValues(of: ring.metric, from: interval.start, to: min(interval.end, now),
+                var points: [ChartPoint]?
+                if PeriodProgress.bucket(for: ring.period) == .day {
+                    // Periods of several days: one value per day gives both the value and the chart (and counts days one
+                    // by one where the ring needs it: left-out days, days reaching a target, days with data).
+                    let daily = try await health.dailyValues(of: ring.metric, from: interval.start, to: end,
                                                              calendar: calendar, filter: ring.healthFilter)
                     value = ring.measure(daily: daily, in: interval, now: now, calendar: calendar)
+                    points = chartPoints(daily)
                 } else {
                     let total = try await health.value(of: ring.metric, in: interval, filter: ring.healthFilter)
                     value = ring.measure(total, in: interval, now: now, calendar: calendar)
+                    // One day: the chart builds up hour by hour (not for sleep and mindful minutes).
+                    if ring.metric.hasHourlyBuildUp,
+                       let hourly = try? await health.hourlyValues(of: ring.metric, in: DateInterval(start: interval.start, end: end),
+                                                                   calendar: calendar, filter: ring.healthFilter) {
+                        points = chartPoints(hourly)
+                    }
                 }
                 result.snapshots[ring.id] = RingSnapshot(value: value, intervalStart: interval.start,
-                                                         intervalEnd: interval.end, updated: now)
+                                                         intervalEnd: interval.end, updated: now, points: points)
             } catch {
                 result.failures.append((ring, error))
             }
@@ -45,7 +60,11 @@ enum ProgressUpdater {
         var cache = old
         cache.merge(snapshots, library: library, allowDecrease: allowDecrease)
         try? cache.save()
-        if cache.rings.mapValues(\.value) != old.rings.mapValues(\.value) {
+        // Only what widgets draw: the values and the charts (not when they were computed).
+        func drawn(_ cache: ProgressCache) -> [Ring.ID: [Double]] {
+            cache.rings.mapValues { [$0.value] + ($0.points?.map(\.v) ?? []) }
+        }
+        if drawn(cache) != drawn(old) {
             WidgetCenter.shared.reloadAllTimelines()
         }
     }

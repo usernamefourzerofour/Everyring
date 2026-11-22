@@ -5,5 +5,6 @@ import WidgetKit
 struct EveryringWidgetBundle: WidgetBundle {
     var body: some Widget {
         RingsWidget()
+        RingChartWidget()
     }
 }
