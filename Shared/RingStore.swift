@@ -40,7 +40,7 @@ struct RingLibrary: Codable, Hashable, Sendable {
         // The old setting for all rings: every ring keeps fading.
         if try c.decodeIfPresent(Bool.self, forKey: .fadesClosedRings) == true {
             for s in sets.indices {
-                for r in sets[s].rings.indices { sets[s].rings[r].fadesWhenClosed = true }
+                for r in sets[s].rings.indices { sets[s].rings[r].whenClosed = .fade }
             }
         }
     }

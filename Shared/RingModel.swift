@@ -257,6 +257,24 @@ enum GoalAggregation: String, Codable, CaseIterable, Sendable {
     case daysReaching
 }
 
+/// How a ring looks once its goal is reached, on the home screen, in widgets and on the watch.
+enum ClosedAppearance: String, Codable, CaseIterable, Sendable {
+    /// As always.
+    case show
+    /// Pale and matte, so rings still to do stand out.
+    case fade
+    /// Not drawn at all (its place in the stack stays empty, so the other rings don't move).
+    case hide
+
+    var title: String {
+        switch self {
+        case .show: String(localized: "Show")
+        case .fade: String(localized: "Fade")
+        case .hide: String(localized: "Hide")
+        }
+    }
+}
+
 /// Which part of an activity metric a ring counts.
 enum ActivityScope: String, Codable, CaseIterable, Sendable {
     /// Everything, all day.
@@ -333,8 +351,8 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var minimumWorkoutMinutes = 0
     /// Workout rings: only workouts at most this long (0: no limit).
     var maximumWorkoutMinutes = 0
-    /// Drawn pale and matte once the goal is reached, so rings still to do stand out (never a limit).
-    var fadesWhenClosed = false
+    /// How the ring looks once its goal is reached (a limit never closes, so always shows).
+    var whenClosed: ClosedAppearance = .show
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
@@ -342,7 +360,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
          days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [],
          activity: ActivityScope = .all, sources: [String] = [],
          minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0,
-         fadesWhenClosed: Bool = false) {
+         whenClosed: ClosedAppearance = .show) {
         self.id = id
         self.name = name
         self.color = color
@@ -362,7 +380,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.sources = sources
         self.minimumWorkoutMinutes = minimumWorkoutMinutes
         self.maximumWorkoutMinutes = maximumWorkoutMinutes
-        self.fadesWhenClosed = fadesWhenClosed
+        self.whenClosed = whenClosed
     }
 
     /// Keys of earlier builds, read only to carry their settings over.
@@ -371,7 +389,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
         case dailyTarget, days, customDays, leftOutWorkouts, activity, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
-        case fadesWhenClosed
+        case whenClosed
     }
 
     init(from decoder: Decoder) throws {
@@ -399,7 +417,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         sources = try c.decodeIfPresent([String].self, forKey: .sources) ?? []
         minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
         maximumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .maximumWorkoutMinutes) ?? 0
-        fadesWhenClosed = try c.decodeIfPresent(Bool.self, forKey: .fadesWhenClosed) ?? false
+        whenClosed = try c.decodeIfPresent(ClosedAppearance.self, forKey: .whenClosed) ?? .show
     }
 
     /// Whether the ring's value must stay under its goal. A days-reaching ring always counts days up to its goal; its

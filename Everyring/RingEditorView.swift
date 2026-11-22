@@ -315,13 +315,19 @@ struct RingEditorView: View {
                 ), supportsOpacity: false)
                 SymbolGrid(selection: $ring.symbol, color: ring.accent)
                 if !ring.isLimit {
-                    Toggle("Fade when closed", isOn: $ring.fadesWhenClosed)
+                    Picker("When closed", selection: $ring.whenClosed) {
+                        ForEach(ClosedAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                 }
             } header: {
                 Text("Appearance")
             } footer: {
                 if !ring.isLimit {
-                    Text("Once the goal is reached, the ring turns pale and matte in the app, the widgets and on the watch, so rings still to do stand out.")
+                    switch ring.whenClosed {
+                    case .show: EmptyView()
+                    case .fade: Text("Once the goal is reached, the ring turns pale and matte on the home screen, in widgets and on the watch, so rings still to do stand out.")
+                    case .hide: Text("Once the goal is reached, the ring disappears from the home screen, widgets and the watch until its next period. Its place stays empty, so the other rings don't move.")
+                    }
                 }
             }
 

@@ -50,11 +50,13 @@ struct RingDisplay: Identifiable, Hashable {
     var warning = false
     /// SF Symbol shown at the ring's start when the stack draws labels.
     var symbol: String?
-    /// A closed ring drawn pale and matte (the "fade closed rings" setting).
+    /// A closed ring drawn pale and matte (the ring's "when closed: fade").
     var faded = false
+    /// A closed ring not drawn at all (the ring's "when closed: hide"); its place stays empty.
+    var hidden = false
 
     init(id: UUID, start: Color, end: Color, fraction: Double, warning: Bool = false, symbol: String? = nil,
-         faded: Bool = false) {
+         faded: Bool = false, hidden: Bool = false) {
         self.id = id
         self.start = start
         self.end = end
@@ -62,6 +64,7 @@ struct RingDisplay: Identifiable, Hashable {
         self.warning = warning
         self.symbol = symbol
         self.faded = faded
+        self.hidden = hidden
     }
 
     init(id: UUID, color: RingColor, fraction: Double, warning: Bool = false) {
@@ -90,11 +93,13 @@ extension Ring {
     /// The ring's main colour for icons, text and highlights.
     var accent: Color { customTint.map { $0.gradient.end } ?? color.color }
 
-    /// The ring as drawn for `value`: pale once its goal is reached if the ring fades when closed (never a limit).
-    func display(_ value: Double) -> RingDisplay {
+    /// The ring as drawn for `value`. With `glance` (home screen, widgets, watch), a closed ring fades or hides if
+    /// the ring says so; details and history always show it as it is.
+    func display(_ value: Double, glance: Bool = false) -> RingDisplay {
         let (start, end) = gradient
+        let closed = glance && !isLimit && isMetInProgress(value)
         return RingDisplay(id: id, start: start, end: end, fraction: fraction(value), warning: isOverLimit(value),
-                           symbol: symbol, faded: fadesWhenClosed && !isLimit && isMetInProgress(value))
+                           symbol: symbol, faded: closed && whenClosed == .fade, hidden: closed && whenClosed == .hide)
     }
 
     /// The colour for the ring's text and icons at `value`: the warning colour past a limit.
@@ -137,6 +142,7 @@ struct RingStackView: View {
             ZStack {
                 ForEach(Array(rings.enumerated()), id: \.element.id) { index, ring in
                     let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + Self.gapUnits)
+                    if !ring.hidden {
                     ZStack {
                         SingleRing(start: ring.start, end: ring.end, fraction: ring.fraction, lineWidth: lw,
                                    trackOpacity: trackOpacity,
@@ -149,6 +155,16 @@ struct RingStackView: View {
                     // A closed ring steps back: matte (no colour) and see-through.
                     .saturation(ring.faded ? 0.15 : 1)
                     .opacity(ring.faded ? 0.3 : 1)
+                    }
+                }
+            }
+            .overlay {
+                // Every ring closed and hidden: a quiet check in their place.
+                if !rings.isEmpty && rings.allSatisfy(\.hidden) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: diameter * 0.35, weight: .light))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

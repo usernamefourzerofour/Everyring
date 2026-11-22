@@ -57,7 +57,7 @@ final class RingsModel {
     func value(for ring: Ring) -> Double { values[ring.id] ?? 0 }
 
     func displays(for set: RingSet) -> [RingDisplay] {
-        set.rings.map { $0.display(value(for: $0)) }
+        set.rings.map { $0.display(value(for: $0), glance: true) }
     }
 
     // MARK: Lookup and editing

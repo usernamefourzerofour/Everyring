@@ -29,7 +29,9 @@ struct RingsEntry: TimelineEntry {
         var value: Double
         var id: Ring.ID { ring.id }
         var fraction: Double { ring.fraction(value) }
-        var display: RingDisplay { ring.display(value) }
+        var display: RingDisplay { ring.display(value, glance: true) }
+        /// Closed and set to hide when closed: left out of the widget's list too.
+        var isHidden: Bool { display.hidden }
         var tint: Color { ring.tint(value) }
     }
 
@@ -165,7 +167,7 @@ struct RingsWidgetView: View {
         HStack(spacing: 14) {
             rings
             VStack(alignment: .leading, spacing: entry.items.count > 4 ? 2 : 5) {
-                ForEach(entry.items) { item in
+                ForEach(entry.items.filter { !$0.isHidden }) { item in
                     HStack(spacing: 6) {
                         Image(systemName: item.ring.symbol)
                             .foregroundStyle(item.tint)
@@ -192,7 +194,7 @@ struct RingsWidgetView: View {
             rings
                 .frame(maxWidth: .infinity, maxHeight: 150)
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(entry.items) { item in
+                ForEach(entry.items.filter { !$0.isHidden }) { item in
                     HStack(spacing: 8) {
                         Image(systemName: item.ring.symbol)
                             .foregroundStyle(item.tint)
@@ -233,7 +235,7 @@ struct RingsWidgetView: View {
             RingStackView(rings: entry.displays, trackOpacity: 0.3)
                 .widgetAccentable()
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(entry.items.prefix(3)) { item in
+                ForEach(entry.items.filter { !$0.isHidden }.prefix(3)) { item in
                     HStack(spacing: 4) {
                         Text(item.ring.name)
                             .lineLimit(1)

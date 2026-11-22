@@ -240,15 +240,19 @@ struct PaceTextTests {
 }
 
 struct FadedRingTests {
-    @Test func closedRingsFadeOnlyWhenAsked() {
+    @Test func closedRingsFadeOrHideOnlyAtAGlance() {
         var steps = Ring(name: "Steps", color: .fern, symbol: "figure.walk", metric: .steps, goal: 10_000, period: .today)
-        #expect(!steps.display(12_000).faded)
-        steps.fadesWhenClosed = true
-        #expect(steps.display(12_000).faded)
-        #expect(!steps.display(8_000).faded)
+        #expect(!steps.display(12_000, glance: true).faded)
+        steps.whenClosed = .fade
+        #expect(steps.display(12_000, glance: true).faded)
+        #expect(!steps.display(12_000).faded)   // details and history show it as it is
+        #expect(!steps.display(8_000, glance: true).faded)
+        steps.whenClosed = .hide
+        #expect(steps.display(12_000, glance: true).hidden)
+        #expect(!steps.display(8_000, glance: true).hidden)
         var limit = steps
         limit.goalKind = .limit
-        #expect(!limit.display(500).faded)
+        #expect(!limit.display(500, glance: true).hidden)
     }
 
     @Test func theOldSettingForAllRingsMovesToEachRing() throws {
@@ -257,9 +261,9 @@ struct FadedRingTests {
         var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(RingLibrary(sets: [set]))) as! [String: Any]
         json["fadesClosedRings"] = true
         let library = try JSONDecoder().decode(RingLibrary.self, from: JSONSerialization.data(withJSONObject: json))
-        #expect(library.sets[0].rings.allSatisfy(\.fadesWhenClosed))
+        #expect(library.sets[0].rings.allSatisfy { $0.whenClosed == .fade })
         let plain = try JSONDecoder().decode(RingLibrary.self, from: JSONEncoder().encode(RingLibrary(sets: [set])))
-        #expect(!plain.sets[0].rings.contains(where: \.fadesWhenClosed))
+        #expect(plain.sets[0].rings.allSatisfy { $0.whenClosed == .show })
     }
 }
 
