@@ -240,8 +240,8 @@ struct CalendarView: View {
     }
 }
 
-/// One day: a small ring filled towards the daily limit (or the busiest day, without one), the date inside, and on a
-/// day over the limit the part past it hatched, as on the ring itself.
+/// One day: a small ring filled towards the daily limit (or the busiest day, without one), the date inside, and the
+/// day's mark (see DayMark).
 struct DayRing: View {
     let day: Date
     let minutes: Double?
@@ -252,11 +252,10 @@ struct DayRing: View {
         let goal = style?.dailyMinutes ?? max(top, 1)
         let fraction = (minutes ?? 0) / goal
         let isLimit = style?.isLimit == true
-        let over = isLimit && style?.marksOverLimit != false && fraction > 1
         let past = !Calendar.current.isDateInToday(day) && day < .now
         // As in the app's History: a check for a goal reached (or a limit kept, once the day is over), a cross for a
         // limit passed.
-        let mark: DayMark.Kind? = if isLimit && fraction > 1 { .over }
+        let mark: DayMark.Kind? = if isLimit && fraction > 1 { style?.marksOverLimit != false ? .over : nil }
             else if isLimit ? (past && (minutes ?? 0) > 0) : fraction >= 1 { .reached }
             else { nil }
         let deep = style?.deepColor ?? .accentColor, light = style?.lightColor ?? .accentColor
@@ -268,13 +267,6 @@ struct DayRing: View {
                     .trim(from: 0, to: min(fraction, 1))
                     .stroke(AngularGradient(colors: [light, deep], center: .center),
                             style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            if over {
-                // The part past the limit, hatched: short white strokes across the ring.
-                Circle()
-                    .trim(from: 0, to: min(fraction - 1, 1))
-                    .stroke(Color.white.opacity(0.75), style: StrokeStyle(lineWidth: 4, dash: [1, 1.6]))
                     .rotationEffect(.degrees(-90))
             }
             Text(day, format: .dateTime.day())

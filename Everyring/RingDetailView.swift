@@ -868,7 +868,7 @@ struct DayGrid: View {
     /// A check for a day that reached its goal (or ended under its limit), a cross for one over its limit. A limit
     /// day still running gets no check yet: it could still go over.
     private func mark(day: Date, value: Double) -> DayMark.Kind? {
-        if ring.isOverLimit(value) { return .over }
+        if ring.isOverLimit(value) { return ring.marksOverLimit ? .over : nil }
         if ring.isLimit && calendar.isDateInToday(day) { return nil }
         return ring.isMet(value) ? .reached : nil
     }

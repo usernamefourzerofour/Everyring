@@ -18,9 +18,6 @@ struct ToneRing: View {
     let lineWidth: CGFloat
     /// How strong the ring is in one colour (neighbouring rings alternate).
     var emphasis = 1.0
-    /// A limit past its limit: the part beyond the limit is hatched like a cut section in a CAD drawing, in the ring's
-    /// own colour, so it reads the same on every colour and in one-colour widgets.
-    var warning = false
     /// The white dot isn't drawn while the tip is between 12 o'clock and this fraction of a lap (where a label sits).
     var dotHiddenUntil = 0.0
 
@@ -77,8 +74,6 @@ struct ToneRing: View {
     /// previous lap, then the new lap on top from 12 o'clock to the tip. Round ends drawn as dots in their colour.
     private func progress(f: Double, laps: Double, pos: Double) -> some View {
         let darkEdge = fullColor && colorScheme == .dark
-        let hatch = warning
-        let hatchColor = fullColor ? Color.white.opacity(0.7) : Color.black
         let lw = lineWidth
         return Canvas { context, canvasSize in
             let r = min(canvasSize.width, canvasSize.height) / 2 - lw / 2
@@ -116,25 +111,6 @@ struct ToneRing: View {
                 dot(0, radius: lw / 2, tone(laps / f))
                 stroke(from: 0, to: pos) { tone((laps + $0) / f) }       // the new lap
                 dot(pos, radius: lw / 2, tone(1))
-                if hatch {
-                    // Past the limit: from 12 o'clock to the tip on this lap (all of it from the third lap on).
-                    var band = Path()
-                    band.addArc(center: center, radius: r, startAngle: .degrees(-90), endAngle: .degrees(270), clockwise: false)
-                    let over = laps >= 2 ? band : band.trimmedPath(from: 0, to: pos)
-                    var hatched = context
-                    hatched.clip(to: over.strokedPath(StrokeStyle(lineWidth: lw, lineCap: .round)))
-                    // Thin parallel lines at 45°; in one colour black, which the luminance mask turns into gaps.
-                    let gap = max(3, lw * 0.3)
-                    let lines = hatchColor
-                    var k = -canvasSize.height
-                    while k < canvasSize.width + canvasSize.height {
-                        var line = Path()
-                        line.move(to: CGPoint(x: k, y: 0))
-                        line.addLine(to: CGPoint(x: k - canvasSize.height, y: canvasSize.height))
-                        hatched.stroke(line, with: .color(lines), lineWidth: max(0.8, lw * 0.07))
-                        k += gap
-                    }
-                }
             }
         }
     }
@@ -152,8 +128,7 @@ struct ToneRingStack: View {
             ZStack {
                 if shown.count == 1, let ring = shown.first {
                     let (deep, light) = colours(ring)
-                    ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: diameter * 0.14,
-                             warning: ring.warning)
+                    ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: diameter * 0.14)
                         .saturation(ring.faded ? 0.15 : 1)
                         .opacity(ring.faded ? 0.3 : 1)
                     // As Heart Minutes: the number big, with a small % under it rather than beside it.

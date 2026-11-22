@@ -320,9 +320,9 @@ struct RingEditorView: View {
                     Text("When the limit is passed")
                 } footer: {
                     if ring.marksOverLimit {
-                        Text("The part past the limit is hatched, and the percentage turns red. The ring keeps its colour.")
+                        Text("The percentage turns red, and History marks the day with a cross. The ring keeps its colour.")
                     } else {
-                        Text("The ring looks the same over and under its limit.")
+                        Text("Nothing changes when you pass the limit.")
                     }
                 }
             }
