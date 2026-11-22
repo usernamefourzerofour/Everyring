@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WidgetKit
 
 extension RingColor {
     /// Gradient from the ring start to its end. Everyring's own palette: deliberately not Apple's Activity colours.
@@ -116,6 +117,9 @@ struct RingStackView: View {
     var trackOpacity = 0.18
     /// Each ring's icon and percentage written on the ring at its start (small widget).
     var showsLabels = false
+    /// Tinted and clear Home Screens, Lock Screen and watch faces draw widgets in one colour: then the rings are drawn
+    /// for that (see `SingleRing.monochrome`).
+    @Environment(\.widgetRenderingMode) private var renderingMode
 
     /// Free space in the middle, in ring widths, by ring count.
     static func holeUnits(_ count: Int) -> CGFloat {
@@ -145,15 +149,20 @@ struct RingStackView: View {
             ZStack {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, ring in
                     let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + Self.gapUnits)
+                    let monochrome = renderingMode != .fullColor
                     ZStack {
                         SingleRing(start: ring.start, end: ring.end, fraction: ring.fraction, lineWidth: lw,
                                    trackOpacity: trackOpacity,
-                                   warning: ring.warning)
+                                   warning: ring.warning, monochrome: monochrome,
+                                   // In one colour, neighbouring rings alternate strong and softer to tell them apart.
+                                   emphasis: index.isMultiple(of: 2) ? 1 : 0.72)
                             .frame(width: radius * 2, height: radius * 2)
                         if showsLabels {
-                            RingStartLabel(ring: ring, radius: radius, lineWidth: lw)
+                            RingStartLabel(ring: ring, radius: radius, lineWidth: lw, monochrome: monochrome)
                         }
                     }
+                    // In one colour the label is cut out of the ring (see RingStartLabel), within this ring only.
+                    .compositingGroup()
                     // A closed ring steps back: matte (no colour) and see-through.
                     .saturation(ring.faded ? 0.15 : 1)
                     .opacity(ring.faded ? 0.3 : 1)
@@ -180,6 +189,9 @@ struct RingStartLabel: View {
     let ring: RingDisplay
     let radius: CGFloat
     let lineWidth: CGFloat
+    /// One-colour widgets: on the filled arc the text is cut out of the ring (the background shows through), since
+    /// white on a tinted white ring can't be read.
+    var monochrome = false
 
     /// One glyph on the ring: a symbol or a character, with roughly how much arc it takes.
     private struct Glyph: Identifiable {
@@ -213,7 +225,8 @@ struct RingStartLabel: View {
                 .rotationEffect(.radians(glyph.angle))
             }
         }
-        .foregroundStyle(filledUnder ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+        .foregroundStyle(filledUnder || monochrome ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+        .blendMode(monochrome && filledUnder ? .destinationOut : .normal)
         .accessibilityHidden(true)
     }
 
@@ -269,8 +282,32 @@ struct SingleRing: View {
     var lineWidth: CGFloat
     var trackOpacity = 0.18
     var warning = false
+    /// Drawn for a one-colour widget (tinted or clear Home Screen, Lock Screen, watch face): a white arc that iOS
+    /// tints (the accented part), a faint track, no gradient or shadow.
+    var monochrome = false
+    /// How strong the arc is in one colour (neighbouring rings alternate).
+    var emphasis = 1.0
 
     var body: some View {
+        if monochrome { monochromeBody } else { colourBody }
+    }
+
+    private var monochromeBody: some View {
+        let f = max(0, fraction)
+        return ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.22), lineWidth: lineWidth)
+            if f > 0 {
+                Circle()
+                    .trim(from: 0, to: min(f, 1))
+                    .stroke(Color.white.opacity(emphasis), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .widgetAccentable()
+            }
+        }
+    }
+
+    @ViewBuilder private var colourBody: some View {
         let (start, end) = warning ? RingDisplay.warningGradient : (self.start, self.end)
         let f = max(0, fraction)
         let wraps = f > 1
