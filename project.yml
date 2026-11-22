@@ -48,6 +48,7 @@ targets:
       - target: EveryringWidget
       - target: EveryringWatch
       - target: EveryringScreenTimeMonitor
+      - target: EveryringScreenTimeReport
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring
@@ -168,6 +169,30 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.screentime
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Screen Time report (DeviceActivityReport): draws Apple's own Screen Time history for a Screen Time ring's apps on
+  # the ring's page. Sealed by iOS: it can show the numbers but never hand them to the app.
+  EveryringScreenTimeReport:
+    type: app-extension
+    platform: iOS
+    sources: [EveryringScreenTimeReport, Shared/ScreenTime]
+    entitlements:
+      path: EveryringScreenTimeReport/EveryringScreenTimeReport.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.dk.erik.everyring]
+    info:
+      path: EveryringScreenTimeReport/Info.plist
+      properties:
+        CFBundleDisplayName: Everyring Screen Time Report
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivityui.report-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.screentimereport
         TARGETED_DEVICE_FAMILY: "1,2"
 
   EveryringTests:

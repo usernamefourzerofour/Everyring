@@ -17,7 +17,9 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
   1. Make sure the capability is on for `dk.erik.everyring` and `dk.erik.everyring.screentime` (managed capability in
      the developer account) and run `set_up_signing` again before the next archive.
   2. Test on a device: pick apps, check the ring counts up during the day and resets.
-  3. Later: a DeviceActivityReport extension to show exact minutes inside the app (the numbers can't leave it).
+  3. Screen Time history: `EveryringScreenTimeReport` (DeviceActivityReport) draws the last 4 weeks and the most used
+     apps on the ring's page, in the ring's colours with its daily goal (`ScreenTimeReportStyle` in the App Group).
+     Needs Family Controls on `dk.erik.everyring.screentimereport` (managed capability, by hand). Check on a device.
 
 - **Graph widget from Heart Minutes.** Done: "Ring and Chart" (one ring and a chart of its period, small/medium/large).
   Maybe later: the zone bar on the large widget for Heart Minutes rings.

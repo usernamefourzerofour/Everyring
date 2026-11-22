@@ -1,6 +1,7 @@
 import Charts
 import SwiftUI
 #if os(iOS)
+import DeviceActivity
 import FamilyControls
 #endif
 
@@ -82,6 +83,12 @@ struct RingDetailView: View {
                             }
                         }
                     }
+
+                    #if os(iOS)
+                    if ring.metric == .screenTime {
+                        ScreenTimeHistoryCard(ring: ring)
+                    }
+                    #endif
 
                     if let history, !history.hasData {
                         NoDataCard(ring: ring)
@@ -424,6 +431,58 @@ struct ScreenTimeNoDataCard: View {
             Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .foregroundStyle(ok ? .green : .red)
         }
+    }
+}
+#endif
+
+#if os(iOS)
+extension DeviceActivityReport.Context {
+    /// Must match the report extension's context (EveryringScreenTimeReport).
+    static let history = Self("everyring.history")
+}
+
+/// Apple's own Screen Time history for the ring's apps, drawn by the report extension (the numbers can't leave it).
+struct ScreenTimeHistoryCard: View {
+    let ring: Ring
+
+    var body: some View {
+        let selection = ScreenTimeManager.selection(of: ring)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let start = calendar.date(byAdding: .day, value: -27, to: today) ?? today
+        let end = calendar.date(byAdding: .day, value: 1, to: today) ?? .now
+        let filter = DeviceActivityFilter(
+            segment: .daily(during: DateInterval(start: start, end: end)),
+            users: .all,
+            devices: .init([.iPhone, .iPad]),
+            applications: selection?.applicationTokens ?? [],
+            categories: selection?.categoryTokens ?? [],
+            webDomains: selection?.webDomainTokens ?? [])
+        VStack(alignment: .leading, spacing: 8) {
+            DeviceActivityReport(.history, filter: filter)
+                .frame(height: 400)
+            Label("The ring, widgets and watch count from when the ring was added. This history comes straight from Screen Time.",
+                  systemImage: "info.circle")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding([.horizontal, .bottom])
+        }
+        .card()
+        .onAppear { style.save() }
+    }
+
+    /// The ring's colours and daily goal, for the report to draw with.
+    private var style: ScreenTimeReportStyle {
+        let (deep, light) = ring.gradient
+        let environment = EnvironmentValues()
+        let daily: Double? = switch ring.aggregation {
+        case _ where ring.period.nominalDays <= 1: ring.goal
+        case .dailyAverage: ring.goal
+        case .daysReaching: ring.dailyTarget
+        default: nil
+        }
+        return ScreenTimeReportStyle(deep: deep.resolve(in: environment), light: light.resolve(in: environment),
+                                     dailyMinutes: daily, isLimit: ring.goalKind == .limit)
     }
 }
 #endif
