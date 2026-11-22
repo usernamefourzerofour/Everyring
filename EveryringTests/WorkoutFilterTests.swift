@@ -65,7 +65,10 @@ struct WorkoutFilterTests {
         var ring = Ring(name: "W", color: .indigo, symbol: "dumbbell", metric: .workouts(.count, kind: nil), goal: 3,
                         period: .thisWeek, minimumWorkoutMinutes: 20)
         #expect(ring.healthFilter.minimumWorkoutMinutes == 20)
+        ring.maximumWorkoutMinutes = 60
+        #expect(ring.healthFilter.maximumWorkoutMinutes == 60)
         ring.metric = .steps
         #expect(ring.healthFilter.minimumWorkoutMinutes == 0)
+        #expect(ring.healthFilter.maximumWorkoutMinutes == 0)
     }
 }

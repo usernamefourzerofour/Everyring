@@ -480,6 +480,8 @@ final class HealthManager {
         /// `nil`: every source.
         var sources: Set<HKSource>?
         var minimumWorkoutDuration: TimeInterval = 0
+        /// 0: no limit.
+        var maximumWorkoutDuration: TimeInterval = 0
         var leftOutWorkouts: [WorkoutKind] = []
 
         func apply(_ predicate: NSPredicate) -> NSPredicate {
@@ -490,6 +492,7 @@ final class HealthManager {
 
     private func scope(for metric: HealthMetric, filter: HealthFilter) async throws -> Scope {
         var scope = Scope(minimumWorkoutDuration: Double(filter.minimumWorkoutMinutes) * 60,
+                          maximumWorkoutDuration: Double(filter.maximumWorkoutMinutes) * 60,
                           leftOutWorkouts: filter.leftOutWorkouts)
         if !filter.sources.isEmpty, let type = metric.sampleType {
             let wanted = Set(filter.sources)
@@ -659,7 +662,10 @@ final class HealthManager {
         let predicate = scope.apply(NSCompoundPredicate(andPredicateWithSubpredicates: predicates))
         let descriptor = HKSampleQueryDescriptor(predicates: [.workout(predicate)], sortDescriptors: [SortDescriptor(\.startDate)])
         let workouts = try await descriptor.result(for: store)
-        return scope.minimumWorkoutDuration > 0 ? workouts.filter { $0.duration >= scope.minimumWorkoutDuration } : workouts
+        return workouts.filter { workout in
+            workout.duration >= scope.minimumWorkoutDuration
+                && (scope.maximumWorkoutDuration <= 0 || workout.duration <= scope.maximumWorkoutDuration)
+        }
     }
 
     /// Workouts of `kinds` (all workouts for `nil`) that start inside `interval`, from any source.

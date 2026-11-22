@@ -65,6 +65,8 @@ struct HealthFilter: Hashable, Sendable {
     var sources: [String] = []
     var leftOutWorkouts: [WorkoutKind] = []
     var minimumWorkoutMinutes = 0
+    /// 0: no limit.
+    var maximumWorkoutMinutes = 0
 
     static let none = HealthFilter()
 }
@@ -74,6 +76,7 @@ extension Ring {
     var healthFilter: HealthFilter {
         HealthFilter(sources: sources,
                      leftOutWorkouts: metric.supportsWorkoutLeaveOut ? leftOutWorkouts : [],
-                     minimumWorkoutMinutes: metric.isWorkouts ? minimumWorkoutMinutes : 0)
+                     minimumWorkoutMinutes: metric.isWorkouts ? minimumWorkoutMinutes : 0,
+                     maximumWorkoutMinutes: metric.isWorkouts ? maximumWorkoutMinutes : 0)
     }
 }

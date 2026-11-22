@@ -84,7 +84,9 @@ struct DaysReachingTests {
     @Test func newSettingsDecodeWithDefaults() throws {
         let ring = Ring(name: "Steps", color: .fern, symbol: "figure.walk", metric: .steps, goal: 10_000, period: .today)
         var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(ring)) as! [String: Any]
-        for key in ["dailyTarget", "days", "leftOutWorkouts", "sources", "minimumWorkoutMinutes"] { json.removeValue(forKey: key) }
+        for key in ["dailyTarget", "days", "leftOutWorkouts", "sources", "minimumWorkoutMinutes", "maximumWorkoutMinutes"] {
+            json.removeValue(forKey: key)
+        }
         let decoded = try JSONDecoder().decode(Ring.self, from: JSONSerialization.data(withJSONObject: json))
         #expect(decoded == ring)
         var full = steps(days: .weekdays)

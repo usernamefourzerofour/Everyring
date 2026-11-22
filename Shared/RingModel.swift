@@ -311,12 +311,14 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var sources: [String] = []
     /// Workout rings: only workouts at least this long (0: all).
     var minimumWorkoutMinutes = 0
+    /// Workout rings: only workouts at most this long (0: no limit).
+    var maximumWorkoutMinutes = 0
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
          aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false, dailyTarget: Double = 0,
          days: DayFilter = .everyDay, leftOutWorkouts: [WorkoutKind] = [], sources: [String] = [],
-         minimumWorkoutMinutes: Int = 0) {
+         minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0) {
         self.id = id
         self.name = name
         self.color = color
@@ -333,11 +335,12 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.leftOutWorkouts = leftOutWorkouts
         self.sources = sources
         self.minimumWorkoutMinutes = minimumWorkoutMinutes
+        self.maximumWorkoutMinutes = maximumWorkoutMinutes
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
-        case dailyTarget, days, leftOutWorkouts, sources, minimumWorkoutMinutes
+        case dailyTarget, days, leftOutWorkouts, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
     }
 
     init(from decoder: Decoder) throws {
@@ -359,6 +362,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         leftOutWorkouts = try c.decodeIfPresent([WorkoutKind].self, forKey: .leftOutWorkouts) ?? []
         sources = try c.decodeIfPresent([String].self, forKey: .sources) ?? []
         minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
+        maximumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .maximumWorkoutMinutes) ?? 0
     }
 
     /// Whether the ring's value must stay under its goal. A days-reaching ring always counts days up to its goal; its

@@ -36,6 +36,11 @@ struct RingEditorView: View {
         self.onDelete = onDelete
     }
 
+    /// "20 min", "1 hr 30 min".
+    static func minutesText(_ minutes: Int) -> String {
+        Duration.seconds(minutes * 60).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+    }
+
     /// Goals are entered with at most two decimals (62.137… mi shows as 62.14).
     static func rounded(_ value: Double) -> Double {
         (value * 100).rounded() / 100
@@ -134,9 +139,15 @@ struct RingEditorView: View {
                     }
                     Picker("Shortest workout", selection: $ring.minimumWorkoutMinutes) {
                         Text("Any length").tag(0)
-                        ForEach([5, 10, 15, 20, 30, 45, 60], id: \.self) { minutes in
-                            Text(Duration.seconds(minutes * 60).formatted(.units(allowed: [.minutes], width: .abbreviated)))
-                                .tag(minutes)
+                        ForEach([5, 10, 15, 20, 30, 45, 60, 90], id: \.self) { minutes in
+                            Text(Self.minutesText(minutes)).tag(minutes)
+                        }
+                    }
+                    Picker("Longest workout", selection: $ring.maximumWorkoutMinutes) {
+                        Text("Any length").tag(0)
+                        // Only lengths above the shortest, so the range is never empty.
+                        ForEach([15, 20, 30, 45, 60, 90, 120, 180].filter { $0 > ring.minimumWorkoutMinutes }, id: \.self) { minutes in
+                            Text(Self.minutesText(minutes)).tag(minutes)
                         }
                     }
                 }
@@ -332,6 +343,10 @@ struct RingEditorView: View {
                 // An average goal is per day, so it stays the same when the period changes.
                 displayGoal = Self.rounded(ring.metric.toDisplay(ring.metric.suggestedGoal(for: ring.isAverage ? .today : period)))
             }
+        }
+        .onChange(of: ring.minimumWorkoutMinutes) { _, shortest in
+            // A longest length at or below the new shortest would leave no workouts.
+            if ring.maximumWorkoutMinutes != 0 && ring.maximumWorkoutMinutes <= shortest { ring.maximumWorkoutMinutes = 0 }
         }
         .onChange(of: ring.days) {
             if ring.isDaysReaching { displayGoal = min(displayGoal, Double(maxDays)) }
