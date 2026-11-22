@@ -86,11 +86,17 @@ struct RingDetailView: View {
 
                     #if os(iOS)
                     if ring.metric == .screenTime {
-                        ScreenTimeHistoryCard(ring: ring)
+                        // Screen Time: the period and the History calendar come straight from Screen Time, app by
+                        // app and also before the ring was made (drawn by the report extension).
+                        ScreenTimePeriodCard(ring: ring)
+                        StreakCard(ring: ring, streak: history?.streak, loading: loading)
+                        ScreenTimeCalendarCard(ring: ring)
                     }
                     #endif
 
-                    if let history, !history.hasData {
+                    if ring.metric == .screenTime {
+                        EmptyView()
+                    } else if let history, !history.hasData {
                         NoDataCard(ring: ring)
                     } else {
                     if let progress {
@@ -437,52 +443,107 @@ struct ScreenTimeNoDataCard: View {
 
 #if os(iOS)
 extension DeviceActivityReport.Context {
-    /// Must match the report extension's context (EveryringScreenTimeReport).
-    static let history = Self("everyring.history")
+    /// Must match the report extension's contexts (EveryringScreenTimeReport).
+    static let period = Self("everyring.period")
+    static let calendar = Self("everyring.calendar")
 }
 
-/// Apple's own Screen Time history for the ring's apps, drawn by the report extension (the numbers can't leave it).
-struct ScreenTimeHistoryCard: View {
-    let ring: Ring
+extension Ring {
+    /// What the Screen Time report draws with: the ring's colours, its daily limit and the month to show.
+    func screenTimeReportStyle(month: Date? = nil) -> ScreenTimeReportStyle {
+        let (deep, light) = gradient
+        let environment = EnvironmentValues()
+        let daily: Double? = switch aggregation {
+        case _ where period.nominalDays <= 1: goal
+        case .dailyAverage: goal
+        case .daysReaching: dailyTarget
+        default: nil
+        }
+        return ScreenTimeReportStyle(deep: deep.resolve(in: environment), light: light.resolve(in: environment),
+                                     dailyMinutes: daily, isLimit: goalKind == .limit, calendarMonth: month,
+                                     marksOverLimit: marksOverLimit)
+    }
 
-    var body: some View {
-        let selection = ScreenTimeManager.selection(of: ring)
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
-        let start = calendar.date(byAdding: .day, value: -27, to: today) ?? today
-        let end = calendar.date(byAdding: .day, value: 1, to: today) ?? .now
-        let filter = DeviceActivityFilter(
-            segment: .daily(during: DateInterval(start: start, end: end)),
+    /// The Screen Time filter for this ring's apps over `interval`, day by day or hour by hour.
+    func screenTimeFilter(_ interval: DateInterval, hourly: Bool) -> DeviceActivityFilter {
+        let selection = ScreenTimeManager.selection(of: self)
+        return DeviceActivityFilter(
+            segment: hourly ? .hourly(during: interval) : .daily(during: interval),
             users: .all,
             devices: .init([.iPhone, .iPad]),
             applications: selection?.applicationTokens ?? [],
             categories: selection?.categoryTokens ?? [],
             webDomains: selection?.webDomainTokens ?? [])
+    }
+}
+
+/// The ring's current period from Screen Time, broken down by app.
+struct ScreenTimePeriodCard: View {
+    let ring: Ring
+
+    var body: some View {
+        let interval = ring.period.interval(now: .now, calendar: .current)
+        let hourly = ring.period.nominalDays <= 1
         VStack(alignment: .leading, spacing: 8) {
-            DeviceActivityReport(.history, filter: filter)
-                .frame(height: 400)
-            Label("The ring, widgets and watch count from when the ring was added. This history comes straight from Screen Time.",
+            Label(ring.period.isRolling ? String(localized: "The last \(ring.period.nominalDays) days") : ring.period.title,
+                  systemImage: "chart.bar.xaxis")
+                .font(.headline)
+                .foregroundStyle(ring.accent)
+            DeviceActivityReport(.period, filter: ring.screenTimeFilter(interval, hourly: hourly))
+                .frame(height: 340)
+        }
+        .card()
+        .onAppear { ring.screenTimeReportStyle(month: ScreenTimeReportStyle.load()?.calendarMonth).save() }
+    }
+}
+
+/// A calendar of day rings from Screen Time, also for the days before the ring was made.
+struct ScreenTimeCalendarCard: View {
+    let ring: Ring
+    @State private var offset = 0
+    private let calendar = Calendar.current
+
+    private var month: Date {
+        let thisMonth = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+        return calendar.date(byAdding: .month, value: offset, to: thisMonth) ?? thisMonth
+    }
+
+    var body: some View {
+        let shown = month
+        let end = calendar.date(byAdding: .month, value: 1, to: shown) ?? shown
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("History", systemImage: "calendar")
+                    .font(.headline)
+                    .foregroundStyle(ring.accent)
+                Spacer()
+                // Screen Time keeps about a month of history.
+                Button { move(-1) } label: { Image(systemName: "chevron.backward") }
+                    .disabled(offset <= -1)
+                Text(shown, format: .dateTime.month(.wide).year())
+                    .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
+                Button { move(1) } label: { Image(systemName: "chevron.forward") }
+                    .disabled(offset >= 0)
+            }
+            DeviceActivityReport(.calendar, filter: ring.screenTimeFilter(DateInterval(start: shown, end: end), hourly: false))
+                .id(offset)
+                .frame(height: 300)
+            Label("History comes straight from Screen Time, also from before the ring was added. The ring, widgets and watch count from when it was added.",
                   systemImage: "info.circle")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .padding([.horizontal, .bottom])
         }
         .card()
-        .onAppear { style.save() }
+        .onAppear { ring.screenTimeReportStyle(month: month).save() }
     }
 
-    /// The ring's colours and daily goal, for the report to draw with.
-    private var style: ScreenTimeReportStyle {
-        let (deep, light) = ring.gradient
-        let environment = EnvironmentValues()
-        let daily: Double? = switch ring.aggregation {
-        case _ where ring.period.nominalDays <= 1: ring.goal
-        case .dailyAverage: ring.goal
-        case .daysReaching: ring.dailyTarget
-        default: nil
-        }
-        return ScreenTimeReportStyle(deep: deep.resolve(in: environment), light: light.resolve(in: environment),
-                                     dailyMinutes: daily, isLimit: ring.goalKind == .limit)
+    private func move(_ step: Int) {
+        let next = calendar.date(byAdding: .month, value: offset + step,
+                                 to: calendar.dateInterval(of: .month, for: .now)?.start ?? .now) ?? .now
+        // The report reads the month when it draws: save it before the filter changes.
+        ring.screenTimeReportStyle(month: next).save()
+        offset += step
     }
 }
 #endif

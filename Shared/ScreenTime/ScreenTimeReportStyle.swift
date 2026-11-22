@@ -12,6 +12,10 @@ struct ScreenTimeReportStyle: Codable, Hashable, Sendable {
     var dailyMinutes: Double?
     /// "Stay under" rings: days over the line are drawn in the warning colour.
     var isLimit: Bool
+    /// The month the History calendar shows (its first day).
+    var calendarMonth: Date?
+    /// Whether the ring has a past-the-limit mark (the red ! at the tip); off, over-limit days look like the others.
+    var marksOverLimit: Bool = true
 
     private static let key = "screenTime.reportStyle"
 
