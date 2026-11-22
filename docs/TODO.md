@@ -6,6 +6,18 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 
 - **Top priority: make the direction of ring progress clear.** Start each ring with a lighter colour at 12 o’clock and build to the strongest colour at the moving tip. Keep the tip visible where the ends overlap. Check the 98% sleep-ring example, exactly 100%, and rings beyond one full lap.
 
+- **High priority (Erik will use it): Screen Time rings.** Screen time is not in Apple Health; it comes from Apple's
+  Screen Time API (FamilyControls with `.individual` authorization, DeviceActivity). Limits to design around:
+  - Needs the **Family Controls entitlement**, which Apple must approve before App Store distribution (request form).
+    Check early whether it works on TestFlight / development without approval.
+  - **Real numbers can only be shown inside the app**, in a `DeviceActivityReport` extension view: the app itself can't
+    read the usage, so it can't write it to the App Group for widgets or send it to the watch.
+  - **Widgets:** approximate with a `DeviceActivityMonitor` extension and usage thresholds (e.g. every 15 min), which
+    the extension writes to the App Group. Show it as approximate.
+  - iPhone and iPad only (no watch data). Rings for total screen time or chosen apps/categories (social, games), today
+    or per week, usually as limits ("stay under 2 hr").
+  - Start with a small prototype on TestFlight to see what the API allows, then decide on the design.
+
 - **Graph widget from Heart Minutes.** Bring Heart Minutes' graph widget over: a widget that shows a ring's
   history as a chart (bars or a line per day, with the goal), in Everyring's own look and for any ring. Fits Erik's
   wish for few widgets: one widget with a setting for which ring, not one widget per metric.
