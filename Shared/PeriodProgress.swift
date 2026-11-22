@@ -42,12 +42,14 @@ struct PeriodProgress: Hashable, Sendable {
     ///   - buckets: values keyed by the start of each hour or day.
     ///   - interval: a past period to show instead of the current one (whole days; for a rolling ring, the window
     ///     ending on a past day).
+    /// - Parameter bucketSize: hours instead of the period's usual buckets (a finer chart of a total over several
+    ///   days, e.g. for the chart widget).
     static func make(for ring: Ring, buckets: [Date: Double], interval chosen: DateInterval? = nil, now: Date,
-                     calendar: Calendar) -> PeriodProgress {
+                     calendar: Calendar, bucketSize: Calendar.Component? = nil) -> PeriodProgress {
         let interval = chosen ?? chartInterval(for: ring, now: now, calendar: calendar)
         let isPast = interval.end <= now
         let now = min(now, interval.end)
-        let bucket = bucket(for: ring.period)
+        let bucket = bucketSize ?? bucket(for: ring.period)
         let average = ring.isAverage && bucket == .day
         let daysReaching = ring.isDaysReaching && bucket == .day
         let today = calendar.startOfDay(for: now)

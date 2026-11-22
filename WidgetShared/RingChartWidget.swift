@@ -272,18 +272,18 @@ private struct RingWidgetChart: View {
             let days = entry.chart.duration / 86_400
             if days <= 1.1 {
                 AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
-                    AxisGridLine().foregroundStyle(Color.gray.opacity(0.3))
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Color.gray.opacity(0.3))
                     AxisValueLabel(format: axisFormat(.dateTime.hour())).font(.system(size: compact ? 8 : 10))
                 }
             } else if days <= 7.5 {
                 AxisMarks(values: .stride(by: .day)) { _ in
-                    AxisGridLine().foregroundStyle(Color.gray.opacity(0.3))
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Color.gray.opacity(0.3))
                     AxisValueLabel(format: axisFormat(.dateTime.weekday(.narrow)), centered: true)
                         .font(.system(size: compact ? 8 : 10))
                 }
             } else {
                 AxisMarks(values: dateTicks(stepDays: days <= 14.5 ? (compact ? 5 : 3) : (compact ? 10 : 7))) { _ in
-                    AxisGridLine().foregroundStyle(Color.gray.opacity(0.3))
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Color.gray.opacity(0.3))
                     AxisValueLabel(format: axisFormat(.dateTime.day().month(.defaultDigits)))
                         .font(.system(size: compact ? 8 : 10))
                 }

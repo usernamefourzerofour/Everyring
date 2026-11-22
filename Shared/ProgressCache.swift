@@ -16,8 +16,9 @@ struct ChartPoint: Codable, Hashable, Sendable {
     var t: Date
     var v: Double
 
-    /// At most `max` points, always keeping the first and the last (a widget has a small budget).
-    static func reduced(_ points: [ChartPoint], max: Int = 64) -> [ChartPoint] {
+    /// At most `max` points, always keeping the first and the last (a widget has a small budget; a week hour by hour
+    /// fits).
+    static func reduced(_ points: [ChartPoint], max: Int = 200) -> [ChartPoint] {
         guard points.count > max, max > 1 else { return points }
         let step = Double(points.count - 1) / Double(max - 1)
         return (0..<max).map { points[Int((Double($0) * step).rounded())] }

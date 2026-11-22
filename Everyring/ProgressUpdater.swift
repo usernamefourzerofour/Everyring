@@ -21,8 +21,9 @@ enum ProgressUpdater {
             let interval = ring.period.interval(now: now, calendar: calendar)
             let chart = PeriodProgress.chartInterval(for: ring, now: now, calendar: calendar)
             let end = max(interval.start, min(interval.end, now))
-            func chartPoints(_ buckets: [Date: Double]) -> [ChartPoint] {
-                ChartPoint.reduced(PeriodProgress.make(for: ring, buckets: buckets, interval: chart, now: now, calendar: calendar)
+            func chartPoints(_ buckets: [Date: Double], bucketSize: Calendar.Component? = nil) -> [ChartPoint] {
+                ChartPoint.reduced(PeriodProgress.make(for: ring, buckets: buckets, interval: chart, now: now, calendar: calendar,
+                                                       bucketSize: bucketSize)
                     .points.map { ChartPoint(t: $0.date, v: $0.total) })
             }
             do {
@@ -34,7 +35,15 @@ enum ProgressUpdater {
                     let daily = try await health.dailyValues(of: ring.metric, from: interval.start, to: end,
                                                              calendar: calendar, filter: ring.healthFilter)
                     value = ring.measure(daily: daily, in: interval, now: now, calendar: calendar)
-                    points = chartPoints(daily)
+                    // The chart hour by hour, like Heart Minutes' widget, for totals (an average or a count of days is a
+                    // daily figure, so it stays day by day).
+                    if !ring.isAverage, !ring.isDaysReaching, ring.metric.hasHourlyBuildUp,
+                       let hourly = try? await health.hourlyValues(of: ring.metric, in: DateInterval(start: interval.start, end: end),
+                                                                   calendar: calendar, filter: ring.healthFilter) {
+                        points = chartPoints(hourly, bucketSize: .hour)
+                    } else {
+                        points = chartPoints(daily)
+                    }
                 } else {
                     let total = try await health.value(of: ring.metric, in: interval, filter: ring.healthFilter)
                     value = ring.measure(total, in: interval, now: now, calendar: calendar)
