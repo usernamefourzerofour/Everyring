@@ -59,9 +59,25 @@ struct RingEditorView: View {
                         Text("Metric")
                         Spacer()
                         // Workouts: the kinds have their own row below, so name only the category here.
-                        Text(ring.metric.isWorkouts ? String(localized: "Workouts") : ring.metric.title)
+                        Text(ring.metric.pickerTitle)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.trailing)
+                    }
+                }
+                if case .exerciseMinutes(let excluded) = ring.metric {
+                    NavigationLink {
+                        WorkoutFilterView(measure: .minutes, excludeOnly: true, filter: Binding(
+                            get: { excluded },
+                            set: { ring.metric = .exerciseMinutes(excluding: $0) }
+                        ))
+                    } label: {
+                        HStack {
+                            Text("Leave out")
+                            Spacer()
+                            Text(excluded?.listed ?? String(localized: "Nothing"))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.trailing)
+                        }
                     }
                 }
                 if case .workouts(let measure, let filter) = ring.metric {
@@ -269,6 +285,8 @@ struct MetricPickerView: View {
     init(selection: Binding<HealthMetric>) {
         current = selection.wrappedValue
         onPick = { metric in
+            // Picking exercise minutes again keeps the workouts left out.
+            if selection.wrappedValue.isSameKind(as: metric), case .exerciseMinutes = metric { return }
             // Keep the chosen workout kinds when switching between workout measures.
             if case .workouts(_, let filter) = selection.wrappedValue, case .workouts(let measure, _) = metric {
                 selection.wrappedValue = .workouts(measure, kind: WorkoutFilter.adapted(filter, to: measure))
@@ -318,8 +336,7 @@ struct MetricPickerView: View {
 
     private func isSelected(_ metric: HealthMetric) -> Bool {
         guard let current else { return false }
-        if case .workouts(let a, _) = current, case .workouts(let b, _) = metric { return a == b }
-        return current == metric
+        return current.isSameKind(as: metric)
     }
 }
 
@@ -545,15 +562,19 @@ extension RingTint {
 /// Picks the kinds of workouts a ring counts: all, only some, or all except some.
 struct WorkoutFilterView: View {
     let measure: WorkoutMeasure
+    /// Exercise minutes: workouts can only be left out (most exercise minutes come from everyday activity, not
+    /// workouts, so "only these" would mislead).
+    var excludeOnly = false
     @Binding var filter: WorkoutFilter?
     @State private var kinds: Set<WorkoutKind>
     @State private var excludes: Bool
 
-    init(measure: WorkoutMeasure, filter: Binding<WorkoutFilter?>) {
+    init(measure: WorkoutMeasure, excludeOnly: Bool = false, filter: Binding<WorkoutFilter?>) {
         self.measure = measure
+        self.excludeOnly = excludeOnly
         _filter = filter
         _kinds = State(initialValue: Set(filter.wrappedValue?.kinds ?? []))
-        _excludes = State(initialValue: filter.wrappedValue?.excludes ?? false)
+        _excludes = State(initialValue: excludeOnly || filter.wrappedValue?.excludes == true)
     }
 
     private var available: [WorkoutKind] {
@@ -562,18 +583,20 @@ struct WorkoutFilterView: View {
 
     var body: some View {
         Form {
-            Section {
-                Picker("Mode", selection: $excludes) {
-                    Text("Only these").tag(false)
-                    Text("All except these").tag(true)
+            if !excludeOnly {
+                Section {
+                    Picker("Mode", selection: $excludes) {
+                        Text("Only these").tag(false)
+                        Text("All except these").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                } footer: {
+                    Text(kinds.isEmpty
+                         ? LocalizedStringKey("No types picked: the ring counts all workouts.")
+                         : excludes ? "The ring counts every workout except the types you pick."
+                                    : "The ring counts only the types you pick.")
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            } footer: {
-                Text(kinds.isEmpty
-                     ? LocalizedStringKey("No types picked: the ring counts all workouts.")
-                     : excludes ? "The ring counts every workout except the types you pick."
-                                : "The ring counts only the types you pick.")
             }
 
             Section {
@@ -593,9 +616,13 @@ struct WorkoutFilterView: View {
                     }
                     .accessibilityAddTraits(kinds.contains(kind) ? .isSelected : [])
                 }
+            } footer: {
+                if excludeOnly {
+                    Text("Exercise minutes logged during workouts of the types you pick are left out. All other exercise minutes still count, including everyday activity and workouts you didn't record.")
+                }
             }
         }
-        .navigationTitle("Workout Types")
+        .navigationTitle(excludeOnly ? "Leave Out Workouts" : "Workout Types")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !kinds.isEmpty {

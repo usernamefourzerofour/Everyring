@@ -46,7 +46,7 @@ struct ProgressCacheTests {
     }
 
     @Test func rollingRingKeepsLastValue() {
-        var exercise = Ring.new(metric: .exerciseMinutes)
+        var exercise = Ring.new(metric: .exerciseMinutes())
         exercise.period = .rollingDays(7)
         let cache = ProgressCache(rings: [exercise.id: snapshot(120, day: 18)])
         #expect(cache.value(for: exercise, at: date(2026, 11, 19, 8, in: cph), calendar: cph) == 120)
@@ -57,7 +57,7 @@ struct ProgressCacheTests {
         day.period = .today
         var week = Ring.new(metric: .workouts(.count, kind: nil))
         week.period = .thisWeek
-        var rolling = Ring.new(metric: .exerciseMinutes)
+        var rolling = Ring.new(metric: .exerciseMinutes())
         rolling.period = .rollingDays(7)
         // Sunday 22 Nov 15:00, Monday week start: midnight is both a new day and a new week.
         let now = date(2026, 11, 22, 15, in: cph)

@@ -3,7 +3,10 @@ import Foundation
 /// A Health metric a ring can measure. Goals are stored in the metric's `baseUnit` and formatted for the user's locale.
 enum HealthMetric: Codable, Hashable, Sendable {
     // Activity
-    case steps, activeEnergy, exerciseMinutes, standHours, flightsClimbed
+    case steps, activeEnergy, standHours, flightsClimbed
+    /// Apple's exercise minutes, optionally leaving out the minutes logged during workouts of some kinds (always an
+    /// excluding filter). Saved rings without the value decode as `nil`.
+    case exerciseMinutes(excluding: WorkoutFilter? = nil)
     // Distance
     case walkingRunningDistance, cyclingDistance, swimmingDistance, wheelchairDistance
     // Workouts, optionally only some kinds or all but some (nil = all workouts). The label stays `kind` so rings
@@ -48,7 +51,8 @@ enum HealthMetric: Codable, Hashable, Sendable {
         switch self {
         case .steps: String(localized: "Steps")
         case .activeEnergy: String(localized: "Active energy")
-        case .exerciseMinutes: String(localized: "Exercise minutes")
+        case .exerciseMinutes(.none): String(localized: "Exercise minutes")
+        case .exerciseMinutes(let excluded?): String(localized: "Exercise minutes except \(excluded.listed)")
         case .standHours: String(localized: "Stand hours")
         case .flightsClimbed: String(localized: "Flights climbed")
         case .walkingRunningDistance: String(localized: "Walking + running distance")
@@ -162,7 +166,7 @@ struct WorkoutFilter: Codable, Hashable, Sendable {
     }
 
     /// "Strength", "Running and Cycling" or "3 types".
-    private var listed: String {
+    var listed: String {
         kinds.count <= 2 ? kinds.map(\.title).formatted(.list(type: .and)) : String(localized: "\(kinds.count) types")
     }
 

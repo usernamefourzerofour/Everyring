@@ -45,4 +45,16 @@ struct WorkoutFilterTests {
         let all = HealthMetric.workouts(.count, kind: nil)
         #expect(try JSONDecoder().decode(HealthMetric.self, from: JSONEncoder().encode(all)) == all)
     }
+
+    @Test func exerciseMinutesLeaveOutWorkouts() throws {
+        #expect(HealthMetric.exerciseMinutes().title == "Exercise minutes")
+        let walking = HealthMetric.exerciseMinutes(excluding: .make([.walking], excludes: true))
+        #expect(walking.title == "Exercise minutes except Walking")
+        #expect(walking.pickerTitle == "Exercise minutes")
+        #expect(walking.isSameKind(as: .exerciseMinutes()))
+        // Rings saved before the filter existed.
+        let old = try JSONDecoder().decode(HealthMetric.self, from: Data(#"{"exerciseMinutes":{}}"#.utf8))
+        #expect(old == .exerciseMinutes())
+        #expect(try JSONDecoder().decode(HealthMetric.self, from: JSONEncoder().encode(walking)) == walking)
+    }
 }

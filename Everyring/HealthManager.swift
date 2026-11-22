@@ -23,6 +23,7 @@ extension HealthMetric {
 
     /// Everything this metric needs read access to.
     var readTypes: Set<HKObjectType> {
+        if case .exerciseMinutes(_?) = self { return [HKQuantityType(.appleExerciseTime), HKObjectType.workoutType()] }
         if let quantityType { return [quantityType] }
         switch self {
         case .standHours: return [HKCategoryType(.appleStandHour)]
@@ -215,6 +216,11 @@ final class HealthManager {
     }
 
     private func readValue(of metric: HealthMetric, in interval: DateInterval) async throws -> Double {
+        if case .exerciseMinutes(let excluded?) = metric {
+            let total = try await readValue(of: .exerciseMinutes(), in: interval)
+            let left = try await exerciseMinutes(during: excluded, in: interval) { _ in interval.start }
+            return max(0, total - left.values.reduce(0, +))
+        }
         if let type = metric.quantityType {
             return try await sum(type, unit: metric.hkUnit, in: interval)
         }
@@ -271,6 +277,12 @@ final class HealthManager {
                                  calendar: Calendar) async throws -> [Date: Double] {
         guard Self.isAvailable, start < end else { return [:] }
         let range = DateInterval(start: calendar.startOfDay(for: start), end: end)
+        if case .exerciseMinutes(let excluded?) = metric {
+            var daily = try await readDailyValues(of: .exerciseMinutes(), from: start, to: end, calendar: calendar)
+            let left = try await exerciseMinutes(during: excluded, in: range) { calendar.startOfDay(for: $0) }
+            for (day, minutes) in left { daily[day] = max(0, (daily[day] ?? 0) - minutes) }
+            return daily
+        }
         if let type = metric.quantityType {
             let predicate = HKQuery.predicateForSamples(withStart: range.start, end: range.end)
             let descriptor = HKStatisticsCollectionQueryDescriptor(
@@ -331,6 +343,13 @@ final class HealthManager {
         guard Self.isAvailable, interval.duration > 0 else { return [:] }
         func hour(_ date: Date) -> Date { calendar.dateInterval(of: .hour, for: date)?.start ?? date }
         do {
+            if case .exerciseMinutes(let excluded?) = metric {
+                var hourly = try await hourlyValues(of: .exerciseMinutes(), in: interval, calendar: calendar,
+                                                    askForAccess: askForAccess)
+                let left = try await exerciseMinutes(during: excluded, in: interval, bucket: hour)
+                for (start, minutes) in left { hourly[start] = max(0, (hourly[start] ?? 0) - minutes) }
+                return hourly
+            }
             if let type = metric.quantityType {
                 let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
                 let descriptor = HKStatisticsCollectionQueryDescriptor(
@@ -400,6 +419,30 @@ final class HealthManager {
             predicates: [.categorySample(type: HKCategoryType(identifier), predicate: predicate)],
             sortDescriptors: [SortDescriptor(\.startDate)])
         return try await descriptor.result(for: store)
+    }
+
+    /// Exercise minutes logged during workouts of the kinds `excluded` names, inside `interval`, summed per
+    /// `bucket` of each sample's start. Apple doesn't tie exercise minutes to a workout, so a minute belongs to a
+    /// workout when its middle falls inside the workout's time.
+    private func exerciseMinutes(during excluded: WorkoutFilter, in interval: DateInterval,
+                                 bucket: (Date) -> Date) async throws -> [Date: Double] {
+        // A workout may have started before the interval (an evening workout past midnight).
+        let fetch = DateInterval(start: interval.start.addingTimeInterval(-12 * 3600), end: interval.end)
+        let spans = try await workouts(filter: WorkoutFilter.make(excluded.kinds), in: fetch)
+            .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) }
+            .filter { $0.intersects(interval) }
+        guard !spans.isEmpty else { return [:] }
+        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.quantitySample(type: HKQuantityType(.appleExerciseTime), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate)])
+        var result: [Date: Double] = [:]
+        for sample in try await descriptor.result(for: store) {
+            let middle = sample.startDate.addingTimeInterval(sample.endDate.timeIntervalSince(sample.startDate) / 2)
+            guard interval.contains(middle), spans.contains(where: { $0.contains(middle) }) else { continue }
+            result[bucket(sample.startDate), default: 0] += sample.quantity.doubleValue(for: .minute())
+        }
+        return result
     }
 
     /// Workouts that start inside `interval`: all, only some kinds, or all but some.

@@ -24,7 +24,7 @@ extension HealthMetric {
             let more = QuantityKind.allCases.filter { $0.category == self }.map(HealthMetric.quantity)
                 + NutrientKind.allCases.filter { $0.category == self }.map(HealthMetric.nutrient)
             switch self {
-            case .activity: return [.steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed] + more
+            case .activity: return [.steps, .activeEnergy, .exerciseMinutes(), .standHours, .flightsClimbed] + more
             case .distance:
                 return [.walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance] + more
             case .workouts: return [.workouts(.count, kind: nil), .workouts(.minutes, kind: nil), .workouts(.distance, kind: nil)]
@@ -183,6 +183,24 @@ extension HealthMetric {
 extension HealthMetric {
     var isWorkouts: Bool {
         if case .workouts = self { true } else { false }
+    }
+
+    /// The name in the editor's Metric row: workouts and exercise minutes have their filters in rows of their own.
+    var pickerTitle: String {
+        switch self {
+        case .workouts: String(localized: "Workouts")
+        case .exerciseMinutes: String(localized: "Exercise minutes")
+        default: title
+        }
+    }
+
+    /// Whether picking `other` in the metric list keeps this metric (only its filter differs).
+    func isSameKind(as other: HealthMetric) -> Bool {
+        switch (self, other) {
+        case (.workouts(let a, _), .workouts(let b, _)): a == b
+        case (.exerciseMinutes, .exerciseMinutes): true
+        default: self == other
+        }
     }
 }
 
