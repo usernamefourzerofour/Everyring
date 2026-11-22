@@ -767,7 +767,8 @@ struct WorkoutLogCard: View {
                     ForEach(shown) { workout in
                         let isExpanded = expanded == workout.id
                         Button {
-                            withAnimation(.snappy) { expanded = isExpanded ? nil : workout.id }
+                            // Opens and closes at once: a sliding chart overlapped the rows above it.
+                            expanded = isExpanded ? nil : workout.id
                         } label: {
                             WorkoutRow(workout: workout, ring: ring, calendar: calendar, isExpanded: isExpanded)
                                 .contentShape(.rect)
@@ -776,7 +777,6 @@ struct WorkoutLogCard: View {
                         .accessibilityHint(isExpanded ? LocalizedStringKey("Hides the chart") : "Shows a chart of the workout")
                         if isExpanded {
                             WorkoutTimelineView(ring: ring, workout: workout, calendar: calendar)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                         if workout.id != shown.last?.id { Divider() }
                     }
@@ -835,6 +835,7 @@ private struct WorkoutRow: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .animation(.snappy, value: isExpanded)
                 .accessibilityHidden(true)
         }
         .accessibilityElement(children: .ignore)
