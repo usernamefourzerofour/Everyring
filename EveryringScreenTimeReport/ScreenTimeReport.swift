@@ -251,7 +251,14 @@ struct DayRing: View {
     var body: some View {
         let goal = style?.dailyMinutes ?? max(top, 1)
         let fraction = (minutes ?? 0) / goal
-        let over = style?.isLimit == true && style?.marksOverLimit != false && fraction > 1
+        let isLimit = style?.isLimit == true
+        let over = isLimit && style?.marksOverLimit != false && fraction > 1
+        let past = !Calendar.current.isDateInToday(day) && day < .now
+        // As in the app's History: a check for a goal reached (or a limit kept, once the day is over), a cross for a
+        // limit passed.
+        let mark: DayMark.Kind? = if isLimit && fraction > 1 { .over }
+            else if isLimit ? (past && (minutes ?? 0) > 0) : fraction >= 1 { .reached }
+            else { nil }
         let deep = style?.deepColor ?? .accentColor, light = style?.lightColor ?? .accentColor
         let future = day > .now
         ZStack {
@@ -275,6 +282,7 @@ struct DayRing: View {
                 .foregroundStyle(future ? .tertiary : .primary)
         }
         .frame(width: 36, height: 36)
+        .dayMark(mark, size: 13)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("\(day.formatted(.dateTime.day().month())), \(duration(minutes ?? 0))"))
