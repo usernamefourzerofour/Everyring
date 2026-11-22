@@ -14,6 +14,7 @@ enum ProgressUpdater {
     /// Reads each ring on its own, so one ring that can't be read (a Health error for one type) never stops the others.
     static func snapshots(for library: RingLibrary, now: Date = .now, health: HealthManager? = nil) async -> Result {
         let health = health ?? .shared
+        health.heartMinuteSettings = library.heartMinutes
         let calendar = library.calendar()
         var result = Result()
         for ring in library.sets.flatMap(\.rings) {

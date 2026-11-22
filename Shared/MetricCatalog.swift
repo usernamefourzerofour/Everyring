@@ -27,7 +27,7 @@ extension HealthMetric {
             let more = QuantityKind.allCases.filter { $0.category == self }.map(HealthMetric.quantity)
                 + NutrientKind.allCases.filter { $0.category == self }.map(HealthMetric.nutrient)
             switch self {
-            case .activity: return [.steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed] + more
+            case .activity: return [.steps, .activeEnergy, .exerciseMinutes, .heartMinutes, .standHours, .flightsClimbed] + more
             case .distance:
                 return [.walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance] + more
             case .workouts: return [.workouts(.count, kind: nil), .workouts(.minutes, kind: nil), .workouts(.distance, kind: nil)]
@@ -43,7 +43,7 @@ extension HealthMetric {
 
     var category: Category {
         switch self {
-        case .steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed: .activity
+        case .steps, .activeEnergy, .exerciseMinutes, .heartMinutes, .standHours, .flightsClimbed: .activity
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance: .distance
         case .workouts: .workouts
         case .sleep, .sleepStage, .mindfulMinutes, .timeInDaylight: .recovery
@@ -60,6 +60,7 @@ extension HealthMetric {
         case .steps: "figure.walk"
         case .activeEnergy: "flame"
         case .exerciseMinutes: "bolt.heart"
+        case .heartMinutes: "heart.circle"
         case .standHours: "figure.stand"
         case .flightsClimbed: "figure.stairs"
         case .walkingRunningDistance: "shoeprints.fill"
@@ -84,7 +85,7 @@ extension HealthMetric {
     var defaultPeriod: RingPeriod {
         switch self {
         case .steps, .activeEnergy, .standHours, .flightsClimbed, .timeInDaylight, .water: .today
-        case .exerciseMinutes, .sleep, .sleepStage: .rollingDays(7)
+        case .exerciseMinutes, .heartMinutes, .sleep, .sleepStage: .rollingDays(7)
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance, .workouts, .mindfulMinutes:
             .thisWeek
         case .quantity(let kind): kind.defaultPeriod
@@ -99,6 +100,8 @@ extension HealthMetric {
         case .steps: 8_000
         case .activeEnergy: 500
         case .exerciseMinutes: 30
+        // The American Heart Association's 150 minutes a week.
+        case .heartMinutes: 150.0 / 7
         case .standHours: 12
         case .flightsClimbed: 10
         case .walkingRunningDistance: 5_000
@@ -144,6 +147,7 @@ extension HealthMetric {
         case .steps, .walkingRunningDistance: .fern
         case .activeEnergy: .sunrise
         case .exerciseMinutes: .magenta
+        case .heartMinutes: .tangerine
         case .standHours: .lagoon
         case .flightsClimbed, .cyclingDistance: .indigo
         case .swimmingDistance: .lagoon
@@ -222,7 +226,7 @@ extension HealthMetric {
     /// workouts listed).
     var supportsWorkoutLeaveOut: Bool {
         switch self {
-        case .steps, .activeEnergy, .exerciseMinutes, .flightsClimbed, .walkingRunningDistance, .cyclingDistance,
+        case .steps, .activeEnergy, .exerciseMinutes, .heartMinutes, .flightsClimbed, .walkingRunningDistance, .cyclingDistance,
              .swimmingDistance, .wheelchairDistance: true
         case .quantity(let kind):
             switch kind {

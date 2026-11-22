@@ -18,7 +18,7 @@ extension HealthMetric {
         case .quantity(let kind): HKQuantityType(kind.identifier)
         case .nutrient(let kind): HKQuantityType(kind.identifier)
         case .sensitive(let kind): kind.quantityIdentifier.map { HKQuantityType($0) }
-        case .standHours, .workouts, .sleep, .sleepStage, .mindfulMinutes, .events: nil
+        case .standHours, .heartMinutes, .workouts, .sleep, .sleepStage, .mindfulMinutes, .events: nil
         }
     }
 
@@ -27,6 +27,7 @@ extension HealthMetric {
         if let quantityType { return quantityType }
         switch self {
         case .standHours: return HKCategoryType(.appleStandHour)
+        case .heartMinutes: return HKQuantityType(.heartRate)
         case .sleep, .sleepStage: return HKCategoryType(.sleepAnalysis)
         case .mindfulMinutes: return HKCategoryType(.mindfulSession)
         case .events(let kind): return HKCategoryType(kind.identifier)
@@ -38,6 +39,11 @@ extension HealthMetric {
 
     /// Everything this metric needs read access to.
     var readTypes: Set<HKObjectType> {
+        // Heart Minutes: heart rate, plus workouts and Exercise minutes to mark measurements, and age for max heart rate.
+        if case .heartMinutes = self {
+            return [HKQuantityType(.heartRate), HKQuantityType(.appleExerciseTime), HKObjectType.workoutType(),
+                    HKCharacteristicType(.dateOfBirth)]
+        }
         // Activity measured all day: workouts too, to leave some out and to list them on the ring's detail screen.
         if supportsWorkoutLeaveOut, let quantityType { return [quantityType, HKObjectType.workoutType()] }
         if let quantityType { return [quantityType] }
@@ -295,6 +301,16 @@ final class HealthManager {
 
     let store = HKHealthStore()
 
+    /// How Heart Minutes are calculated (the library's settings; set before reading).
+    var heartMinuteSettings = RingStore.load()?.heartMinutes ?? HeartMinuteSettings()
+
+    /// Age from the date of birth in Health, for max heart rate; `nil` if not set or not allowed.
+    func ageFromHealth(now: Date = .now) -> Int? {
+        guard Self.isAvailable, let components = try? store.dateOfBirthComponents(),
+              let birth = Calendar.current.date(from: components) else { return nil }
+        return Calendar.current.dateComponents([.year], from: birth, to: now).year
+    }
+
     static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
     /// Asks for read access to the types `metrics` need. HealthKit only shows the sheet for types not asked for before,
@@ -360,6 +376,18 @@ final class HealthManager {
 
     /// The workouts that started inside `interval`, newest first, each with what `metric` logged during it.
     func workoutLog(of metric: HealthMetric, in interval: DateInterval, filter: HealthFilter = .none) async throws -> [LoggedWorkout] {
+        if case .heartMinutes = metric, Self.isAvailable {
+            return try await reading(metric) {
+                let scope = try await self.scope(for: metric, filter: HealthFilter(sources: filter.sources))
+                let workouts = try await self.workouts(kinds: nil, in: interval)
+                let spans = workouts.map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) }
+                let credits = try await self.heartMinutes(in: spans, around: interval, scope: scope, markAll: true)
+                return zip(workouts, credits).map { workout, value in
+                    LoggedWorkout(id: workout.uuid, kind: WorkoutKind(activityType: workout.workoutActivityType),
+                                  start: workout.startDate, end: workout.endDate, value: value)
+                }.reversed()
+            }
+        }
         guard Self.isAvailable, let type = metric.quantityType else { return [] }
         return try await reading(metric) {
             let scope = try await self.scope(for: metric, filter: filter)
@@ -377,6 +405,18 @@ final class HealthManager {
 
     /// How much of `metric` in `interval` was logged during workouts and how much in everyday life.
     func activitySplit(of metric: HealthMetric, in interval: DateInterval, filter: HealthFilter = .none) async throws -> ActivitySplit {
+        if case .heartMinutes = metric, Self.isAvailable, interval.duration > 0 {
+            return try await reading(metric) {
+                let scope = try await self.scope(for: metric, filter: HealthFilter(sources: filter.sources))
+                let fetch = DateInterval(start: interval.start.addingTimeInterval(-12 * 3600), end: interval.end)
+                let spans = IntervalMath.merged(try await self.workouts(kinds: nil, in: fetch)
+                    .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) })
+                    .compactMap { $0.intersection(with: interval) }
+                    .filter { $0.duration > 0 }
+                let credits = try await self.heartMinutes(in: [interval] + spans, around: interval, scope: scope, markAll: true)
+                return ActivitySplit(total: credits.first ?? 0, duringWorkouts: credits.dropFirst().reduce(0, +))
+            }
+        }
         guard Self.isAvailable, let type = metric.quantityType, interval.duration > 0 else { return ActivitySplit() }
         return try await reading(metric) {
             let scope = try await self.scope(for: metric, filter: HealthFilter(sources: filter.sources))
@@ -425,6 +465,16 @@ final class HealthManager {
         if let type = metric.quantityType {
             timeline.perMinute = try await series(type, unit: metric.hkUnit, options: .cumulativeSum, in: interval,
                                                   step: DateComponents(minute: 1), scope: scope, fillsGaps: true)
+        } else if case .heartMinutes = metric {
+            // Heart Minutes earned minute by minute through the workout.
+            var minutes: [DateInterval] = []
+            var t = interval.start
+            while t < interval.end {
+                minutes.append(DateInterval(start: t, end: min(interval.end, t.addingTimeInterval(60))))
+                t = t.addingTimeInterval(60)
+            }
+            let credits = try await heartMinutes(in: minutes, around: interval, scope: scope, markAll: true)
+            timeline.perMinute = zip(minutes, credits).map { .init(date: $0.start, value: $1) }
         }
         // Heart rate every 30 seconds for an hour and a half, every minute for longer workouts.
         let step = interval.duration <= 90 * 60 ? DateComponents(second: 30) : DateComponents(minute: 1)
@@ -533,6 +583,22 @@ final class HealthManager {
             samples.reduce(into: [:]) { result, sample in result[key(sample.startDate), default: 0] += value(sample) }
         }
 
+        if case .heartMinutes = metric {
+            // Buckets: the whole range, each day or each hour.
+            var buckets: [DateInterval] = []
+            if bucket == .whole {
+                buckets = [range]
+            } else {
+                var t = range.start
+                while t < range.end {
+                    let next = calendar.date(byAdding: bucket == .day ? .day : .hour, value: 1, to: t) ?? range.end
+                    buckets.append(DateInterval(start: t, end: min(next, range.end)))
+                    t = next
+                }
+            }
+            let credits = try await heartMinutes(in: buckets, around: range, scope: scope, markAll: false)
+            return Dictionary(zip(buckets.map { key($0.start) }, credits), uniquingKeysWith: +)
+        }
         if let type = metric.quantityType {
             // Health doesn't tie samples to workouts: what was logged while a workout ran belongs to it.
             func workoutSpans(_ filter: WorkoutFilter?, lengths: Bool) async throws -> [DateInterval] {
@@ -637,6 +703,106 @@ final class HealthManager {
         }
     }
 
+    // MARK: Heart Minutes
+
+    /// Heart Minutes in each of `buckets` (all inside `range`), calculated like the Heart Minutes app: heart rate
+    /// measurements with workouts and Exercise-ring minutes marked.
+    /// - Parameter markAll: every workout counts as a workout and every measurement counts (for the workout list and
+    ///   the split); otherwise the scope's activity, left-out kinds and workout lengths decide.
+    private func heartMinutes(in buckets: [DateInterval], around range: DateInterval, scope: Scope,
+                              markAll: Bool) async throws -> [Double] {
+        guard !buckets.isEmpty else { return [] }
+        // A little margin: the calculation looks at the measurements around each edge.
+        let margin: TimeInterval = 15 * 60
+        let samples = try await heartRates(in: DateInterval(start: range.start.addingTimeInterval(-margin),
+                                                            end: range.end.addingTimeInterval(margin)), scope: scope)
+        guard !samples.isEmpty else { return buckets.map { _ in 0 } }
+        let all = try await workouts(filter: nil, in: DateInterval(start: range.start.addingTimeInterval(-12 * 3600),
+                                                                   end: range.end.addingTimeInterval(margin)))
+        func span(_ w: HKWorkout) -> DateInterval { DateInterval(start: w.startDate, end: max(w.startDate, w.endDate)) }
+        func withinLengths(_ w: HKWorkout) -> Bool {
+            w.duration >= scope.minimumWorkoutDuration
+                && (scope.maximumWorkoutDuration <= 0 || w.duration <= scope.maximumWorkoutDuration)
+        }
+        let leftOut = Set(scope.leftOutWorkouts)
+        func isLeftOut(_ w: HKWorkout) -> Bool { WorkoutKind(activityType: w.workoutActivityType).map(leftOut.contains) ?? false }
+        let exercise = try await exerciseSamples(in: DateInterval(start: range.start.addingTimeInterval(-margin),
+                                                                  end: range.end.addingTimeInterval(margin))).map(\.interval)
+        let marked: [DateInterval]
+        let keep: (HRSample) -> Bool
+        if markAll {
+            marked = all.map(span)
+            keep = { _ in true }
+        } else {
+            switch scope.activity {
+            case .all:
+                marked = all.map(span)
+                // Measurements during the left-out kinds don't count.
+                let out = all.filter(isLeftOut).map(span)
+                keep = { sample in !out.contains { $0.contains(sample.date) } }
+            case .duringWorkouts:
+                marked = all.filter { withinLengths($0) && !isLeftOut($0) }.map(span)
+                keep = { $0.inWorkout }
+            case .outsideWorkouts:
+                marked = all.filter(withinLengths).map(span)
+                keep = { !$0.inWorkout }
+            }
+        }
+        return HeartMinuteSettings.credits(samples: samples, workouts: marked, exercise: exercise, buckets: buckets,
+                                           settings: heartMinuteSettings, keep: keep)
+    }
+
+    /// Exercise-ring minutes (usually one sample per minute).
+    private func exerciseSamples(in interval: DateInterval) async throws -> [HKQuantitySample] {
+        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.quantitySample(type: HKQuantityType(.appleExerciseTime), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate)])
+        return try await descriptor.result(for: store)
+    }
+
+    /// Heart rate measurements, sorted, with Apple's active/resting marking. Series (one entry with many values, as
+    /// Apple Watch stores workout heart rate) are unpacked, so no values are lost.
+    private func heartRates(in interval: DateInterval, scope: Scope) async throws -> [HRSample] {
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let predicate = scope.apply(HKQuery.predicateForSamples(withStart: interval.start, end: interval.end))
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.quantitySample(type: HKQuantityType(.heartRate), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate)])
+        var result: [HRSample] = []
+        for sample in try await descriptor.result(for: store) {
+            let motion = MotionContext(sample.metadata)
+            let source = sample.sourceRevision.source.name
+            if let discrete = sample as? HKDiscreteQuantitySample, discrete.count > 1 {
+                result += try await seriesValues(of: sample).map {
+                    HRSample(date: $0.date, bpm: $0.bpm, motion: motion, source: source)
+                }
+            } else {
+                result.append(HRSample(date: sample.startDate, bpm: sample.quantity.doubleValue(for: unit),
+                                       motion: motion, source: source))
+            }
+        }
+        return result.sorted { $0.date < $1.date }
+    }
+
+    /// The individual heart rate values in a series entry.
+    private func seriesValues(of sample: HKQuantitySample) async throws -> [(date: Date, bpm: Double)] {
+        try await withCheckedThrowingContinuation { continuation in
+            let box = SeriesBox()
+            let query = HKQuantitySeriesSampleQuery(sample: sample) { _, quantity, date, done, error in
+                if let error {
+                    box.finish { continuation.resume(throwing: error) }
+                    return
+                }
+                if let quantity, let date {
+                    box.append(date: date, bpm: quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())))
+                }
+                if done { box.finish { continuation.resume(returning: box.values) } }
+            }
+            store.execute(query)
+        }
+    }
+
     // MARK: Queries
 
     /// Sums of a quantity per bucket (Health's statistics, which don't double count overlapping sources).
@@ -724,4 +890,34 @@ extension ActivitySplit: EmptyableResult { static var empty: Self { ActivitySpli
 
 private extension HKSample {
     var interval: DateInterval { DateInterval(start: startDate, end: max(startDate, endDate)) }
+}
+
+extension MotionContext {
+    /// From HKMetadataKeyHeartRateMotionContext on Apple Watch measurements.
+    init(_ metadata: [String: Any]?) {
+        guard let raw = (metadata?[HKMetadataKeyHeartRateMotionContext] as? NSNumber)?.intValue,
+              let context = HKHeartRateMotionContext(rawValue: raw) else { self = .unknown; return }
+        switch context {
+        case .sedentary: self = .sedentary
+        case .active: self = .active
+        default: self = .unknown
+        }
+    }
+}
+
+/// Collects values from a series query (HealthKit calls back from a background thread).
+private final class SeriesBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+    private(set) var values: [(date: Date, bpm: Double)] = []
+
+    func append(date: Date, bpm: Double) {
+        lock.lock(); values.append((date, bpm)); lock.unlock()
+    }
+
+    /// Only runs the first time (so the continuation is never resumed twice).
+    func finish(_ body: () -> Void) {
+        lock.lock(); let first = !finished; finished = true; lock.unlock()
+        if first { body() }
+    }
 }

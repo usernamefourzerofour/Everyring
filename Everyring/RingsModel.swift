@@ -9,6 +9,8 @@ final class RingsModel {
     var library: RingLibrary {
         didSet {
             guard library != oldValue else { return }
+            health.heartMinuteSettings = library.heartMinutes
+            if library.heartMinutes != oldValue.heartMinutes { dailyCache = [:] }
             try? RingStore.save(library)
             WidgetCenter.shared.reloadAllTimelines()
             BackgroundUpdater.shared.start(library: library)
@@ -46,6 +48,7 @@ final class RingsModel {
         if library == nil, stored == nil { try? RingStore.save(self.library) }
         PhoneSync.shared.activate()
         #endif
+        self.health.heartMinuteSettings = self.library.heartMinutes
         BackgroundUpdater.shared.start(library: self.library)
     }
 
@@ -118,6 +121,13 @@ final class RingsModel {
             } catch {
                 // Rings with access granted earlier can still be read.
                 problems.append(String(localized: "Health access: \(error.localizedDescription)"))
+            }
+            // Heart Minutes need max heart rate: take the age from the date of birth in Health the first time.
+            if self.library.heartMinutes.age == nil,
+               library.sets.contains(where: { $0.rings.contains { $0.metric == .heartMinutes } }),
+               let age = health.ageFromHealth() {
+                self.library.heartMinutes.age = age
+                return
             }
             let result = await ProgressUpdater.snapshots(for: library, now: now, health: health)
             snapshots = result.snapshots

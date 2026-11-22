@@ -16,6 +16,8 @@ enum AppGroup {
 struct RingLibrary: Codable, Hashable, Sendable {
     var sets: [RingSet]
     var weekStart: WeekStart = .system
+    /// How Heart Minutes rings are calculated.
+    var heartMinutes = HeartMinuteSettings()
 
     static let starter = RingLibrary(sets: [.starter])
 
@@ -25,7 +27,7 @@ struct RingLibrary: Codable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sets, weekStart
+        case sets, weekStart, heartMinutes
         /// Build 14 had "fade closed rings" for all rings; it is now a setting of each ring.
         case fadesClosedRings
     }
@@ -34,6 +36,7 @@ struct RingLibrary: Codable, Hashable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sets = try c.decode([RingSet].self, forKey: .sets)
         weekStart = try c.decodeIfPresent(WeekStart.self, forKey: .weekStart) ?? .system
+        heartMinutes = try c.decodeIfPresent(HeartMinuteSettings.self, forKey: .heartMinutes) ?? HeartMinuteSettings()
         // The old setting for all rings: every ring keeps fading.
         if try c.decodeIfPresent(Bool.self, forKey: .fadesClosedRings) == true {
             for s in sets.indices {
@@ -46,6 +49,7 @@ struct RingLibrary: Codable, Hashable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(sets, forKey: .sets)
         try c.encode(weekStart, forKey: .weekStart)
+        try c.encode(heartMinutes, forKey: .heartMinutes)
     }
 
     /// The calendar all periods are computed in.

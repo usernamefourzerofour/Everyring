@@ -24,6 +24,14 @@ struct SettingsView: View {
             }
 
             Section {
+                NavigationLink("Heart Minutes") { HeartMinuteSettingsView() }
+            } header: {
+                Text("Rings")
+            } footer: {
+                Text("How Heart Minutes rings count heart rate: zones, max heart rate and when background heart rate counts.")
+            }
+
+            Section {
                 Text("Everyring only reads from Apple Health and never writes to it. To change what it can read, open the Health app, tap your profile picture, then Apps → Everyring.")
                     .font(.callout)
             } header: {

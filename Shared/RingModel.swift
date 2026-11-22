@@ -4,6 +4,8 @@ import Foundation
 enum HealthMetric: Codable, Hashable, Sendable {
     // Activity
     case steps, activeEnergy, exerciseMinutes, standHours, flightsClimbed
+    /// Minutes in the moderate (× 1) and vigorous (× 2) heart rate zones, as the Heart Minutes app counts them.
+    case heartMinutes
     // Distance
     case walkingRunningDistance, cyclingDistance, swimmingDistance, wheelchairDistance
     // Workouts, optionally only some kinds or all but some (nil = all workouts). The label stays `kind` so rings
@@ -32,7 +34,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         switch self {
         case .steps, .flightsClimbed: .count
         case .activeEnergy: .kilocalories
-        case .exerciseMinutes, .mindfulMinutes, .timeInDaylight: .minutes
+        case .exerciseMinutes, .heartMinutes, .mindfulMinutes, .timeInDaylight: .minutes
         case .standHours, .sleep, .sleepStage: .hours
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance: .meters
         case .workouts(let measure, _):
@@ -54,6 +56,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .steps: String(localized: "Steps")
         case .activeEnergy: String(localized: "Active energy")
         case .exerciseMinutes: String(localized: "Exercise minutes")
+        case .heartMinutes: String(localized: "Heart Minutes")
         case .standHours: String(localized: "Stand hours")
         case .flightsClimbed: String(localized: "Flights climbed")
         case .walkingRunningDistance: String(localized: "Walking + running distance")

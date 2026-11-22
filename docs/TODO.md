@@ -51,9 +51,10 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 ## Later
 
 - **Everything from Heart Minutes in Everyring.** Go through Heart Minutes (github.com/usernamefourzerofour/HeartMinutes)
-  feature by feature and bring over what Everyring lacks (its views, widgets, complications, settings and the heart
-  minute calculation itself), so Everyring can replace it. Start with a list of Heart Minutes' features and what
-  Everyring already covers.
+  feature by feature and bring over what Everyring lacks, so Everyring can replace it. Done: the Heart Minutes metric
+  with its calculation and settings (zones, max heart rate, background activity filter, gaps). Still to do: the zone
+  breakdown and the heart-rate chart with zone bands on the detail screen, the comparison with Exercise minutes, the
+  hint about background measurements without Apple Watch's active marking, and the 38 languages.
   - **Time in heart rate zones.** Let a ring count minutes in one or more selected zones across activities,
     for example 90 minutes in zone 2 over the last seven days.
 - **Time windows for existing rings.** Add an optional local time window that works with weekday and period
