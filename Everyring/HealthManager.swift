@@ -787,20 +787,14 @@ final class HealthManager {
 
     /// The individual heart rate values in a series entry.
     private func seriesValues(of sample: HKQuantitySample) async throws -> [(date: Date, bpm: Double)] {
-        try await withCheckedThrowingContinuation { continuation in
-            let box = SeriesBox()
-            let query = HKQuantitySeriesSampleQuery(sample: sample) { _, quantity, date, done, error in
-                if let error {
-                    box.finish { continuation.resume(throwing: error) }
-                    return
-                }
-                if let quantity, let date {
-                    box.append(date: date, bpm: quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())))
-                }
-                if done { box.finish { continuation.resume(returning: box.values) } }
-            }
-            store.execute(query)
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let descriptor = HKQuantitySeriesSampleQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.heartRate), predicate: HKQuery.predicateForObject(with: sample.uuid)))
+        var values: [(date: Date, bpm: Double)] = []
+        for try await result in descriptor.results(for: store) {
+            values.append((result.dateInterval.start, result.quantity.doubleValue(for: unit)))
         }
+        return values
     }
 
     // MARK: Queries
@@ -902,22 +896,5 @@ extension MotionContext {
         case .active: self = .active
         default: self = .unknown
         }
-    }
-}
-
-/// Collects values from a series query (HealthKit calls back from a background thread).
-private final class SeriesBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var finished = false
-    private(set) var values: [(date: Date, bpm: Double)] = []
-
-    func append(date: Date, bpm: Double) {
-        lock.lock(); values.append((date, bpm)); lock.unlock()
-    }
-
-    /// Only runs the first time (so the continuation is never resumed twice).
-    func finish(_ body: () -> Void) {
-        lock.lock(); let first = !finished; finished = true; lock.unlock()
-        if first { body() }
     }
 }
