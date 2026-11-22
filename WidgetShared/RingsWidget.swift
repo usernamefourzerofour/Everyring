@@ -8,8 +8,9 @@ struct RingsWidget: Widget {
         AppIntentConfiguration(kind: "RingsWidget", intent: SelectRingSetIntent.self, provider: RingsProvider()) { entry in
             RingsWidgetView(entry: entry)
         }
-        .configurationDisplayName("Rings")
-        .description("A ring set at a glance.")
+        // Named like Heart Minutes' complications: the app, then what it shows.
+        .configurationDisplayName("Everyring – rings")
+        .description("The rings of a ring set fill towards their goals and keep going past 100 %.")
         .supportedFamilies(Self.families)
         // The small widget's rings use almost the whole widget; other sizes add the usual margins themselves.
         .contentMarginsDisabled()
@@ -65,12 +66,12 @@ struct RingsProvider: AppIntentTimelineProvider {
         let sets = RingStore.load()?.sets ?? []
         guard !sets.isEmpty else {
             return [AppIntentRecommendation(intent: SelectRingSetIntent(),
-                                            description: Text("Rings: open Everyring on iPhone and watch"))]
+                                            description: Text("Everyring – open on iPhone and watch"))]
         }
         return sets.map { set in
             let intent = SelectRingSetIntent()
             intent.ringSet = RingSetEntity(set)
-            return AppIntentRecommendation(intent: intent, description: Text(set.name))
+            return AppIntentRecommendation(intent: intent, description: Text("Everyring – \(set.name)"))
         }
     }
 
