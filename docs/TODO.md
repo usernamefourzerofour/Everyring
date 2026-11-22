@@ -40,6 +40,9 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 
 ## Before the App Store
 
+- **Heart Minutes is one of the headline features** in the App Store listing and marketing: minutes in the moderate
+  and vigorous heart-rate zones (AHA: 150 min a week), calculated from heart rate with the background-activity
+  filter, on any ring and in the Ring and Chart widget. Name it early in the description and show it in a screenshot.
 - **Feature "When closed: fade / hide" in the App Store listing.** Erik loves it. Make it part of the pitch, with the idea
   behind it: *you should only be shown the data you need to act on.* Rings you've already closed step back, so a
   glance at the widget shows what's left to do today. Use it in the subtitle or first lines of the description and in
