@@ -108,10 +108,11 @@ struct RingChartProvider: AppIntentTimelineProvider {
         let library = RingStore.load()
         let calendar = library?.calendar() ?? .current
         let pairs = (library?.sets ?? []).flatMap { set in set.rings.map { (set, $0) } }
-        guard let (set, ring) = pairs.first(where: { $0.1.id == configuration.ring?.id }) ?? pairs.first else {
+        guard let pair = pairs.first(where: { $0.1.id == configuration.ring?.id }) ?? pairs.first else {
             return RingChartEntry(date: date, ring: nil, setID: nil, value: 0, points: [],
                                   chart: DateInterval(start: date, duration: 86_400), calendar: calendar)
         }
+        let (set, ring) = pair
         let cache = ProgressCache.load()
         return RingChartEntry(date: date, ring: ring, setID: set.id,
                               value: cache.value(for: ring, at: date, calendar: calendar),
@@ -259,7 +260,8 @@ private struct RingWidgetChart: View {
                 .foregroundStyle(ring.isLimit ? RingDisplay.warningGradient.end : Color.gray)
                 .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                 .annotation(position: compact ? .bottom : .top, alignment: .leading, spacing: 1) {
-                    Text(ring.isLimit ? "Limit \(ring.formatValue(ring.goal))" : "Goal \(ring.formatValue(ring.goal))")
+                    Text(ring.isLimit ? LocalizedStringKey("Limit \(ring.formatValue(ring.goal))")
+                                      : LocalizedStringKey("Goal \(ring.formatValue(ring.goal))"))
                         .font(.system(size: compact ? 8 : 9, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
