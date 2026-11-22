@@ -62,7 +62,7 @@ struct ToneRing: View {
                         if drawsBadge {
                             // A red ! on a white disc where you went too far, in place of the white dot.
                             let angle = (pos * 2 - 0.5) * .pi
-                            WarningBadge(size: lineWidth * 1.2, fullColor: fullColor)
+                            WarningBadge(size: lineWidth, fullColor: fullColor)
                                 .position(x: geo.size.width / 2 + radius * cos(angle),
                                           y: geo.size.height / 2 + radius * sin(angle))
                                 .accessibilityHidden(true)

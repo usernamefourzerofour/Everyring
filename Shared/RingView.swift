@@ -156,24 +156,14 @@ struct RingStackView: View {
                         ToneRing(light: ring.end, deep: ring.start, fraction: ring.fraction, lineWidth: lw,
                                  // In one colour, neighbouring rings alternate strong and softer to tell them apart.
                                  emphasis: index.isMultiple(of: 2) ? 1 : 0.72,
+                                 // Past a limit the tip is a red !, under the label where they meet.
                                  warning: ring.warning,
-                                 // With a label the ! is drawn above it, below.
-                                 drawsBadge: !showsLabels,
                                  // The tip's dot stays behind the label: not drawn where the text is.
                                  dotHiddenUntil: showsLabels
                                     ? RingStartLabel(ring: ring, radius: radius, lineWidth: lw).span : 0)
                             .frame(width: (radius + lw / 2) * 2, height: (radius + lw / 2) * 2)
                         if showsLabels {
                             RingStartLabel(ring: ring, radius: radius, lineWidth: lw, monochrome: monochrome)
-                            // Past a limit: the tip is always the red !, on top of the label where they meet.
-                            if ring.warning {
-                                let f = max(0, ring.fraction)
-                                let tip = f > 1 ? f - (f - 0.0005).rounded(.down) : f
-                                let angle = (tip * 2 - 0.5) * .pi
-                                WarningBadge(size: lw * 1.2, fullColor: !monochrome)
-                                    .offset(x: radius * cos(angle), y: radius * sin(angle))
-                                    .accessibilityHidden(true)
-                            }
                         }
                     }
                     // In one colour the label is cut out of the ring (see RingStartLabel), within this ring only.
