@@ -71,6 +71,11 @@ struct ScreenTimeLog: Codable, Hashable, Sendable {
 
     // MARK: Reading
 
+    /// The first day the monitor recorded anything for `ring`: before it, there is no data (not zero).
+    func firstDay(ring: UUID, calendar: Calendar) -> Date? {
+        rings[ring]?.first.map { calendar.startOfDay(for: $0.t) }
+    }
+
     /// Minutes per day (keyed by start of day): the highest reading of each day.
     func daily(ring: UUID, calendar: Calendar) -> [Date: Double] {
         (rings[ring] ?? []).reduce(into: [:]) { result, reading in

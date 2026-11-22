@@ -227,7 +227,12 @@ extension Ring {
 
     /// The value the ring shows for `interval`, from values per day (keyed by start of day).
     func measure(daily: [Date: Double], in interval: DateInterval, now: Date, calendar: Calendar) -> Double {
-        let days = countedDays(in: interval, now: now, calendar: calendar)
+        var days = countedDays(in: interval, now: now, calendar: calendar)
+        // Screen Time is only recorded from when the ring was made: the days before have no data, so they don't
+        // count (as 0) in an average or a count of days.
+        if metric == .screenTime, let first = ScreenTimeLog.load().firstDay(ring: id, calendar: calendar) {
+            days = days.filter { $0 >= first }
+        }
         let values = days.map { daily[$0] ?? 0 }
         if isDaysReaching {
             let today = calendar.startOfDay(for: now)
