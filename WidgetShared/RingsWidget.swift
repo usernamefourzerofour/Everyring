@@ -64,7 +64,8 @@ struct RingsProvider: AppIntentTimelineProvider {
     func recommendations() -> [AppIntentRecommendation<SelectRingSetIntent>] {
         let sets = RingStore.load()?.sets ?? []
         guard !sets.isEmpty else {
-            return [AppIntentRecommendation(intent: SelectRingSetIntent(), description: Text("Rings"))]
+            return [AppIntentRecommendation(intent: SelectRingSetIntent(),
+                                            description: Text("Rings: open Everyring on iPhone and watch"))]
         }
         return sets.map { set in
             let intent = SelectRingSetIntent()
@@ -137,12 +138,21 @@ struct RingsWidgetView: View {
         }
     }
 
+    /// Ring sets reach the watch from the iPhone, so there both apps must have been opened.
+    private var emptyText: Text {
+        #if os(watchOS)
+        Text("Open Everyring on iPhone and watch.")
+        #else
+        Text("Open Everyring to add rings.")
+        #endif
+    }
+
     private var empty: some View {
         VStack(spacing: 6) {
             Image(systemName: "circle.circle")
                 .font(.title2)
             if family != .accessoryCircular && family != .accessoryInline {
-                Text("Open Everyring to add rings.")
+                emptyText
                     .font(.caption)
                     .multilineTextAlignment(.center)
             }

@@ -10,8 +10,10 @@ struct WatchHomeView: View {
         NavigationStack {
             Group {
                 if model.library.sets.isEmpty {
-                    ContentUnavailableView("No rings yet", systemImage: "iphone",
-                                           description: Text("Set up your rings in Everyring on your iPhone."))
+                    ScrollView {
+                        ContentUnavailableView("No rings yet", systemImage: "iphone",
+                                               description: Text("Set up your rings in Everyring on your iPhone, then open Everyring on your iPhone and on this watch, close to each other. Your ring sets and complications appear here once they arrive."))
+                    }
                 } else {
                     TabView(selection: $selectedSet) {
                         ForEach(model.library.sets) { set in
@@ -57,6 +59,9 @@ struct WatchSetPage: View {
                         WatchRingRow(ring: ring, value: model.value(for: ring))
                     }
                 }
+
+                SyncHint()
+                    .padding(.top, 6)
             }
         }
         .navigationTitle(set.name)
@@ -143,5 +148,19 @@ struct WatchRingDetail: View {
 extension RingsModel {
     func accessibilityText(for ring: Ring) -> String {
         ring.accessibilityText(value(for: ring), calendar: calendar)
+    }
+}
+
+/// Ring sets come from the iPhone: say what to do when one (or a complication for it) is missing.
+struct SyncHint: View {
+    var body: some View {
+        Label {
+            Text("Missing a ring set or complication? Open Everyring on your iPhone and on this watch, close to each other.")
+        } icon: {
+            Image(systemName: "arrow.triangle.2.circlepath")
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
