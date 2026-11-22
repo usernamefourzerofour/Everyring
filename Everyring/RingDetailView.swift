@@ -465,7 +465,7 @@ extension Ring {
     }
 
     /// The Screen Time filter for this ring's apps over `interval`, day by day or hour by hour.
-    func screenTimeFilter(_ interval: DateInterval, hourly: Bool) -> DeviceActivityFilter {
+    @MainActor func screenTimeFilter(_ interval: DateInterval, hourly: Bool) -> DeviceActivityFilter {
         let selection = ScreenTimeManager.selection(of: self)
         return DeviceActivityFilter(
             segment: hourly ? .hourly(during: interval) : .daily(during: interval),

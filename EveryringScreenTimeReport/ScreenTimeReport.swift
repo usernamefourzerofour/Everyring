@@ -267,7 +267,6 @@ struct DayRing: View {
         .frame(width: 36, height: 36)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(day, format: .dateTime.day().month()) + Text(verbatim: ", ")
-                            + Text(duration(minutes ?? 0)))
+        .accessibilityLabel(Text("\(day.formatted(.dateTime.day().month())), \(duration(minutes ?? 0))"))
     }
 }
