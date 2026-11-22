@@ -68,15 +68,17 @@ struct RingDetailView: View {
                         let interval = past?.interval ?? ring.period.interval(now: .now, calendar: model.calendar)
                         if let pace = DailyPace.make(for: ring, value: shown, interval: interval, now: .now,
                                                      calendar: model.calendar) {
-                            Text("≈ \(ring.metric.format(pace.average)) per day")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            if let left = pace.perDayLeft {
-                                Text(ring.isLimit
-                                     ? LocalizedStringKey("\(ring.metric.format(left)) per day left within your limit")
-                                     : LocalizedStringKey("\(ring.metric.format(left)) per day to reach your goal"))
+                            // A daily average under one ("≈ 0 workouts per day") says nothing: leave it out.
+                            if ring.metric.number(pace.average) != ring.metric.number(0) {
+                                Text("≈ \(ring.metric.format(pace.average)) per day")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let text = paceText(pace, ring: ring) {
+                                Text(text)
                                     .font(.subheadline)
                                     .foregroundStyle(ring.accent)
+                                    .multilineTextAlignment(.center)
                             }
                         }
                     }
@@ -307,7 +309,16 @@ struct ProgressChartCard: View {
             }
             return String(localized: "Your total over the window, day by day.")
         }
-        let difference = ring.formatValue(abs(total - pace))
+        if !ring.isLimit && ring.isMet(total) {
+            return String(localized: "Goal reached.")
+        }
+        // Counts of things (workouts, days) are whole: "behind by 0.9 workouts" reads as 1 workout.
+        let wholes = ring.metric.baseUnit == .count || ring.isDaysReaching
+        let gap = wholes ? abs(total - pace).rounded() : abs(total - pace)
+        if wholes ? gap == 0 : ring.metric.number(gap) == ring.metric.number(0) {
+            return String(localized: "Right on an even pace.")
+        }
+        let difference = ring.formatValue(gap)
         if ring.isLimit {
             return total <= pace
                 ? String(localized: "Under an even pace for your limit by \(difference).")
@@ -395,6 +406,23 @@ private struct StreakNumber: View {
 }
 
 // MARK: History
+
+/// What is left to do in the rest of the period: today only on its last day, the total when it's less than one a day
+/// (one more workout in 3 days), otherwise per day.
+private func paceText(_ pace: DailyPace, ring: Ring) -> String? {
+    guard let left = pace.perDayLeft, let remaining = pace.remaining else { return nil }
+    let total = ring.metric.format(remaining)
+    if pace.daysLeft == 1 {
+        return ring.isLimit ? String(localized: "\(total) left today within your limit")
+                            : String(localized: "\(total) more today to reach your goal")
+    }
+    if ring.metric.number(left) == ring.metric.number(0) || ring.metric.baseUnit == .count && left < 1 {
+        return ring.isLimit ? String(localized: "\(total) left in the last \(pace.daysLeft) days")
+                            : String(localized: "\(total) more in the last \(pace.daysLeft) days to reach your goal")
+    }
+    return ring.isLimit ? String(localized: "\(ring.metric.format(left)) per day left within your limit")
+                        : String(localized: "\(ring.metric.format(left)) per day to reach your goal")
+}
 
 private struct PageKey: Hashable {
     var ring: Ring

@@ -105,11 +105,11 @@ enum QuantityKind: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// What counts are called ("pushes", "strokes"), for count metrics.
-    var countNoun: String? {
+    /// What counts are called ("pushes", "strokes"; "push" for one), for count metrics.
+    func countNoun(singular: Bool = false) -> String? {
         switch self {
-        case .wheelchairPushes: String(localized: "pushes")
-        case .swimmingStrokes: String(localized: "strokes")
+        case .wheelchairPushes: singular ? String(localized: "push") : String(localized: "pushes")
+        case .swimmingStrokes: singular ? String(localized: "stroke") : String(localized: "strokes")
         default: nil
         }
     }

@@ -107,6 +107,8 @@ struct DailyPace: Hashable, Sendable {
     /// Per remaining day: what is still needed to reach the goal, or (for a limit) what is left of it. `nil` when
     /// the goal is already reached or the limit already exceeded, or with no days left.
     var perDayLeft: Double?
+    /// What is still needed to reach the goal (or left of a limit) in the rest of the period; `nil` like `perDayLeft`.
+    var remaining: Double?
 
     /// `nil` for one-day periods, where the average is the value itself.
     static func make(for ring: Ring, value: Double, interval: DateInterval, now: Date,
@@ -125,6 +127,7 @@ struct DailyPace: Hashable, Sendable {
         let remaining = ring.goal - value
         if daysLeft > 0, remaining > 0 {
             pace.perDayLeft = remaining / Double(daysLeft)
+            pace.remaining = remaining
         }
         return pace
     }

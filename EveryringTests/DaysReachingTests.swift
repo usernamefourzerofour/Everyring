@@ -201,3 +201,26 @@ struct ActivitySplitTests {
         #expect(ActivitySplit(total: 10, duringWorkouts: 10.2).workoutShare == 1)
     }
 }
+
+struct PaceTextTests {
+    let us = Locale(identifier: "en_US")
+
+    @Test func oneIsSingular() {
+        #expect(HealthMetric.workouts(.count, kind: nil).format(1, locale: us) == "1 workout")
+        #expect(HealthMetric.workouts(.count, kind: nil).format(2, locale: us) == "2 workouts")
+        #expect(HealthMetric.steps.format(1, locale: us) == "1 step")
+        #expect(HealthMetric.workouts(.count, kind: nil).formatProgress(0, goal: 1, locale: us) == "0 of 1 workout")
+    }
+
+    @Test func lastDayNeedsWhatIsLeft() {
+        let cph = makeCalendar()
+        // Sunday afternoon: the last day of a Monday–Sunday week.
+        let now = date(2026, 11, 22, 9, 43, in: cph)
+        let ring = Ring(name: "Workouts", color: .indigo, symbol: "dumbbell", metric: .workouts(.count, kind: nil),
+                        goal: 3, period: .thisWeek)
+        let week = ring.period.interval(now: now, calendar: cph)
+        let pace = DailyPace.make(for: ring, value: 2, interval: week, now: now, calendar: cph)
+        #expect(pace?.daysLeft == 1)
+        #expect(pace?.remaining == 1)
+    }
+}

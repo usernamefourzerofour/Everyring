@@ -174,11 +174,11 @@ enum SensitiveKind: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    var countNoun: String {
+    func countNoun(singular: Bool = false) -> String {
         switch self {
-        case .menstrualFlow: String(localized: "days")
-        case .inhalerUsage: String(localized: "puffs")
-        default: String(localized: "times")
+        case .menstrualFlow: singular ? String(localized: "day") : String(localized: "days")
+        case .inhalerUsage: singular ? String(localized: "puff") : String(localized: "puffs")
+        default: singular ? String(localized: "time") : String(localized: "times")
         }
     }
 }

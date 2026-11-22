@@ -85,5 +85,8 @@ enum NutrientKind: String, Codable, CaseIterable, Sendable {
     var category: HealthMetric.Category { info.category }
     var symbol: String { info.symbol }
     var defaultGoalKind: GoalKind { info.isLimit ? .limit : .reach }
-    var countNoun: String? { self == .alcoholicBeverages ? String(localized: "drinks") : nil }
+    func countNoun(singular: Bool = false) -> String? {
+        guard self == .alcoholicBeverages else { return nil }
+        return singular ? String(localized: "drink") : String(localized: "drinks")
+    }
 }

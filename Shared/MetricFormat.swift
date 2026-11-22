@@ -87,8 +87,8 @@ extension HealthMetric {
             .formatted(.number.precision(.fractionLength(digits)).locale(locale))
     }
 
-    /// The unit's name, e.g. "km", "kilometers", "steps", "min".
-    func unitName(style: UnitStyle = .short, locale: Locale = .current) -> String {
+    /// The unit's name, e.g. "km", "kilometers", "steps", "min"; "step", "workout" for exactly one (`singular`).
+    func unitName(style: UnitStyle = .short, locale: Locale = .current, singular: Bool = false) -> String {
         if let unit = displayUnit(locale: locale) {
             let formatter = MeasurementFormatter()
             formatter.locale = locale
@@ -97,26 +97,36 @@ extension HealthMetric {
         }
         switch baseUnit {
         case .minutes: return style == .wide ? String(localized: "minutes") : String(localized: "min")
-        case .hours: return style == .wide ? String(localized: "hours") : String(localized: "hr")
+        case .hours:
+            if style == .wide { return singular ? String(localized: "hour") : String(localized: "hours") }
+            return String(localized: "hr")
         default:
+            let times = singular ? String(localized: "time") : String(localized: "times")
             switch self {
-            case .steps: return String(localized: "steps")
-            case .flightsClimbed: return String(localized: "flights")
-            case .quantity(let kind): return kind.countNoun ?? String(localized: "times")
-            case .nutrient(let kind): return kind.countNoun ?? String(localized: "times")
-            case .events: return String(localized: "times")
+            case .steps: return singular ? String(localized: "step") : String(localized: "steps")
+            case .flightsClimbed: return singular ? String(localized: "flight") : String(localized: "flights")
+            case .quantity(let kind): return kind.countNoun(singular: singular) ?? times
+            case .nutrient(let kind): return kind.countNoun(singular: singular) ?? times
+            case .events: return times
             case .sensitive(let kind):
-                return kind.baseUnit == .internationalUnits ? String(localized: "IU") : kind.countNoun
-            default: return String(localized: "workouts")
+                return kind.baseUnit == .internationalUnits ? String(localized: "IU") : kind.countNoun(singular: singular)
+            default: return singular ? String(localized: "workout") : String(localized: "workouts")
             }
         }
+    }
+
+    /// "1 step", "2 steps": a number with its count noun.
+    private func counted(_ value: Double, style: UnitStyle, locale: Locale) -> String {
+        let text = number(value, locale: locale)
+        let one = 1.formatted(.number.locale(locale))
+        return String(localized: "\(text) \(unitName(style: style, locale: locale, singular: text == one))")
     }
 
     /// E.g. "6,512 steps", "14.2 km", "512 kcal", "45 min", "7 hr 30 min", "1.5 L".
     func format(_ value: Double, style: UnitStyle = .short, locale: Locale = .current) -> String {
         switch baseUnit {
         case .count, .internationalUnits:
-            return String(localized: "\(number(value, locale: locale)) \(unitName(style: style, locale: locale))")
+            return counted(value, style: style, locale: locale)
         case .meters, .kilocalories, .liters, .grams, .milligrams, .micrograms:
             let unit = displayUnit(locale: locale)!
             let digits = fractionDigits(locale: locale)
@@ -125,7 +135,7 @@ extension HealthMetric {
                                         numberFormatStyle: .number.precision(.fractionLength(digits)))
                     .locale(locale))
         case .hours where isCountOfHours:
-            return String(localized: "\(number(value, locale: locale)) \(unitName(style: style, locale: locale))")
+            return counted(value, style: style, locale: locale)
         case .minutes, .hours:
             let seconds = (baseUnit == .hours ? value * 3600 : value * 60).rounded(.down)
             let allowed: Set<Duration.UnitsFormatStyle.Unit> =
