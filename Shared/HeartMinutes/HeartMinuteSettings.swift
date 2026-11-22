@@ -1,6 +1,8 @@
 import Foundation
 
-/// How Heart Minutes are calculated: the same settings and defaults as the Heart Minutes app. Part of the ring library,
+/// How Heart Minutes are calculated: the same settings and defaults as the Heart Minutes app (2 AHA zones, max heart
+/// rate 220 − age, "active, Exercise ring and short pauses" with 5 min pauses, 5 min longest gap, first–last in
+/// workouts, straight line between measurements). Part of the ring library,
 /// so the watch calculates the same way.
 struct HeartMinuteSettings: Codable, Hashable, Sendable {
     var zoneModel: ZoneModel = .two

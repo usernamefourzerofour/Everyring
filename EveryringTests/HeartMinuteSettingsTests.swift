@@ -13,6 +13,9 @@ struct HeartMinuteSettingsTests {
         let config = settings.config
         #expect(config.requireActive && config.activitySource == .either && config.activeBridge == 300)
         #expect(config.maxGap == 300 && config.fillWorkoutGaps)
+        #expect(settings.workoutGaps == .betweenMeasurements && settings.interpolation == .linear)
+        #expect(settings.maxHRSource == .age && settings.manualMaxHR == 180)
+        #expect(settings.zones.percents == [0, 0.5, 0.7] && settings.zones.weights == [0, 1, 2])
     }
 
     @Test func activityModesMapLikeHeartMinutes() {
@@ -61,7 +64,11 @@ struct HeartMinuteSettingsTests {
 
     @Test func heartMinutesMetric() {
         #expect(HealthMetric.heartMinutes.title == "Heart Minutes")
-        #expect(HealthMetric.heartMinutes.suggestedGoal(for: .rollingDays(7), locale: Locale(identifier: "da_DK")) == 150)
+        // As in the Heart Minutes app: 150 min this week.
+        #expect(HealthMetric.heartMinutes.defaultPeriod == .thisWeek)
+        #expect(HealthMetric.heartMinutes.suggestedGoal(for: .thisWeek, locale: Locale(identifier: "da_DK")) == 150)
+        let ring = Ring.new(metric: .heartMinutes)
+        #expect(ring.goal == 150 && ring.period == .thisWeek && ring.activity == .all)
         #expect(HealthMetric.heartMinutes.supportsWorkoutLeaveOut)
     }
 }

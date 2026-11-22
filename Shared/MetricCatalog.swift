@@ -85,7 +85,9 @@ extension HealthMetric {
     var defaultPeriod: RingPeriod {
         switch self {
         case .steps, .activeEnergy, .standHours, .flightsClimbed, .timeInDaylight, .water: .today
-        case .exerciseMinutes, .heartMinutes, .sleep, .sleepStage: .rollingDays(7)
+        case .exerciseMinutes, .sleep, .sleepStage: .rollingDays(7)
+        // As in the Heart Minutes app: the whole current week.
+        case .heartMinutes: .thisWeek
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance, .workouts, .mindfulMinutes:
             .thisWeek
         case .quantity(let kind): kind.defaultPeriod
