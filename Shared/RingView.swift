@@ -193,8 +193,8 @@ struct RingStartLabel: View {
     var ring: RingDisplay
     let radius: CGFloat
     let lineWidth: CGFloat
-    /// One-colour widgets: on the filled arc the text is cut out of the ring (the background shows through), since
-    /// white on a tinted white ring can't be read.
+    /// One-colour widgets (tinted and clear): on the filled arc a gap is cut out of the ring around the text and the
+    /// text drawn in white inside it, since white on a tinted white ring can't be read.
     var monochrome = false
 
     /// One glyph on the ring: a symbol or a character, with roughly how much arc it takes.
@@ -214,23 +214,24 @@ struct RingStartLabel: View {
         // too light for the ring's own colour, e.g. yellow).
         let filledUnder = ring.fraction * 2 * .pi >= end
         ZStack {
-            ForEach(glyphs) { glyph in
-                Group {
-                    if let symbol = glyph.symbol {
-                        Image(systemName: symbol)
-                            .font(.system(size: size * 0.9, weight: .bold))
-                    } else {
-                        Text(glyph.text)
-                            .font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
-                    }
+            if monochrome && filledUnder {
+                // One colour (tinted and clear): a gap is cut out of the ring around the text, then the text is
+                // drawn in white inside it. The gap keeps white text apart from a white-tinted ring, and on a clear
+                // (glass) widget the white text stays solid where the ring itself is faint.
+                let offsets = Self.haloOffsets(size: size)
+                ForEach(offsets.indices, id: \.self) { i in
+                    glyphLayer(glyphs, size: size, weight: .heavy)
+                        .offset(x: offsets[i].width, y: offsets[i].height)
                 }
-                .fixedSize()
-                .offset(y: -radius)
-                .rotationEffect(.radians(glyph.angle))
+                .foregroundStyle(Color.white)
+                .blendMode(.destinationOut)
+                glyphLayer(glyphs, size: size, weight: .bold)
+                    .foregroundStyle(Color.white)
+            } else {
+                glyphLayer(glyphs, size: size, weight: .bold)
+                    .foregroundStyle(filledUnder || monochrome ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
             }
         }
-        .foregroundStyle(filledUnder || monochrome ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
-        .blendMode(monochrome && filledUnder ? .destinationOut : .normal)
         .accessibilityHidden(true)
     }
 
@@ -243,6 +244,34 @@ struct RingStartLabel: View {
         var plain = self
         plain.ring.warning = false
         return tip <= plain.span ? "exclamationmark.circle.fill" : ring.symbol
+    }
+
+    private func glyphLayer(_ glyphs: [Glyph], size: CGFloat, weight: Font.Weight) -> some View {
+        ZStack {
+            ForEach(glyphs) { glyph in
+                Group {
+                    if let symbol = glyph.symbol {
+                        Image(systemName: symbol)
+                            .font(.system(size: size * 0.9, weight: weight))
+                    } else {
+                        Text(glyph.text)
+                            .font(.system(size: size, weight: weight, design: .rounded).monospacedDigit())
+                    }
+                }
+                .fixedSize()
+                .offset(y: -radius)
+                .rotationEffect(.radians(glyph.angle))
+            }
+        }
+    }
+
+    /// Small shifts all round, so the cut-out gap is a little wider than the text itself.
+    private static func haloOffsets(size: CGFloat) -> [CGSize] {
+        let d = max(0.8, size * 0.09)
+        return [CGSize(width: -d, height: 0), CGSize(width: d, height: 0), CGSize(width: 0, height: -d),
+                CGSize(width: 0, height: d), CGSize(width: -d * 0.7, height: -d * 0.7),
+                CGSize(width: d * 0.7, height: -d * 0.7), CGSize(width: -d * 0.7, height: d * 0.7),
+                CGSize(width: d * 0.7, height: d * 0.7)]
     }
 
     /// How far round the ring the label reaches, as a fraction of a lap (with a little room after it).
