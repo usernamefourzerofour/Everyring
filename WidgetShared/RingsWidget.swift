@@ -233,7 +233,7 @@ struct RingsWidgetView: View {
 
     private var rectangular: some View {
         HStack(spacing: 8) {
-            RingStackView(rings: entry.displays, trackOpacity: 0.3)
+            RingStackView(rings: entry.displays)
                 .widgetAccentable()
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(entry.items.filter { !$0.isHidden }.prefix(3)) { item in

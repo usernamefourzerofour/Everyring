@@ -16,6 +16,8 @@ struct ToneRing: View {
     /// Fraction of the goal; past 1 the ring goes round again.
     let fraction: Double
     let lineWidth: CGFloat
+    /// How strong the ring is in one colour (neighbouring rings alternate).
+    var emphasis = 1.0
 
     /// Pieces per lap: enough that the steps in colour can't be seen.
     private static let piecesPerLap = 160.0
@@ -46,7 +48,7 @@ struct ToneRing: View {
                     if fullColor {
                         progress(f: f, laps: laps, pos: pos)
                     } else {
-                        Rectangle().fill(Color.white)
+                        Rectangle().fill(Color.white.opacity(emphasis))
                             .mask(progress(f: f, laps: laps, pos: pos).luminanceToAlpha())
                             .widgetAccentable()
                     }
@@ -130,21 +132,8 @@ struct ToneRingStack: View {
                         .lineLimit(1)
                         .frame(width: diameter * 0.62)
                 } else {
-                    let lw = RingStackView.lineWidth(diameter: diameter, count: shown.count)
-                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, ring in
-                        let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + RingStackView.gapUnits)
-                        let (deep, light) = colours(ring)
-                        ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: lw)
-                            .frame(width: (radius + lw / 2) * 2, height: (radius + lw / 2) * 2)
-                            .saturation(ring.faded ? 0.15 : 1)
-                            .opacity(ring.faded ? 0.3 : 1)
-                    }
-                }
-                // Every ring closed and hidden: a quiet check in their place.
-                if !rings.isEmpty && shown.isEmpty {
-                    Image(systemName: "checkmark.circle")
-                        .font(.system(size: diameter * 0.35, weight: .light))
-                        .widgetAccentable()
+                    // Several rings (or every ring hidden: a check in their place).
+                    RingStackView(rings: rings)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

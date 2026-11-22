@@ -4,7 +4,10 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 
 ## Next
 
-- **Top priority: make the direction of ring progress clear.** Start each ring with a lighter colour at 12 o’clock and build to the strongest colour at the moving tip. Keep the tip visible where the ends overlap. Check the 98% sleep-ring example, exactly 100%, and rings beyond one full lap.
+- **Direction of ring progress: done (build 19), check on devices.** Every ring is drawn as in Heart Minutes
+  (`Shared/ToneRing.swift`): light at 12 o’clock building to deep at the tip, a white dot at the tip, a dark track,
+  laps past 100 % on top of the previous lap. Check the 98% sleep-ring example, exactly 100%, beyond one lap, and
+  tinted/clear widgets.
 
 - **High priority (Erik will use it): Screen Time rings — switched on.** Apple approved **Family Controls
   (Distribution)** on 22 Nov 2026. The code (metric `.screenTime`, app/category picker, `ScreenTimeManager`, the

@@ -113,12 +113,10 @@ extension Ring {
 /// small widget or a complication.
 struct RingStackView: View {
     var rings: [RingDisplay]
-    /// Background track opacity.
-    var trackOpacity = 0.18
     /// Each ring's icon and percentage written on the ring at its start (small widget).
     var showsLabels = false
     /// Tinted and clear Home Screens, Lock Screen and watch faces draw widgets in one colour: then the rings are drawn
-    /// for that (see `SingleRing.monochrome`).
+    /// for that (see `ToneRing`).
     @Environment(\.widgetRenderingMode) private var renderingMode
 
     /// Free space in the middle, in ring widths, by ring count.
@@ -151,12 +149,13 @@ struct RingStackView: View {
                     let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + Self.gapUnits)
                     let monochrome = renderingMode != .fullColor
                     ZStack {
-                        SingleRing(start: ring.start, end: ring.end, fraction: ring.fraction, lineWidth: lw,
-                                   trackOpacity: trackOpacity,
-                                   warning: ring.warning, monochrome: monochrome,
-                                   // In one colour, neighbouring rings alternate strong and softer to tell them apart.
-                                   emphasis: index.isMultiple(of: 2) ? 1 : 0.72)
-                            .frame(width: radius * 2, height: radius * 2)
+                        // Drawn as in Heart Minutes: light at the start building to deep at the tip, a white dot
+                        // where you have reached (see ToneRing).
+                        let (deep, light) = ring.warning ? RingDisplay.warningGradient : (ring.start, ring.end)
+                        ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: lw,
+                                 // In one colour, neighbouring rings alternate strong and softer to tell them apart.
+                                 emphasis: index.isMultiple(of: 2) ? 1 : 0.72)
+                            .frame(width: (radius + lw / 2) * 2, height: (radius + lw / 2) * 2)
                         if showsLabels {
                             RingStartLabel(ring: ring, radius: radius, lineWidth: lw, monochrome: monochrome)
                         }
@@ -270,85 +269,6 @@ struct RingStartLabel: View {
     private static func symbolWidth(_ name: String, size: CGFloat) -> CGFloat {
         let config = UIImage.SymbolConfiguration(pointSize: size, weight: .bold)
         return UIImage(systemName: name, withConfiguration: config)?.size.width ?? size
-    }
-}
-
-/// One ring: a track, a gradient arc with round caps, and past 100 % a full lap plus the end cap with a shadow over the
-/// ring's start, like a ring that wraps around itself.
-struct SingleRing: View {
-    var start: Color
-    var end: Color
-    var fraction: Double
-    var lineWidth: CGFloat
-    var trackOpacity = 0.18
-    var warning = false
-    /// Drawn for a one-colour widget (tinted or clear Home Screen, Lock Screen, watch face): a white arc that iOS
-    /// tints (the accented part), a faint track, no gradient or shadow.
-    var monochrome = false
-    /// How strong the arc is in one colour (neighbouring rings alternate).
-    var emphasis = 1.0
-
-    var body: some View {
-        if monochrome { monochromeBody } else { colourBody }
-    }
-
-    private var monochromeBody: some View {
-        let f = max(0, fraction)
-        return ZStack {
-            Circle()
-                .stroke(Color.white.opacity(0.22), lineWidth: lineWidth)
-            if f > 0 {
-                Circle()
-                    .trim(from: 0, to: min(f, 1))
-                    .stroke(Color.white.opacity(emphasis), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .widgetAccentable()
-            }
-        }
-    }
-
-    @ViewBuilder private var colourBody: some View {
-        let (start, end) = warning ? RingDisplay.warningGradient : (self.start, self.end)
-        let f = max(0, fraction)
-        let wraps = f > 1
-        // Position of the ring end within its last lap.
-        let tip = wraps ? (f.truncatingRemainder(dividingBy: 1) == 0 ? 1 : f.truncatingRemainder(dividingBy: 1)) : f
-        GeometryReader { geo in
-            let radius = min(geo.size.width, geo.size.height) / 2
-            ZStack {
-                Circle()
-                    .stroke(end.opacity(trackOpacity), lineWidth: lineWidth)
-
-                if wraps {
-                    // A whole lap whose gradient ends at the tip.
-                    Circle()
-                        .stroke(AngularGradient(colors: [start, end], center: .center,
-                                                startAngle: .degrees(360 * tip - 360), endAngle: .degrees(360 * tip)),
-                                lineWidth: lineWidth)
-                        .rotationEffect(.degrees(-90))
-                    // End cap with a shadow falling on the ring behind it.
-                    Circle()
-                        .fill(end)
-                        .frame(width: lineWidth, height: lineWidth)
-                        .shadow(color: .black.opacity(0.35), radius: lineWidth * 0.18, x: 0, y: 0)
-                        .offset(y: -radius)
-                        .rotationEffect(.degrees(360 * tip))
-                } else if f > 0 {
-                    Circle()
-                        .trim(from: 0, to: f)
-                        .stroke(AngularGradient(colors: [start, end], center: .center,
-                                                startAngle: .degrees(0), endAngle: .degrees(360 * max(f, 0.001))),
-                                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    // The arc's round start cap would take the end colour from the gradient; cover it.
-                    Circle()
-                        .fill(start)
-                        .frame(width: lineWidth, height: lineWidth)
-                        .offset(y: -radius)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
     }
 }
 
