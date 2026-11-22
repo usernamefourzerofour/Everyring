@@ -281,7 +281,7 @@ enum ActivityScope: String, Codable, CaseIterable, Sendable {
     case all
     /// Only what was logged while a workout ran.
     case duringWorkouts
-    /// Only everyday activity: everything except what was logged during workouts.
+    /// Only background activity: everything except what was logged during workouts.
     case outsideWorkouts
 }
 
@@ -343,7 +343,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var customDays: [Int] = []
     /// Activity metrics: leave out what was logged during workouts of these kinds (empty: leave out nothing).
     var leftOutWorkouts: [WorkoutKind] = []
-    /// Activity metrics: everything, only what was logged during workouts, or only everyday activity.
+    /// Activity metrics: everything, only what was logged during workouts, or only background activity.
     var activity: ActivityScope = .all
     /// Only data from these apps and devices (bundle identifiers; empty: all sources).
     var sources: [String] = []

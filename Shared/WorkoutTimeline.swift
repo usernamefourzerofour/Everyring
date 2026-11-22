@@ -56,7 +56,7 @@ extension DemoHistory {
     }
 }
 
-/// How much of an activity metric over a period was logged during workouts and how much in everyday life.
+/// How much of an activity metric over a period was logged during workouts and how much in background activity.
 struct ActivitySplit: Hashable, Sendable {
     /// The whole period's value, in the metric's base unit.
     var total: Double = 0
@@ -64,7 +64,7 @@ struct ActivitySplit: Hashable, Sendable {
     var duringWorkouts: Double = 0
 
     /// What was logged outside workouts: walking around, taking the stairs, cycling to work.
-    var everyday: Double { max(0, total - duringWorkouts) }
+    var background: Double { max(0, total - duringWorkouts) }
     /// The share from workouts, 0–1 (0 when nothing was logged).
     var workoutShare: Double { total > 0 ? min(1, duringWorkouts / total) : 0 }
 }

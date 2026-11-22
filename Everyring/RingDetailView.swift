@@ -829,7 +829,7 @@ struct WorkoutLogCard: View {
                             .font(.subheadline.weight(.semibold))
                             .tint(ring.accent)
                     }
-                    Text("\(ring.metric.title) logged while each workout ran. The rest comes from everyday activity.")
+                    Text("\(ring.metric.title) logged while each workout ran. The rest comes from background activity.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -1190,7 +1190,7 @@ private struct WorkoutTimelineView: View {
 
 }
 
-/// How much of the period came from workouts and how much from everyday activity, as a split bar with both amounts.
+/// How much of the period came from workouts and how much from background activity, as a split bar with both amounts.
 private struct ActivitySplitView: View {
     let ring: Ring
     let split: ActivitySplit
@@ -1212,12 +1212,12 @@ private struct ActivitySplitView: View {
             HStack(alignment: .top) {
                 part(color: ring.accent, title: "From workouts", value: split.duringWorkouts, share: share)
                 Spacer()
-                part(color: ring.accent.opacity(0.25), title: "Everyday activity", value: split.everyday, share: 1 - share)
+                part(color: ring.accent.opacity(0.25), title: "Background activity", value: split.background, share: 1 - share)
                     .multilineTextAlignment(.trailing)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "\(ring.metric.format(split.duringWorkouts, style: .wide)) from workouts, \(ring.metric.format(split.everyday, style: .wide)) from everyday activity"))
+        .accessibilityLabel(String(localized: "\(ring.metric.format(split.duringWorkouts, style: .wide)) from workouts, \(ring.metric.format(split.background, style: .wide)) from background activity"))
     }
 
     private func part(color: Color, title: LocalizedStringKey, value: Double, share: Double) -> some View {

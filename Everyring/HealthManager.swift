@@ -403,7 +403,7 @@ final class HealthManager {
         }
     }
 
-    /// How much of `metric` in `interval` was logged during workouts and how much in everyday life.
+    /// How much of `metric` in `interval` was logged during workouts and how much in background activity.
     func activitySplit(of metric: HealthMetric, in interval: DateInterval, filter: HealthFilter = .none) async throws -> ActivitySplit {
         if case .heartMinutes = metric, Self.isAvailable, interval.duration > 0 {
             return try await reading(metric) {
@@ -624,7 +624,7 @@ final class HealthManager {
                 return result
             case .outsideWorkouts, .all:
                 var result = try await quantities(type, unit: metric.hkUnit, in: range, by: bucket, scope: scope, key: key)
-                // Everyday activity: leave out every workout; otherwise only the left-out kinds.
+                // Background activity: leave out every workout; otherwise only the left-out kinds.
                 let spans: [DateInterval]
                 if scope.activity == .outsideWorkouts {
                     spans = try await workoutSpans(nil, lengths: true)

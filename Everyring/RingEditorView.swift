@@ -137,10 +137,10 @@ struct RingEditorView: View {
                     Picker("Activity", selection: $ring.activity) {
                         Text("All activity").tag(ActivityScope.all)
                         Text("Only during workouts").tag(ActivityScope.duringWorkouts)
-                        Text("Only everyday activity").tag(ActivityScope.outsideWorkouts)
+                        Text("Only background activity").tag(ActivityScope.outsideWorkouts)
                     }
                     let leftOut = WorkoutFilter.make(ring.leftOutWorkouts, excludes: true)
-                    // Everyday activity already leaves out every workout.
+                    // Background activity already leaves out every workout.
                     if ring.activity != .outsideWorkouts {
                         NavigationLink {
                             WorkoutFilterView(measure: .minutes, excludeOnly: true, metricTitle: ring.metric.title,
@@ -204,9 +204,9 @@ struct RingEditorView: View {
                     switch ring.activity {
                     case .all: EmptyView()
                     case .duringWorkouts:
-                        Text("Counts only what was logged while a workout ran. Everyday activity, like walking around or taking the stairs, is left out.")
+                        Text("Counts only what was logged while a workout ran. Background activity, like walking around or taking the stairs, is left out.")
                     case .outsideWorkouts:
-                        Text("Counts only everyday activity, like walking around or taking the stairs. What was logged while a workout ran is left out.")
+                        Text("Counts only background activity, like walking around or taking the stairs. What was logged while a workout ran is left out.")
                     }
                 }
             }
@@ -763,12 +763,12 @@ extension RingTint {
 /// Picks the kinds of workouts a ring counts: all, only some, or all except some.
 struct WorkoutFilterView: View {
     let measure: WorkoutMeasure
-    /// Activity rings (steps, exercise minutes, …): workouts can only be left out (most activity comes from everyday
-    /// life, not workouts, so "only these" would mislead).
+    /// Activity rings (steps, exercise minutes, …): workouts can only be left out (most activity is background
+    /// activity, not workouts, so "only these" would mislead).
     var excludeOnly = false
     /// For `excludeOnly`: what is left out, "Steps".
     var metricTitle = ""
-    /// For `excludeOnly`: the ring counts only activity during workouts (so everyday activity is already left out).
+    /// For `excludeOnly`: the ring counts only activity during workouts (so background activity is already left out).
     var onlyDuringWorkouts = false
     @Binding var filter: WorkoutFilter?
     @State private var kinds: Set<WorkoutKind>
@@ -831,7 +831,7 @@ struct WorkoutFilterView: View {
                 if excludeOnly && onlyDuringWorkouts {
                     Text("\(metricTitle) logged during workouts of the types you pick is left out. The ring counts only your other workouts.")
                 } else if excludeOnly {
-                    Text("\(metricTitle) logged during workouts of the types you pick is left out. Everything else still counts, including everyday activity and workouts you didn't record.")
+                    Text("\(metricTitle) logged during workouts of the types you pick is left out. Everything else still counts, including background activity and workouts you didn't record.")
                 }
             }
         }

@@ -255,7 +255,7 @@ final class RingsModel {
         return try? await health.workoutLog(of: ring.metric, in: interval, filter: ring.healthFilter)
     }
 
-    /// How much of an activity ring's metric in `interval` came from workouts and how much from everyday life; `nil`
+    /// How much of an activity ring's metric in `interval` came from workouts and how much from background activity; `nil`
     /// for other rings or if Health couldn't be read.
     func activitySplit(for ring: Ring, interval: DateInterval, now: Date = .now) async -> ActivitySplit? {
         guard ring.metric.supportsWorkoutLeaveOut else { return nil }
