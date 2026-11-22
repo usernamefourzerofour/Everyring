@@ -312,6 +312,19 @@ struct RingEditorView: View {
                 }
             }
 
+            // Just above Appearance: how a limit looks once it is passed.
+            if ring.isLimit {
+                Section {
+                    Toggle("Mark when over the limit", isOn: $ring.marksOverLimit)
+                } header: {
+                    Text("When the limit is passed")
+                } footer: {
+                    Text(ring.marksOverLimit
+                         ? "A red ! sits at the ring's tip, and the percentage turns red. The ring keeps its colour."
+                         : "The ring looks the same over and under its limit.")
+                }
+            }
+
             // Just above Appearance: how the ring looks once the goal is reached (a limit never closes).
             if !ring.isLimit {
                 Section {

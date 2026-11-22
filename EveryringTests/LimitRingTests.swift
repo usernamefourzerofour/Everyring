@@ -26,6 +26,23 @@ struct LimitRingTests {
         #expect(!steps.display(12_000).warning)
     }
 
+    @Test func overLimitMarkCanBeTurnedOff() {
+        var quiet = calories
+        quiet.marksOverLimit = false
+        #expect(!quiet.display(2_300).warning)
+        #expect(quiet.tint(2_300) == quiet.accent)
+        // The ring keeps its own colours past the limit either way.
+        #expect(calories.display(2_300).start == calories.gradient.start)
+    }
+
+    @Test func overLimitMarkSurvivesOldSaves() throws {
+        let data = try JSONEncoder().encode(calories)
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "marksOverLimit")
+        let old = try JSONSerialization.data(withJSONObject: object)
+        #expect(try JSONDecoder().decode(Ring.self, from: old).marksOverLimit)
+    }
+
     @Test func limitStreakCountsDaysUnder() {
         let now = date(2026, 11, 18, 15, in: cph)
         // Today 2,500 (over, but in progress); 17th 1,900; 16th 2,200 (over); 15th 1,500; 14th 1,700; 13th nothing.

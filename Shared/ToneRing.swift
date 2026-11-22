@@ -18,6 +18,8 @@ struct ToneRing: View {
     let lineWidth: CGFloat
     /// How strong the ring is in one colour (neighbouring rings alternate).
     var emphasis = 1.0
+    /// A limit past its limit: the tip carries a red ! instead of the white dot (also over a label).
+    var warning = false
     /// The white dot isn't drawn while the tip is between 12 o'clock and this fraction of a lap (where a label sits).
     var dotHiddenUntil = 0.0
 
@@ -54,8 +56,16 @@ struct ToneRing: View {
                             .mask(progress(f: f, laps: laps, pos: pos).luminanceToAlpha())
                             .widgetAccentable()
                     }
-                    // A small white dot where you have reached (left out under a label).
-                    if pos > dotHiddenUntil {
+                    if warning && pos > dotHiddenUntil {
+                        // A red ! on a white disc where you went too far. Under a ring's label the label shows the !
+                        // in place of its icon instead (see RingStartLabel).
+                        let angle = (pos * 2 - 0.5) * .pi
+                        WarningBadge(size: lineWidth * 1.2, fullColor: fullColor)
+                            .position(x: geo.size.width / 2 + radius * cos(angle),
+                                      y: geo.size.height / 2 + radius * sin(angle))
+                            .accessibilityHidden(true)
+                    } else if !warning && pos > dotHiddenUntil {
+                        // A small white dot where you have reached (left out under a label).
                         let angle = (pos * 2 - 0.5) * .pi
                         Circle()
                             .fill(Color.white)
@@ -128,7 +138,8 @@ struct ToneRingStack: View {
             ZStack {
                 if shown.count == 1, let ring = shown.first {
                     let (deep, light) = colours(ring)
-                    ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: diameter * 0.14)
+                    ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: diameter * 0.14,
+                             warning: ring.warning)
                         .saturation(ring.faded ? 0.15 : 1)
                         .opacity(ring.faded ? 0.3 : 1)
                     // As Heart Minutes: the number big, with a small % under it rather than beside it.
@@ -153,8 +164,37 @@ struct ToneRingStack: View {
         .aspectRatio(1, contentMode: .fit)
     }
 
-    /// The ring's deep (start of its gradient) and light (end) colour; a limit past its limit in the warning colours.
+    /// The ring's deep (start of its gradient) and light (end) colour; past a limit too (the tip's ! marks it).
     private func colours(_ ring: RingDisplay) -> (deep: Color, light: Color) {
-        ring.warning ? (RingDisplay.warningGradient.start, RingDisplay.warningGradient.end) : (ring.start, ring.end)
+        (ring.start, ring.end)
+    }
+}
+
+/// The ! at the tip of a limit ring past its limit: red with a white edge; in one colour a disc with the ! cut out.
+struct WarningBadge: View {
+    let size: CGFloat
+    let fullColor: Bool
+
+    var body: some View {
+        if fullColor {
+            ZStack {
+                Circle().fill(Color.white)
+                Circle().fill(RingDisplay.warningGradient.start).padding(size * 0.09)
+                Image(systemName: "exclamationmark")
+                    .font(.system(size: size * 0.52, weight: .black))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: size, height: size)
+        } else {
+            ZStack {
+                Circle().fill(Color.white)
+                Image(systemName: "exclamationmark")
+                    .font(.system(size: size * 0.52, weight: .black))
+                    .blendMode(.destinationOut)
+            }
+            .compositingGroup()
+            .frame(width: size, height: size)
+            .widgetAccentable()
+        }
     }
 }

@@ -359,6 +359,9 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var whenClosed: ClosedAppearance = .show
     /// Screen Time rings: the apps, categories and websites followed (an encoded `FamilyActivitySelection`).
     var screenTimeSelection: Data?
+    /// Limits: past the limit, a red ! at the ring's tip (and the percentage in the warning colour). Off: the ring
+    /// looks the same over and under its limit.
+    var marksOverLimit = true
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
@@ -366,7 +369,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
          days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [],
          activity: ActivityScope = .all, sources: [String] = [],
          minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0,
-         whenClosed: ClosedAppearance = .show, screenTimeSelection: Data? = nil) {
+         whenClosed: ClosedAppearance = .show, screenTimeSelection: Data? = nil, marksOverLimit: Bool = true) {
         self.id = id
         self.name = name
         self.color = color
@@ -388,6 +391,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.maximumWorkoutMinutes = maximumWorkoutMinutes
         self.whenClosed = whenClosed
         self.screenTimeSelection = screenTimeSelection
+        self.marksOverLimit = marksOverLimit
     }
 
     /// Keys of earlier builds, read only to carry their settings over.
@@ -396,7 +400,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
         case dailyTarget, days, customDays, leftOutWorkouts, activity, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
-        case whenClosed, screenTimeSelection
+        case whenClosed, screenTimeSelection, marksOverLimit
     }
 
     init(from decoder: Decoder) throws {
@@ -426,6 +430,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         maximumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .maximumWorkoutMinutes) ?? 0
         whenClosed = try c.decodeIfPresent(ClosedAppearance.self, forKey: .whenClosed) ?? .show
         screenTimeSelection = try c.decodeIfPresent(Data.self, forKey: .screenTimeSelection)
+        marksOverLimit = try c.decodeIfPresent(Bool.self, forKey: .marksOverLimit) ?? true
     }
 
     /// Whether the ring's value must stay under its goal. A days-reaching ring always counts days up to its goal; its

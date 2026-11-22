@@ -99,13 +99,14 @@ extension Ring {
     func display(_ value: Double, glance: Bool = false) -> RingDisplay {
         let (start, end) = gradient
         let closed = glance && !isLimit && isMetInProgress(value)
-        return RingDisplay(id: id, start: start, end: end, fraction: fraction(value), warning: isOverLimit(value),
+        return RingDisplay(id: id, start: start, end: end, fraction: fraction(value),
+                           warning: marksOverLimit && isOverLimit(value),
                            symbol: symbol, faded: closed && whenClosed == .fade, hidden: closed && whenClosed == .hide)
     }
 
-    /// The colour for the ring's text and icons at `value`: the warning colour past a limit.
+    /// The colour for the ring's text and icons at `value`: the warning colour past a limit (unless turned off).
     func tint(_ value: Double) -> Color {
-        isOverLimit(value) ? RingDisplay.warningGradient.end : accent
+        marksOverLimit && isOverLimit(value) ? RingDisplay.warningGradient.end : accent
     }
 }
 
@@ -151,10 +152,11 @@ struct RingStackView: View {
                     ZStack {
                         // Drawn as in Heart Minutes: light at the start building to deep at the tip, a white dot
                         // where you have reached (see ToneRing).
-                        let (deep, light) = ring.warning ? RingDisplay.warningGradient : (ring.start, ring.end)
-                        ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: lw,
+                        // Past a limit the ring keeps its own colours; a red ! at its tip says it is over.
+                        ToneRing(light: ring.end, deep: ring.start, fraction: ring.fraction, lineWidth: lw,
                                  // In one colour, neighbouring rings alternate strong and softer to tell them apart.
                                  emphasis: index.isMultiple(of: 2) ? 1 : 0.72,
+                                 warning: ring.warning,
                                  // The tip's dot stays behind the label: not drawn where the text is.
                                  dotHiddenUntil: showsLabels
                                     ? RingStartLabel(ring: ring, radius: radius, lineWidth: lw).span : 0)
@@ -188,7 +190,7 @@ struct RingStackView: View {
 /// A ring's icon and percentage written on the ring just after its start (12 o'clock), so a small widget needs no
 /// legend. White on the filled ring; in the ring's colour when too little of the ring is filled under the text.
 struct RingStartLabel: View {
-    let ring: RingDisplay
+    var ring: RingDisplay
     let radius: CGFloat
     let lineWidth: CGFloat
     /// One-colour widgets: on the filled arc the text is cut out of the ring (the background shows through), since
@@ -232,6 +234,17 @@ struct RingStartLabel: View {
         .accessibilityHidden(true)
     }
 
+    /// A limit past its limit whose tip lies under the label: the label carries the ! in place of the ring's icon
+    /// (the tip's badge would cover the text).
+    private var shownSymbol: String? {
+        guard ring.warning else { return ring.symbol }
+        let f = max(0, ring.fraction)
+        let tip = f > 1 ? f - (f - 0.0005).rounded(.down) : f
+        var plain = self
+        plain.ring.warning = false
+        return tip <= plain.span ? "exclamationmark.circle.fill" : ring.symbol
+    }
+
     /// How far round the ring the label reaches, as a fraction of a lap (with a little room after it).
     var span: Double {
         let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
@@ -259,7 +272,7 @@ struct RingStartLabel: View {
         }
         // On a tight inner ring the glyphs' inner edges crowd together; space them a little more.
         let curve = 1 + lineWidth * 0.12 / max(radius, 1)
-        if let symbol = ring.symbol {
+        if let symbol = shownSymbol {
             add(symbol: symbol, text: "", advance: (Self.symbolWidth(symbol, size: size * 0.9) + size * 0.3) * curve)
         }
         for character in percent {
