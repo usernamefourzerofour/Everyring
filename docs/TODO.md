@@ -36,3 +36,14 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
   feature by feature and bring over what Everyring lacks (its views, widgets, complications, settings and the heart
   minute calculation itself), so Everyring can replace it. Start with a list of Heart Minutes' features and what
   Everyring already covers.
+  - **Time in heart rate zones.** Let a ring count minutes in one or more selected zones across activities,
+    for example 90 minutes in zone 2 over the last seven days.
+- **Time windows for existing rings.** Add an optional local time window that works with weekday and period
+  settings. For example, count days with 20 minutes of daylight between 07:00 and 10:00, or track caffeine
+  consumed after 14:00.
+- **Custom exercises and repetitions.** Record or import repetitions per set for a named exercise. Let the
+  ring track either the best single set (100 consecutive push-ups) or the total over a period (200 in a week).
+- **Best single workout.** Add a workout aggregation that takes the greatest distance or duration among
+  matching workouts in the period. A 10 km monthly walking goal in this mode requires one 10 km walk.
+- **Longest uninterrupted sleep.** Track the longest recorded sleep stretch per night. Join adjacent sleep
+  stages across transitions, split at recorded awakenings, and avoid counting gaps in the data as sleep.
