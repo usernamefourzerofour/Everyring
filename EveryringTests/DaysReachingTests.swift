@@ -187,6 +187,11 @@ struct WorkoutTimelineTests {
         #expect(timeline.perMinute.count == 30)
         #expect(timeline.heartRate.count == 60)
         #expect(timeline.perMinute.allSatisfy { $0.date >= workout.start && $0.date < workout.end })
+        let running = timeline.runningTotal(from: workout.start, to: workout.end)
+        #expect(running.first?.value == 0)
+        #expect(running.last?.date == workout.end)
+        #expect(abs((running.last?.value ?? 0) - timeline.perMinute.reduce(0) { $0 + $1.value }) < 0.001)
+        #expect(zip(running, running.dropFirst()).allSatisfy { $0.value <= $1.value })
     }
 }
 

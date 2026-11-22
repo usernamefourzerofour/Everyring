@@ -21,6 +21,18 @@ struct WorkoutTimeline: Hashable, Sendable {
     }
 
     var maxHeartRate: Double? { heartRate.map(\.value).max() }
+
+    /// The metric adding up minute by minute: zero at `start`, then the total at the end of each minute (the last one
+    /// at `end`).
+    func runningTotal(from start: Date, to end: Date) -> [Point] {
+        var total = 0.0
+        var result = [Point(date: start, value: 0)]
+        for point in perMinute.sorted(by: { $0.date < $1.date }) {
+            total += point.value
+            result.append(Point(date: min(point.date.addingTimeInterval(60), end), value: total))
+        }
+        return result
+    }
 }
 
 extension DemoHistory {

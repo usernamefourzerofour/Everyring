@@ -1125,21 +1125,35 @@ private struct WorkoutTimelineView: View {
         }
     }
 
+    /// The ring's metric adding up through the workout, from zero at the start to the workout's total.
     private func perMinuteChart(_ timeline: WorkoutTimeline) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("\(ring.metric.title) per minute")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(ring.accent)
-            Chart(timeline.perMinute) { point in
-                BarMark(x: .value("Time", point.date, unit: .minute), y: .value("Value", ring.metric.toDisplay(point.value)))
-                    .foregroundStyle(ring.accent.gradient)
+        let running = timeline.runningTotal(from: workout.start, to: workout.end)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(ring.metric.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ring.accent)
+                Spacer()
+                if let last = running.last {
+                    Text(ring.metric.format(last.value))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Chart(running) { point in
+                AreaMark(x: .value("Time", point.date), y: .value("Value", ring.metric.toDisplay(point.value)))
+                    .foregroundStyle(.linearGradient(colors: [ring.accent.opacity(0.3), ring.accent.opacity(0.02)],
+                                                     startPoint: .top, endPoint: .bottom))
+                LineMark(x: .value("Time", point.date), y: .value("Value", ring.metric.toDisplay(point.value)))
+                    .foregroundStyle(ring.accent)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
             }
             .chartXScale(domain: workout.start...workout.end)
             .chartXAxis { timeAxis }
             .chartYAxisLabel(ring.metric.unitName())
             .frame(height: 90)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(String(localized: "\(ring.metric.title) per minute, \(ring.metric.format(workout.value, style: .wide)) in all"))
+            .accessibilityLabel(String(localized: "\(ring.metric.title) through the workout, \(ring.metric.format(workout.value, style: .wide)) in all"))
         }
     }
 
