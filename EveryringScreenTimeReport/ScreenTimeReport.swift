@@ -1,5 +1,7 @@
 import Charts
 import DeviceActivity
+import ExtensionKit
+import FamilyControls
 import ManagedSettings
 import SwiftUI
 
