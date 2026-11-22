@@ -116,15 +116,14 @@ struct PeriodView: View {
     let breakdown: PeriodBreakdown
     let style: ScreenTimeReportStyle?
 
-    /// One shade of the ring's colour per app, deep for the most used; "Other" grey.
+    /// A distinct colour per app, so the stacks tell apps apart whatever the ring's colour; "Other" grey.
+    private static let palette: [Color] = [.blue, .orange, .purple, .teal]
+
     private var shades: [Color] {
-        let deep = style?.deepColor ?? .accentColor, light = style?.lightColor ?? .accentColor
-        let count = max(breakdown.apps.count, 1)
-        return breakdown.apps.enumerated().map { index, app in
-            if app.token == nil && index == breakdown.apps.count - 1 && app.name == String(localized: "Other") {
-                return Color.gray.opacity(0.45)
-            }
-            return deep.mix(with: light, by: Double(index) / Double(max(count - 1, 1)) * 0.85)
+        breakdown.apps.enumerated().map { index, app in
+            app.token == nil && app.name == String(localized: "Other")
+                ? Color.gray.opacity(0.45)
+                : Self.palette[index % Self.palette.count]
         }
     }
 
