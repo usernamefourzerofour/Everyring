@@ -254,6 +254,16 @@ enum GoalAggregation: String, Codable, CaseIterable, Sendable {
     case daysReaching
 }
 
+/// Which part of an activity metric a ring counts.
+enum ActivityScope: String, Codable, CaseIterable, Sendable {
+    /// Everything, all day.
+    case all
+    /// Only what was logged while a workout ran.
+    case duringWorkouts
+    /// Only everyday activity: everything except what was logged during workouts.
+    case outsideWorkouts
+}
+
 /// Which days of a period of several days count.
 enum DayFilter: String, Codable, CaseIterable, Sendable {
     /// `custom`: the days in `Ring.customDays`.
@@ -312,8 +322,8 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var customDays: [Int] = []
     /// Activity metrics: leave out what was logged during workouts of these kinds (empty: leave out nothing).
     var leftOutWorkouts: [WorkoutKind] = []
-    /// Activity metrics: count only what was logged while a workout ran, leaving out everyday activity.
-    var onlyDuringWorkouts = false
+    /// Activity metrics: everything, only what was logged during workouts, or only everyday activity.
+    var activity: ActivityScope = .all
     /// Only data from these apps and devices (bundle identifiers; empty: all sources).
     var sources: [String] = []
     /// Workout rings: only workouts at least this long (0: all).
@@ -327,7 +337,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
          aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false, dailyTarget: Double = 0,
          days: DayFilter = .everyDay, customDays: [Int] = [], leftOutWorkouts: [WorkoutKind] = [],
-         onlyDuringWorkouts: Bool = false, sources: [String] = [],
+         activity: ActivityScope = .all, sources: [String] = [],
          minimumWorkoutMinutes: Int = 0, maximumWorkoutMinutes: Int = 0,
          fadesWhenClosed: Bool = false) {
         self.id = id
@@ -345,16 +355,19 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.days = days
         self.customDays = customDays
         self.leftOutWorkouts = leftOutWorkouts
-        self.onlyDuringWorkouts = onlyDuringWorkouts
+        self.activity = activity
         self.sources = sources
         self.minimumWorkoutMinutes = minimumWorkoutMinutes
         self.maximumWorkoutMinutes = maximumWorkoutMinutes
         self.fadesWhenClosed = fadesWhenClosed
     }
 
+    /// Keys of earlier builds, read only to carry their settings over.
+    private enum LegacyKeys: String, CodingKey { case onlyDuringWorkouts }
+
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
-        case dailyTarget, days, customDays, leftOutWorkouts, onlyDuringWorkouts, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
+        case dailyTarget, days, customDays, leftOutWorkouts, activity, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
         case fadesWhenClosed
     }
 
@@ -376,7 +389,10 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         days = try c.decodeIfPresent(DayFilter.self, forKey: .days) ?? .everyDay
         customDays = try c.decodeIfPresent([Int].self, forKey: .customDays) ?? []
         leftOutWorkouts = try c.decodeIfPresent([WorkoutKind].self, forKey: .leftOutWorkouts) ?? []
-        onlyDuringWorkouts = try c.decodeIfPresent(Bool.self, forKey: .onlyDuringWorkouts) ?? false
+        // Build 14 only had "only during workouts".
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+        let legacyDuring = try legacy.decodeIfPresent(Bool.self, forKey: .onlyDuringWorkouts) == true
+        activity = try c.decodeIfPresent(ActivityScope.self, forKey: .activity) ?? (legacyDuring ? .duringWorkouts : .all)
         sources = try c.decodeIfPresent([String].self, forKey: .sources) ?? []
         minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
         maximumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .maximumWorkoutMinutes) ?? 0

@@ -494,7 +494,7 @@ final class HealthManager {
         /// 0: no limit.
         var maximumWorkoutDuration: TimeInterval = 0
         var leftOutWorkouts: [WorkoutKind] = []
-        var onlyDuringWorkouts = false
+        var activity: ActivityScope = .all
 
         func apply(_ predicate: NSPredicate) -> NSPredicate {
             guard let sources else { return predicate }
@@ -506,7 +506,7 @@ final class HealthManager {
         var scope = Scope(minimumWorkoutDuration: Double(filter.minimumWorkoutMinutes) * 60,
                           maximumWorkoutDuration: Double(filter.maximumWorkoutMinutes) * 60,
                           leftOutWorkouts: filter.leftOutWorkouts,
-                          onlyDuringWorkouts: filter.onlyDuringWorkouts)
+                          activity: filter.activity)
         if !filter.sources.isEmpty, let type = metric.sampleType {
             let wanted = Set(filter.sources)
             scope.sources = try await sources(of: type).filter { wanted.contains($0.bundleIdentifier) }
@@ -533,39 +533,46 @@ final class HealthManager {
             samples.reduce(into: [:]) { result, sample in result[key(sample.startDate), default: 0] += value(sample) }
         }
 
-        if let type = metric.quantityType, scope.onlyDuringWorkouts {
-            // Only what was logged while workouts ran (except the left-out kinds); everyday activity is left out.
-            let fetch = DateInterval(start: range.start.addingTimeInterval(-12 * 3600), end: range.end)
-            let kinds = WorkoutFilter.make(scope.leftOutWorkouts, excludes: true)
-            // Workouts from any source, within the ring's lengths.
-            var lengths = Scope()
-            lengths.minimumWorkoutDuration = scope.minimumWorkoutDuration
-            lengths.maximumWorkoutDuration = scope.maximumWorkoutDuration
-            let spans = IntervalMath.merged(try await workouts(filter: kinds, in: fetch, scope: lengths)
-                .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) })
-                .compactMap { $0.intersection(with: range) }
-                .filter { $0.duration > 0 }
-            var result: [Date: Double] = [:]
-            for span in spans {
-                result[key(span.start), default: 0] += try await sum(type, unit: metric.hkUnit, in: span, scope: scope)
-            }
-            return result
-        }
         if let type = metric.quantityType {
-            var result = try await quantities(type, unit: metric.hkUnit, in: range, by: bucket, scope: scope, key: key)
-            // Leave out what was logged while workouts of the left-out kinds ran (Health doesn't tie it to them).
-            if !scope.leftOutWorkouts.isEmpty {
+            // Health doesn't tie samples to workouts: what was logged while a workout ran belongs to it.
+            func workoutSpans(_ filter: WorkoutFilter?, lengths: Bool) async throws -> [DateInterval] {
                 let fetch = DateInterval(start: range.start.addingTimeInterval(-12 * 3600), end: range.end)
-                let spans = IntervalMath.merged(try await workouts(kinds: scope.leftOutWorkouts, in: fetch)
+                // Workouts from any source (the ring's sources are for its samples), within the ring's lengths.
+                var limits = Scope()
+                if lengths {
+                    limits.minimumWorkoutDuration = scope.minimumWorkoutDuration
+                    limits.maximumWorkoutDuration = scope.maximumWorkoutDuration
+                }
+                return IntervalMath.merged(try await workouts(filter: filter, in: fetch, scope: limits)
                     .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) })
                     .compactMap { $0.intersection(with: range) }
                     .filter { $0.duration > 0 }
+            }
+            switch scope.activity {
+            case .duringWorkouts:
+                // Only what was logged while workouts ran (except the left-out kinds).
+                var result: [Date: Double] = [:]
+                for span in try await workoutSpans(WorkoutFilter.make(scope.leftOutWorkouts, excludes: true), lengths: true) {
+                    result[key(span.start), default: 0] += try await sum(type, unit: metric.hkUnit, in: span, scope: scope)
+                }
+                return result
+            case .outsideWorkouts, .all:
+                var result = try await quantities(type, unit: metric.hkUnit, in: range, by: bucket, scope: scope, key: key)
+                // Everyday activity: leave out every workout; otherwise only the left-out kinds.
+                let spans: [DateInterval]
+                if scope.activity == .outsideWorkouts {
+                    spans = try await workoutSpans(nil, lengths: true)
+                } else if !scope.leftOutWorkouts.isEmpty {
+                    spans = try await workoutSpans(WorkoutFilter.make(scope.leftOutWorkouts), lengths: false)
+                } else {
+                    spans = []
+                }
                 for span in spans {
                     let during = try await sum(type, unit: metric.hkUnit, in: span, scope: scope)
                     result[key(span.start)] = max(0, (result[key(span.start)] ?? 0) - during)
                 }
+                return result
             }
-            return result
         }
 
         switch metric {

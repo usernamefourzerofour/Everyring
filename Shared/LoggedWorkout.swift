@@ -64,8 +64,8 @@ struct HealthSource: Identifiable, Hashable, Sendable {
 struct HealthFilter: Hashable, Sendable {
     var sources: [String] = []
     var leftOutWorkouts: [WorkoutKind] = []
-    /// Count only what was logged while workouts (other than the left-out kinds) ran.
-    var onlyDuringWorkouts = false
+    /// Everything, only what was logged while workouts ran (other than the left-out kinds), or only the rest.
+    var activity: ActivityScope = .all
     var minimumWorkoutMinutes = 0
     /// 0: no limit.
     var maximumWorkoutMinutes = 0
@@ -78,14 +78,14 @@ extension Ring {
     var healthFilter: HealthFilter {
         HealthFilter(sources: sources,
                      leftOutWorkouts: metric.supportsWorkoutLeaveOut ? leftOutWorkouts : [],
-                     onlyDuringWorkouts: metric.supportsWorkoutLeaveOut && onlyDuringWorkouts,
+                     activity: metric.supportsWorkoutLeaveOut ? activity : .all,
                      minimumWorkoutMinutes: usesWorkoutLengths ? minimumWorkoutMinutes : 0,
                      maximumWorkoutMinutes: usesWorkoutLengths ? maximumWorkoutMinutes : 0)
     }
 
-    /// Workout rings, and activity rings that count only what was logged during workouts, can limit the workouts'
-    /// length.
+    /// Workout rings, and activity rings that count only during or only outside workouts, can limit which workouts
+    /// count by their length.
     var usesWorkoutLengths: Bool {
-        metric.isWorkouts || (metric.supportsWorkoutLeaveOut && onlyDuringWorkouts)
+        metric.isWorkouts || (metric.supportsWorkoutLeaveOut && activity != .all)
     }
 }

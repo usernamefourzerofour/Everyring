@@ -134,27 +134,31 @@ struct RingEditorView: View {
                     }
                 }
                 if ring.metric.supportsWorkoutLeaveOut {
-                    Picker("Activity", selection: $ring.onlyDuringWorkouts) {
-                        Text("All activity").tag(false)
-                        Text("Only during workouts").tag(true)
+                    Picker("Activity", selection: $ring.activity) {
+                        Text("All activity").tag(ActivityScope.all)
+                        Text("Only during workouts").tag(ActivityScope.duringWorkouts)
+                        Text("Only everyday activity").tag(ActivityScope.outsideWorkouts)
                     }
                     let leftOut = WorkoutFilter.make(ring.leftOutWorkouts, excludes: true)
-                    NavigationLink {
-                        WorkoutFilterView(measure: .minutes, excludeOnly: true, metricTitle: ring.metric.title,
-                                          onlyDuringWorkouts: ring.onlyDuringWorkouts,
-                                          filter: Binding(get: { leftOut },
-                                                          set: { ring.leftOutWorkouts = $0?.kinds ?? [] }))
-                    } label: {
-                        HStack {
-                            Text("Leave out workouts")
-                            Spacer()
-                            Text(leftOut?.listed ?? String(localized: "None"))
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.trailing)
+                    // Everyday activity already leaves out every workout.
+                    if ring.activity != .outsideWorkouts {
+                        NavigationLink {
+                            WorkoutFilterView(measure: .minutes, excludeOnly: true, metricTitle: ring.metric.title,
+                                              onlyDuringWorkouts: ring.activity == .duringWorkouts,
+                                              filter: Binding(get: { leftOut },
+                                                              set: { ring.leftOutWorkouts = $0?.kinds ?? [] }))
+                        } label: {
+                            HStack {
+                                Text("Leave out workouts")
+                                Spacer()
+                                Text(leftOut?.listed ?? String(localized: "None"))
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.trailing)
+                            }
                         }
                     }
-                    // Which workouts count as workouts, when the ring counts only what was logged during them.
-                    if ring.onlyDuringWorkouts {
+                    // Which workouts count as workouts, when the ring counts only during or only outside them.
+                    if ring.activity != .all {
                         workoutLengthPickers
                     }
                 }
@@ -196,8 +200,14 @@ struct RingEditorView: View {
             } header: {
                 Text("Health data")
             } footer: {
-                if ring.metric.supportsWorkoutLeaveOut && ring.onlyDuringWorkouts {
-                    Text("Counts only what was logged while a workout ran. Everyday activity, like walking around or taking the stairs, is left out.")
+                if ring.metric.supportsWorkoutLeaveOut {
+                    switch ring.activity {
+                    case .all: EmptyView()
+                    case .duringWorkouts:
+                        Text("Counts only what was logged while a workout ran. Everyday activity, like walking around or taking the stairs, is left out.")
+                    case .outsideWorkouts:
+                        Text("Counts only everyday activity, like walking around or taking the stairs. What was logged while a workout ran is left out.")
+                    }
                 }
             }
 
@@ -367,7 +377,7 @@ struct RingEditorView: View {
             if !old.isSameKind(as: new) { ring.sources = [] }
             if !new.supportsWorkoutLeaveOut {
                 ring.leftOutWorkouts = []
-                ring.onlyDuringWorkouts = false
+                ring.activity = .all
             }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }

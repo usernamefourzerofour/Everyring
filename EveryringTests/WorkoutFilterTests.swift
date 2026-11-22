@@ -71,20 +71,27 @@ struct WorkoutFilterTests {
         #expect(ring.healthFilter.minimumWorkoutMinutes == 0)
         #expect(ring.healthFilter.maximumWorkoutMinutes == 0)
         // Steps during workouts only: the lengths pick which workouts count.
-        ring.onlyDuringWorkouts = true
+        ring.activity = .duringWorkouts
         #expect(ring.healthFilter.minimumWorkoutMinutes == 20)
         #expect(ring.healthFilter.maximumWorkoutMinutes == 60)
     }
 
-    @Test func onlyDuringWorkoutsForActivityRings() {
+    @Test func activityScopeForActivityRings() throws {
         var ring = Ring(name: "Steps", color: .fern, symbol: "figure.walk", metric: .steps, goal: 5_000,
-                        period: .today, onlyDuringWorkouts: true)
-        #expect(ring.healthFilter.onlyDuringWorkouts)
+                        period: .today, activity: .outsideWorkouts)
+        #expect(ring.healthFilter.activity == .outsideWorkouts)
+        #expect(ring.usesWorkoutLengths)
         ring.metric = .flightsClimbed
-        #expect(ring.healthFilter.onlyDuringWorkouts)
+        #expect(ring.healthFilter.activity == .outsideWorkouts)
         ring.metric = .sleep
-        #expect(!ring.healthFilter.onlyDuringWorkouts)
+        #expect(ring.healthFilter.activity == .all)
         #expect(HealthMetric.quantity(.moveTime).supportsWorkoutLeaveOut)
         #expect(!HealthMetric.quantity(.restingEnergy).supportsWorkoutLeaveOut)
+        // Build 14's "only during workouts" carries over.
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(Ring.new(metric: .steps))) as! [String: Any]
+        json.removeValue(forKey: "activity")
+        json["onlyDuringWorkouts"] = true
+        let old = try JSONDecoder().decode(Ring.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(old.activity == .duringWorkouts)
     }
 }
