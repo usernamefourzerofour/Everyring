@@ -23,6 +23,7 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
         com.apple.developer.healthkit.background-delivery: true
+        com.apple.developer.family-controls: true
         com.apple.security.application-groups: [group.dk.erik.everyring]
     info:
       path: Everyring/Info.plist
@@ -46,18 +47,15 @@ targets:
     dependencies:
       - target: EveryringWidget
       - target: EveryringWatch
-      # Screen Time: uncomment once Apple has approved the Family Controls entitlement (see docs/TODO.md).
-      # - target: EveryringScreenTimeMonitor
+      - target: EveryringScreenTimeMonitor
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring
         TARGETED_DEVICE_FAMILY: "1,2"
         # Offers medical, reproductive and symptom types in the metric list (Shared/SensitiveMetrics.swift). For
         # TestFlight only: remove this line before an App Store release unless it is decided they may stay.
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SENSITIVE_METRICS"
-        # Screen Time rings: once Apple has approved Family Controls, add SCREEN_TIME here, the entitlement
-        # com.apple.developer.family-controls to this target and to EveryringScreenTimeMonitor, and the dependency
-        # above. Until then the app builds and ships without it.
+        # SCREEN_TIME: Screen Time rings (Family Controls, approved by Apple; see EveryringScreenTimeMonitor).
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SENSITIVE_METRICS SCREEN_TIME"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   # Home Screen and Lock Screen widgets (iPhone + iPad). Draw from the App Group cache; no HealthKit access.
@@ -148,7 +146,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dk.erik.everyring.watchkitapp.widget
 
   # Screen Time monitor (DeviceActivityMonitor): records each Screen Time ring's minutes at thresholds into the App
-  # Group. Not embedded in the app yet: it needs the Family Controls entitlement, which Apple must approve first.
+  # Group. Needs the Family Controls (Distribution) entitlement, like the app.
   EveryringScreenTimeMonitor:
     type: app-extension
     platform: iOS
@@ -156,6 +154,7 @@ targets:
     entitlements:
       path: EveryringScreenTimeMonitor/EveryringScreenTimeMonitor.entitlements
       properties:
+        com.apple.developer.family-controls: true
         com.apple.security.application-groups: [group.dk.erik.everyring]
     info:
       path: EveryringScreenTimeMonitor/Info.plist

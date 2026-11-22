@@ -6,16 +6,14 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 
 - **Top priority: make the direction of ring progress clear.** Start each ring with a lighter colour at 12 o’clock and build to the strongest colour at the moving tip. Keep the tip visible where the ends overlap. Check the 98% sleep-ring example, exactly 100%, and rings beyond one full lap.
 
-- **High priority (Erik will use it): Screen Time rings — built, waiting for Apple.** The code is done (metric
-  `.screenTime`, app/category picker, `ScreenTimeManager`, the `EveryringScreenTimeMonitor` extension recording minutes at
-  thresholds into `ScreenTimeLog` in the App Group: every 5 min up to 4 hr, 10 up to 8, 30 up to 16; history starts
-  when the ring is made; no watch data). It is switched off until Apple approves the **Family Controls (Distribution)**
-  entitlement. Steps:
-  1. Erik requests it: developer.apple.com → Account → request "Family Controls (Distribution)" for
-     `dk.erik.everyring` and `dk.erik.everyring.screentime`.
-  2. Once approved, in project.yml: add `com.apple.developer.family-controls: true` to the Everyring and
-     EveryringScreenTimeMonitor entitlements, `SCREEN_TIME` to the app's compilation conditions, and the
-     EveryringScreenTimeMonitor dependency; run `set_up_signing` again (new bundle ID and capability).
+- **High priority (Erik will use it): Screen Time rings — switched on.** Apple approved **Family Controls
+  (Distribution)** on 22 Nov 2026. The code (metric `.screenTime`, app/category picker, `ScreenTimeManager`, the
+  `EveryringScreenTimeMonitor` extension recording minutes at thresholds into `ScreenTimeLog` in the App Group: every
+  5 min up to 4 hr, 10 up to 8, 30 up to 16; history starts when the ring is made; no watch data) is now built with
+  `SCREEN_TIME`, the entitlement on the app and the monitor, and the monitor embedded. Left:
+  1. Make sure the capability is on for `dk.erik.everyring` and `dk.erik.everyring.screentime` (managed capability in
+     the developer account) and run `set_up_signing` again before the next archive.
+  2. Test on a device: pick apps, check the ring counts up during the day and resets.
   3. Later: a DeviceActivityReport extension to show exact minutes inside the app (the numbers can't leave it).
 
 - **Graph widget from Heart Minutes.** Done: "Ring and Chart" (one ring and a chart of its period, small/medium/large).
