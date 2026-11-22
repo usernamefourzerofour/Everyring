@@ -537,7 +537,11 @@ final class HealthManager {
             // Only what was logged while workouts ran (except the left-out kinds); everyday activity is left out.
             let fetch = DateInterval(start: range.start.addingTimeInterval(-12 * 3600), end: range.end)
             let kinds = WorkoutFilter.make(scope.leftOutWorkouts, excludes: true)
-            let spans = IntervalMath.merged(try await workouts(filter: kinds, in: fetch)
+            // Workouts from any source, within the ring's lengths.
+            var lengths = Scope()
+            lengths.minimumWorkoutDuration = scope.minimumWorkoutDuration
+            lengths.maximumWorkoutDuration = scope.maximumWorkoutDuration
+            let spans = IntervalMath.merged(try await workouts(filter: kinds, in: fetch, scope: lengths)
                 .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) })
                 .compactMap { $0.intersection(with: range) }
                 .filter { $0.duration > 0 }

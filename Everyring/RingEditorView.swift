@@ -76,6 +76,23 @@ struct RingEditorView: View {
         ring.isDaysReaching ? displayGoal >= 1 && displayTarget > 0 : displayGoal > 0
     }
 
+    /// Only workouts between these lengths count (workout rings, and activity rings that count only during workouts).
+    @ViewBuilder private var workoutLengthPickers: some View {
+        Picker("Shortest workout", selection: $ring.minimumWorkoutMinutes) {
+            Text("Any length").tag(0)
+            ForEach([5, 10, 15, 20, 30, 45, 60, 90], id: \.self) { minutes in
+                Text(Self.minutesText(minutes)).tag(minutes)
+            }
+        }
+        Picker("Longest workout", selection: $ring.maximumWorkoutMinutes) {
+            Text("Any length").tag(0)
+            // Only lengths above the shortest, so the range is never empty.
+            ForEach([15, 20, 30, 45, 60, 90, 120, 180].filter { $0 > ring.minimumWorkoutMinutes }, id: \.self) { minutes in
+                Text(Self.minutesText(minutes)).tag(minutes)
+            }
+        }
+    }
+
     var body: some View {
         Form {
             Section {
@@ -115,6 +132,10 @@ struct RingEditorView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                     }
+                    // Which workouts count as workouts, when the ring counts only what was logged during them.
+                    if ring.onlyDuringWorkouts {
+                        workoutLengthPickers
+                    }
                 }
                 if case .workouts(let measure, let filter) = ring.metric {
                     Picker("Count", selection: Binding(
@@ -139,19 +160,7 @@ struct RingEditorView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                     }
-                    Picker("Shortest workout", selection: $ring.minimumWorkoutMinutes) {
-                        Text("Any length").tag(0)
-                        ForEach([5, 10, 15, 20, 30, 45, 60, 90], id: \.self) { minutes in
-                            Text(Self.minutesText(minutes)).tag(minutes)
-                        }
-                    }
-                    Picker("Longest workout", selection: $ring.maximumWorkoutMinutes) {
-                        Text("Any length").tag(0)
-                        // Only lengths above the shortest, so the range is never empty.
-                        ForEach([15, 20, 30, 45, 60, 90, 120, 180].filter { $0 > ring.minimumWorkoutMinutes }, id: \.self) { minutes in
-                            Text(Self.minutesText(minutes)).tag(minutes)
-                        }
-                    }
+                    workoutLengthPickers
                 }
                 NavigationLink {
                     SourcesView(metric: ring.metric, selection: $ring.sources)

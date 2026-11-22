@@ -79,7 +79,13 @@ extension Ring {
         HealthFilter(sources: sources,
                      leftOutWorkouts: metric.supportsWorkoutLeaveOut ? leftOutWorkouts : [],
                      onlyDuringWorkouts: metric.supportsWorkoutLeaveOut && onlyDuringWorkouts,
-                     minimumWorkoutMinutes: metric.isWorkouts ? minimumWorkoutMinutes : 0,
-                     maximumWorkoutMinutes: metric.isWorkouts ? maximumWorkoutMinutes : 0)
+                     minimumWorkoutMinutes: usesWorkoutLengths ? minimumWorkoutMinutes : 0,
+                     maximumWorkoutMinutes: usesWorkoutLengths ? maximumWorkoutMinutes : 0)
+    }
+
+    /// Workout rings, and activity rings that count only what was logged during workouts, can limit the workouts'
+    /// length.
+    var usesWorkoutLengths: Bool {
+        metric.isWorkouts || (metric.supportsWorkoutLeaveOut && onlyDuringWorkouts)
     }
 }

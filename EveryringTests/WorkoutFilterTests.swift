@@ -70,6 +70,10 @@ struct WorkoutFilterTests {
         ring.metric = .steps
         #expect(ring.healthFilter.minimumWorkoutMinutes == 0)
         #expect(ring.healthFilter.maximumWorkoutMinutes == 0)
+        // Steps during workouts only: the lengths pick which workouts count.
+        ring.onlyDuringWorkouts = true
+        #expect(ring.healthFilter.minimumWorkoutMinutes == 20)
+        #expect(ring.healthFilter.maximumWorkoutMinutes == 60)
     }
 
     @Test func onlyDuringWorkoutsForActivityRings() {
