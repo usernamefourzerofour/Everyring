@@ -277,6 +277,24 @@ struct RingEditorView: View {
                 }
             }
 
+            // Right after the goal: what happens when it's reached (a limit never closes).
+            if !ring.isLimit {
+                Section {
+                    Picker("When closed", selection: $ring.whenClosed) {
+                        ForEach(ClosedAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("When the goal is reached")
+                } footer: {
+                    switch ring.whenClosed {
+                    case .show: Text("The ring stays as it is.")
+                    case .fade: Text("The ring turns pale and matte on the home screen, in widgets and on the watch, so rings still to do stand out.")
+                    case .hide: Text("The ring disappears from the home screen, widgets and the watch until its next period. Its place stays empty, so the other rings don't move.")
+                    }
+                }
+            }
+
             Section {
                 PeriodPicker(period: $ring.period)
                 if ring.period.nominalDays > 1 {
@@ -314,21 +332,8 @@ struct RingEditorView: View {
                     set: { ring.customTint = RingTint($0) }
                 ), supportsOpacity: false)
                 SymbolGrid(selection: $ring.symbol, color: ring.accent)
-                if !ring.isLimit {
-                    Picker("When closed", selection: $ring.whenClosed) {
-                        ForEach(ClosedAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
-                }
             } header: {
                 Text("Appearance")
-            } footer: {
-                if !ring.isLimit {
-                    switch ring.whenClosed {
-                    case .show: EmptyView()
-                    case .fade: Text("Once the goal is reached, the ring turns pale and matte on the home screen, in widgets and on the watch, so rings still to do stand out.")
-                    case .hide: Text("Once the goal is reached, the ring disappears from the home screen, widgets and the watch until its next period. Its place stays empty, so the other rings don't move.")
-                    }
-                }
             }
 
             if let onDelete, !isNew {
