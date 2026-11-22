@@ -214,6 +214,8 @@ struct PaceTextTests {
         #expect(HealthMetric.workouts(.count, kind: nil).formatPerDay(2.0 / 7, locale: us) == "0.3 workouts")
         #expect(HealthMetric.workouts(.count, kind: nil).formatPerDay(1, locale: us) == "1 workout")
         #expect(HealthMetric.steps.formatPerDay(8_412, locale: us) == "8,412 steps")
+        // Steps never get a decimal, however few.
+        #expect(HealthMetric.steps.formatPerDay(2.6, locale: us) == "2 steps")
     }
 
     @Test func lastDayNeedsWhatIsLeft() {

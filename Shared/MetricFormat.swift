@@ -115,11 +115,21 @@ extension HealthMetric {
         }
     }
 
-    /// A rate per day: like `format`, but small counts keep one decimal ("0.3 workouts", "2.5 times") instead of
-    /// rounding down to a whole number.
+    /// Counts of things that happen a few times a day or less (workouts, flights, stand hours, logged events), where a
+    /// rate per day needs a decimal. Never steps, pushes or strokes: those come in thousands.
+    private var hasDecimalRate: Bool {
+        switch self {
+        case .workouts(.count, _), .flightsClimbed, .standHours, .events, .sensitive, .nutrient: true
+        default: false
+        }
+    }
+
+    /// A rate per day: like `format`, but small counts of things (workouts, times) keep one decimal ("0.3 workouts",
+    /// "2.5 times") instead of rounding down to a whole number. Steps never get decimals.
     func formatPerDay(_ value: Double, style: UnitStyle = .short, locale: Locale = .current) -> String {
-        let isCount = baseUnit == .count || isCountOfHours
-        guard isCount, value < 10 else { return format(value, style: style, locale: locale) }
+        guard hasDecimalRate, baseUnit == .count || isCountOfHours, value < 10 else {
+            return format(value, style: style, locale: locale)
+        }
         let text = max(0, value).formatted(.number.precision(.fractionLength(0...1)).locale(locale))
         let one = 1.formatted(.number.locale(locale))
         return String(localized: "\(text) \(unitName(style: style, locale: locale, singular: text == one))")
