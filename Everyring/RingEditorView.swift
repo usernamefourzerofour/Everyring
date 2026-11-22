@@ -693,8 +693,11 @@ struct WorkoutFilterView: View {
         _excludes = State(initialValue: excludeOnly || filter.wrappedValue?.excludes == true)
     }
 
+    /// Alphabetical in the user's language.
     private var available: [WorkoutKind] {
-        WorkoutKind.allCases.filter { measure != .distance || $0.hasDistance }
+        WorkoutKind.allCases
+            .filter { measure != .distance || $0.hasDistance }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     var body: some View {
