@@ -132,3 +132,37 @@ struct SensitiveMetricTests {
         #expect(HealthMetric.sensitive(.menstrualFlow).format(4, locale: us) == "4 days")
     }
 }
+
+struct LoggedNightTests {
+    let cph = makeCalendar()
+
+    @Test func nightsWithStages() {
+        func t(_ d: Int, _ h: Int, _ m: Int = 0) -> Date { date(2026, 11, d, h, m, in: cph) }
+        let samples: [(interval: DateInterval, stage: SleepStage?)] = [
+            (DateInterval(start: t(17, 23), end: t(18, 1)), .core),
+            (DateInterval(start: t(18, 1), end: t(18, 2)), .deep),
+            // 30 minutes awake
+            (DateInterval(start: t(18, 2, 30), end: t(18, 6)), .rem),
+            // The next night
+            (DateInterval(start: t(18, 22), end: t(19, 6)), nil),
+        ]
+        let nights = LoggedNight.make(samples)
+        #expect(nights.count == 2)
+        let first = nights[0]
+        #expect(first.day(calendar: cph) == date(2026, 11, 18, in: cph))
+        #expect(first.asleep == 6.5 * 3600)
+        #expect(first.awake == 30 * 60)
+        #expect(first.stages[.deep] == 3600)
+        #expect(first.hours(for: .sleepStage(.rem)) == 3.5)
+        #expect(nights[1].unspecified == 8 * 3600)
+    }
+
+    @Test func dailyGoalMarksNights() {
+        var ring = Ring(name: "Sleep", color: .indigo, symbol: "bed.double", metric: .sleep, goal: 56, period: .thisWeek)
+        #expect(ring.dailyGoal == nil)
+        ring.aggregation = .dailyAverage
+        ring.goal = 8
+        #expect(ring.dayIsMet(7.5) == false)
+        #expect(ring.dayIsMet(8.2) == true)
+    }
+}

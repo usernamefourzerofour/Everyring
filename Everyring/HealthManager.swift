@@ -372,6 +372,26 @@ final class HealthManager {
         }
     }
 
+    /// The nights that end inside `interval` (counted on the day you wake up), newest first.
+    func nights(in interval: DateInterval, calendar: Calendar, filter: HealthFilter = .none) async throws -> [LoggedNight] {
+        guard Self.isAvailable else { return [] }
+        return try await reading(.sleep) {
+            let scope = try await self.scope(for: .sleep, filter: filter)
+            let fetch = DateInterval(start: interval.start.addingTimeInterval(-24 * 3600),
+                                     end: interval.end.addingTimeInterval(18 * 3600))
+            let asleepValues = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
+            let samples = try await self.categorySamples(.sleepAnalysis, in: fetch, scope: scope)
+                .filter { asleepValues.contains($0.value) }
+                .map { sample in
+                    (interval: sample.interval, stage: SleepStage.allCases.first { $0.categoryValue.rawValue == sample.value })
+                }
+            let first = calendar.startOfDay(for: interval.start)
+            return LoggedNight.make(samples)
+                .filter { $0.day(calendar: calendar) >= first && $0.day(calendar: calendar) < interval.end }
+                .reversed()
+        }
+    }
+
     // MARK: Reading
 
     /// Runs a read, treating "no data" as nothing, and asking for access once if it was never asked for (e.g. the

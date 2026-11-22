@@ -226,6 +226,13 @@ extension HealthMetric {
         }
     }
 
+    var isSleep: Bool {
+        switch self {
+        case .sleep, .sleepStage: true
+        default: false
+        }
+    }
+
     /// Sleep and mindful minutes have no meaningful build-up hour by hour.
     var hasHourlyBuildUp: Bool {
         switch self {

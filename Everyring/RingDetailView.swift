@@ -20,6 +20,8 @@ struct RingDetailView: View {
     @State private var loadedRing: Ring?
     /// Activity rings: the shown period's workouts.
     @State private var workoutLog: [LoggedWorkout]?
+    /// Sleep rings: the shown period's nights.
+    @State private var nightLog: [LoggedNight]?
 
     var body: some View {
         if let ring = model.ring(id: ringID) {
@@ -89,6 +91,9 @@ struct RingDetailView: View {
                     if ring.metric.supportsWorkoutLeaveOut {
                         WorkoutLogCard(ring: ring, workouts: workoutLog, calendar: model.calendar)
                     }
+                    if ring.metric.isSleep {
+                        NightsCard(ring: ring, nights: nightLog, calendar: model.calendar)
+                    }
 
                     StreakCard(ring: ring, streak: history?.streak, loading: loading)
 
@@ -145,6 +150,13 @@ struct RingDetailView: View {
                 let interval = selected ?? ring.period.interval(now: .now, calendar: model.calendar)
                 workoutLog = await withTimeout { await model.workoutLog(for: ring, interval: interval) } ?? nil
                 if workoutLog == nil { workoutLog = [] }
+            }
+            .task(id: WorkoutLogKey(ring: ring, selected: selected)) {
+                guard ring.metric.isSleep else { nightLog = nil; return }
+                nightLog = nil
+                let interval = selected ?? ring.period.interval(now: .now, calendar: model.calendar)
+                nightLog = await withTimeout { await model.nightLog(for: ring, interval: interval) } ?? nil
+                if nightLog == nil { nightLog = [] }
             }
             .task(id: selected) {
                 guard !loading || selected != nil else { return }
@@ -787,5 +799,182 @@ private struct WorkoutRow: View {
 
     private var duration: String {
         Duration.seconds(workout.duration.rounded()).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+    }
+}
+
+/// Sleep rings: the period's nights, with time asleep and a bar of the sleep stages.
+struct NightsCard: View {
+    let ring: Ring
+    /// `nil` while loading.
+    let nights: [LoggedNight]?
+    let calendar: Calendar
+    @State private var showsAll = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Nights", systemImage: "moon.stars")
+                .font(.headline)
+                .foregroundStyle(ring.accent)
+            if let nights {
+                if nights.isEmpty {
+                    Text("No sleep recorded in this period.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    let shown = showsAll ? nights : Array(nights.prefix(7))
+                    ForEach(shown) { night in
+                        NightRow(night: night, ring: ring, calendar: calendar)
+                        if night.id != shown.last?.id { Divider() }
+                    }
+                    if nights.count > shown.count {
+                        Button("Show all \(nights.count)") { withAnimation { showsAll = true } }
+                            .font(.subheadline.weight(.semibold))
+                            .tint(ring.accent)
+                    }
+                    if nights.contains(where: { !$0.stages.isEmpty }) {
+                        StageLegend()
+                    }
+                }
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .card()
+    }
+}
+
+/// Colours for the stage bar: Everyring's own, not the Health app's.
+enum StageStyle {
+    static func color(_ stage: SleepStage) -> Color {
+        switch stage {
+        case .deep: Color(hex: 0x2F4FD8)
+        case .core: Color(hex: 0x7A92FF)
+        case .rem: Color(hex: 0x41C0D2)
+        }
+    }
+
+    static let awake = Color(hex: 0xFFB86B)
+    static let unspecified = Color.secondary.opacity(0.35)
+}
+
+private struct NightRow: View {
+    let night: LoggedNight
+    let ring: Ring
+    let calendar: Calendar
+
+    var body: some View {
+        let value = night.hours(for: ring.metric)
+        let met = ring.dayIsMet(value)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(dayText)
+                        .font(.subheadline.weight(.semibold))
+                    Text(timeText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(ring.metric.format(value))
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(met == false ? AnyShapeStyle(.secondary) : AnyShapeStyle(ring.accent))
+                    if met == false {
+                        Text(ring.goalKind == .limit ? LocalizedStringKey("Over goal") : "Under goal")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            StageBar(night: night, highlighted: highlightedStage)
+                .frame(height: 8)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText(value: value, met: met))
+    }
+
+    private var highlightedStage: SleepStage? {
+        if case .sleepStage(let stage) = ring.metric { return stage }
+        return nil
+    }
+
+    private var dayText: String {
+        var style = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
+        style.timeZone = calendar.timeZone
+        return night.day(calendar: calendar).formatted(style)
+    }
+
+    private var timeText: String {
+        var style = Date.FormatStyle.dateTime.hour().minute()
+        style.timeZone = calendar.timeZone
+        return "\(night.interval.start.formatted(style)) – \(night.interval.end.formatted(style))"
+    }
+
+    private func accessibilityText(value: Double, met: Bool?) -> String {
+        var parts = [dayText, timeText, ring.metric.format(value, style: .wide)]
+        for stage in SleepStage.allCases {
+            if let time = night.stages[stage] {
+                parts.append("\(stage.title) \(HealthMetric.sleep.format(time / 3600, style: .wide))")
+            }
+        }
+        if met == false {
+            parts.append(ring.goalKind == .limit ? String(localized: "over goal") : String(localized: "under goal"))
+        }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// The night's stages as one bar: deep, core, REM, asleep without a stage, then awake, in proportion. A stage ring
+/// shows its own stage in full colour and the rest faded.
+private struct StageBar: View {
+    let night: LoggedNight
+    var highlighted: SleepStage?
+
+    var body: some View {
+        let parts = segments
+        let total = max(1, parts.reduce(0) { $0 + $1.time })
+        GeometryReader { geo in
+            HStack(spacing: 1.5) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                    Rectangle()
+                        .fill(part.color.opacity(highlighted == nil || part.stage == highlighted ? 1 : 0.3))
+                        .frame(width: max(2, geo.size.width * part.time / total - 1.5))
+                }
+            }
+        }
+        .clipShape(.capsule)
+        .accessibilityHidden(true)
+    }
+
+    private var segments: [(time: TimeInterval, color: Color, stage: SleepStage?)] {
+        var result: [(time: TimeInterval, color: Color, stage: SleepStage?)] = []
+        for stage in [SleepStage.deep, .core, .rem] {
+            if let time = night.stages[stage], time > 0 { result.append((time, StageStyle.color(stage), stage)) }
+        }
+        if night.unspecified > 60 { result.append((night.unspecified, StageStyle.unspecified, nil)) }
+        if night.awake > 60 { result.append((night.awake, StageStyle.awake, nil)) }
+        return result
+    }
+}
+
+private struct StageLegend: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach([SleepStage.deep, .core, .rem], id: \.self) { stage in
+                item(StageStyle.color(stage), stage == .rem ? "REM" : stage == .deep ? String(localized: "Deep") : String(localized: "Core"))
+            }
+            item(StageStyle.awake, String(localized: "Awake"))
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .accessibilityHidden(true)
+    }
+
+    private func item(_ color: Color, _ title: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(title)
+        }
     }
 }

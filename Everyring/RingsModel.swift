@@ -246,6 +246,13 @@ final class RingsModel {
         return try? await health.workoutLog(of: ring.metric, in: interval, filter: ring.healthFilter)
     }
 
+    /// The nights in `interval`, for sleep rings; `nil` for other rings or if Health couldn't be read.
+    func nightLog(for ring: Ring, interval: DateInterval, now: Date = .now) async -> [LoggedNight]? {
+        guard ring.metric.isSleep else { return nil }
+        if Self.isDemo { return DemoHistory.nights(in: interval, now: now, calendar: calendar) }
+        return try? await health.nights(in: interval, calendar: calendar, filter: ring.healthFilter)
+    }
+
     /// The apps and devices that wrote data for `metric`, for picking a ring's sources.
     func sources(for metric: HealthMetric) async -> [HealthSource] {
         if Self.isDemo {
