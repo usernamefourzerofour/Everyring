@@ -122,6 +122,8 @@ struct ToneRingStack: View {
                 if shown.count == 1, let ring = shown.first {
                     let (deep, light) = colours(ring)
                     ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: diameter * 0.14)
+                        .saturation(ring.faded ? 0.15 : 1)
+                        .opacity(ring.faded ? 0.3 : 1)
                     Text(max(0, ring.fraction), format: .percent.precision(.fractionLength(0)))
                         .font(.system(size: diameter * 0.26, weight: .bold, design: .rounded))
                         .minimumScaleFactor(0.4)
@@ -134,8 +136,15 @@ struct ToneRingStack: View {
                         let (deep, light) = colours(ring)
                         ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: lw)
                             .frame(width: (radius + lw / 2) * 2, height: (radius + lw / 2) * 2)
+                            .saturation(ring.faded ? 0.15 : 1)
                             .opacity(ring.faded ? 0.3 : 1)
                     }
+                }
+                // Every ring closed and hidden: a quiet check in their place.
+                if !rings.isEmpty && shown.isEmpty {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: diameter * 0.35, weight: .light))
+                        .widgetAccentable()
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
