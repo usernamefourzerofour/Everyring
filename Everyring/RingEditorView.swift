@@ -4,8 +4,10 @@ import SwiftUI
 struct RingEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var ring: Ring
-    /// The goal in the display unit (km, mi, kcal, …).
+    /// The goal in the display unit (km, mi, kcal, …); a number of days for a days-reaching ring.
     @State private var displayGoal: Double
+    /// A days-reaching ring's daily target in the display unit.
+    @State private var displayTarget: Double
     @State private var nameEdited: Bool
     @State private var goalEdited: Bool
     @State private var confirmDelete = false
@@ -22,7 +24,9 @@ struct RingEditorView: View {
     init(ring: Ring, isNew: Bool, showsCancel: Bool = false, previewValue: Double? = nil,
          onSave: @escaping (Ring) -> Void, onDelete: (() -> Void)? = nil) {
         _ring = State(initialValue: ring)
-        _displayGoal = State(initialValue: Self.rounded(ring.metric.toDisplay(ring.goal)))
+        _displayGoal = State(initialValue: ring.isDaysReaching ? ring.goal.rounded() : Self.rounded(ring.metric.toDisplay(ring.goal)))
+        _displayTarget = State(initialValue: Self.rounded(ring.metric.toDisplay(
+            ring.dailyTarget > 0 ? ring.dailyTarget : ring.metric.suggestedGoal(for: .today))))
         _nameEdited = State(initialValue: !isNew)
         _goalEdited = State(initialValue: !isNew)
         self.isNew = isNew
@@ -39,10 +43,35 @@ struct RingEditorView: View {
 
     private var edited: Ring {
         var r = ring
+        if ring.isDaysReaching {
+            r.goal = max(1, displayGoal.rounded())
+            let same = abs(Self.rounded(ring.metric.toDisplay(ring.dailyTarget)) - displayTarget) < 0.000_001
+            if !same { r.dailyTarget = ring.metric.fromDisplay(displayTarget) }
+            return r
+        }
         // Keep the exact stored goal unless the user changed the (rounded) number shown.
         let unchanged = abs(Self.rounded(ring.metric.toDisplay(ring.goal)) - displayGoal) < 0.000_001
         if !unchanged { r.goal = ring.metric.fromDisplay(displayGoal) }
         return r
+    }
+
+    /// The most days a days-reaching goal can ask for in one period (about: a month counts 30 days).
+    private var maxDays: Int {
+        let n = Double(ring.period.nominalDays)
+        switch ring.effectiveDays {
+        case .everyDay: return Int(n)
+        case .weekdays: return max(1, Int((n * 5 / 7).rounded(.up)))
+        case .weekends: return max(1, Int((n * 2 / 7).rounded(.up)))
+        }
+    }
+
+    /// A days-reaching goal to start from: most days of the period (5 days a week).
+    private var suggestedDays: Double {
+        max(1, (Double(maxDays) * 5 / 7).rounded())
+    }
+
+    private var isValid: Bool {
+        ring.isDaysReaching ? displayGoal >= 1 && displayTarget > 0 : displayGoal > 0
     }
 
     var body: some View {
@@ -64,17 +93,17 @@ struct RingEditorView: View {
                             .multilineTextAlignment(.trailing)
                     }
                 }
-                if case .exerciseMinutes(let excluded) = ring.metric {
+                if ring.metric.supportsWorkoutLeaveOut {
+                    let leftOut = WorkoutFilter.make(ring.leftOutWorkouts, excludes: true)
                     NavigationLink {
-                        WorkoutFilterView(measure: .minutes, excludeOnly: true, filter: Binding(
-                            get: { excluded },
-                            set: { ring.metric = .exerciseMinutes(excluding: $0) }
-                        ))
+                        WorkoutFilterView(measure: .minutes, excludeOnly: true, metricTitle: ring.metric.title,
+                                          filter: Binding(get: { leftOut },
+                                                          set: { ring.leftOutWorkouts = $0?.kinds ?? [] }))
                     } label: {
                         HStack {
-                            Text("Leave out")
+                            Text("Leave out workouts")
                             Spacer()
-                            Text(excluded?.listed ?? String(localized: "Nothing"))
+                            Text(leftOut?.listed ?? String(localized: "None"))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -103,6 +132,23 @@ struct RingEditorView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                     }
+                    Picker("Shortest workout", selection: $ring.minimumWorkoutMinutes) {
+                        Text("Any length").tag(0)
+                        ForEach([5, 10, 15, 20, 30, 45, 60], id: \.self) { minutes in
+                            Text(Duration.seconds(minutes * 60).formatted(.units(allowed: [.minutes], width: .abbreviated)))
+                                .tag(minutes)
+                        }
+                    }
+                }
+                NavigationLink {
+                    SourcesView(metric: ring.metric, selection: $ring.sources)
+                } label: {
+                    HStack {
+                        Text("Sources")
+                        Spacer()
+                        Text(ring.sources.isEmpty ? String(localized: "All") : String(localized: "\(ring.sources.count) selected"))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -116,7 +162,8 @@ struct RingEditorView: View {
                 if ring.period.nominalDays > 1 {
                     Picker("Count", selection: $ring.aggregation) {
                         Text("Total").tag(GoalAggregation.total)
-                        Text("Daily average").tag(GoalAggregation.dailyAverage)
+                        Text("Average").tag(GoalAggregation.dailyAverage)
+                        Text("Days").tag(GoalAggregation.daysReaching)
                     }
                     .pickerStyle(.segmented)
                     .listRowSeparator(.hidden)
@@ -124,20 +171,42 @@ struct RingEditorView: View {
                 if ring.isAverage {
                     Toggle("Skip days without data", isOn: $ring.averageSkipsEmptyDays)
                 }
-                HStack {
-                    TextField(ring.isLimit ? "Limit" : "Goal", value: Binding(
-                        get: { displayGoal },
-                        set: { displayGoal = $0; goalEdited = true }
-                    ), format: .number)
-                    .keyboardType(.decimalPad)
-                    Text(ring.isAverage ? String(localized: "\(ring.metric.unitName()) a day") : ring.metric.unitName())
-                        .foregroundStyle(.secondary)
+                if ring.isDaysReaching {
+                    HStack {
+                        Text(ring.goalKind == .limit ? "Each day under" : "Each day at least")
+                        TextField("Target", value: Binding(
+                            get: { displayTarget },
+                            set: { displayTarget = $0; goalEdited = true }
+                        ), format: .number)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        Text(ring.metric.unitName())
+                            .foregroundStyle(.secondary)
+                    }
+                    Stepper(value: Binding(get: { Int(displayGoal) }, set: { displayGoal = Double($0); goalEdited = true }),
+                            in: 1...maxDays) {
+                        Text(Int(displayGoal) == 1 ? "On 1 day" : "On \(Int(displayGoal)) days")
+                    }
+                } else {
+                    HStack {
+                        TextField(ring.isLimit ? "Limit" : "Goal", value: Binding(
+                            get: { displayGoal },
+                            set: { displayGoal = $0; goalEdited = true }
+                        ), format: .number)
+                        .keyboardType(.decimalPad)
+                        Text(ring.isAverage ? String(localized: "\(ring.metric.unitName()) a day") : ring.metric.unitName())
+                            .foregroundStyle(.secondary)
+                    }
                 }
             } header: {
                 Text("Goal")
             } footer: {
-                if displayGoal <= 0 {
+                if !isValid {
                     Text("The goal must be more than zero.")
+                } else if ring.isDaysReaching {
+                    Text(ring.goalKind == .limit
+                         ? LocalizedStringKey("Counts the days you log something and stay under the target. The ring closes when you've done it on \(Int(displayGoal)) days in the period.")
+                         : "Counts the days that reach the target. The ring closes when you've done it on \(Int(displayGoal)) days in the period.")
                 } else if ring.isAverage {
                     Text(ring.averageSkipsEmptyDays
                          ? LocalizedStringKey("A daily average: the ring compares your average per day over the period with the goal. Days without any data, such as a night without your watch, are left out.")
@@ -151,12 +220,24 @@ struct RingEditorView: View {
 
             Section {
                 PeriodPicker(period: $ring.period)
+                if ring.period.nominalDays > 1 {
+                    Picker("Days", selection: $ring.days) {
+                        ForEach(DayFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                }
             } header: {
                 Text("Period")
             } footer: {
-                Text(ring.period.isRolling
-                     ? LocalizedStringKey("The ring always shows the last days up to now. Old days drop out as new ones begin, so it can also go down. Stay above your goal.")
-                     : "The ring fills up during the period and starts over when the next one begins. Close it before the period ends.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ring.period.isRolling
+                         ? LocalizedStringKey("The ring always shows the last days up to now. Old days drop out as new ones begin, so it can also go down. Stay above your goal.")
+                         : "The ring fills up during the period and starts over when the next one begins. Close it before the period ends.")
+                    switch ring.effectiveDays {
+                    case .everyDay: EmptyView()
+                    case .weekdays: Text("Only weekdays count: what you do at the weekend is left out.")
+                    case .weekends: Text("Only weekends count: what you do on weekdays is left out.")
+                    }
+                }
             }
 
             Section("Appearance") {
@@ -199,7 +280,7 @@ struct RingEditorView: View {
                     onSave(r)
                     dismiss()
                 }
-                .disabled(displayGoal <= 0)
+                .disabled(!isValid)
             }
         }
         .task(id: ring.metric) {
@@ -220,24 +301,58 @@ struct RingEditorView: View {
             if ring.symbol == old.defaultSymbol { ring.symbol = new.defaultSymbol }
             // And the colour: the old metric's colour follows, one the user picked stays.
             if ring.customTint == nil && ring.color == old.defaultColor { ring.color = new.defaultColor }
+            // Sources and left-out workouts belong to the old metric's data.
+            if !old.isSameKind(as: new) { ring.sources = [] }
+            if !new.supportsWorkoutLeaveOut { ring.leftOutWorkouts = [] }
             // A goal in another unit makes no sense; start from a suggestion.
             if old.baseUnit != new.baseUnit { goalEdited = false }
             if !goalEdited {
-                displayGoal = Self.rounded(new.toDisplay(new.suggestedGoal(for: ring.isAverage ? .today : ring.period)))
                 ring.goalKind = new.defaultGoalKind
+                if ring.isDaysReaching {
+                    displayTarget = Self.rounded(new.toDisplay(new.suggestedGoal(for: .today)))
+                } else {
+                    displayGoal = Self.rounded(new.toDisplay(new.suggestedGoal(for: ring.isAverage ? .today : ring.period)))
+                }
             }
         }
-        .onChange(of: ring.period) { _, period in
-            // An average goal is per day, so it stays the same when the period changes.
-            if !goalEdited {
+        .onChange(of: ring.period) { old, period in
+            let wasDays = ring.aggregation == .daysReaching && old.nominalDays > 1
+            if wasDays != ring.isDaysReaching {
+                // Into or out of counting days (a one-day period can't count days): the day's target and the goal
+                // trade places.
+                if ring.isDaysReaching {
+                    displayTarget = displayGoal
+                    displayGoal = suggestedDays
+                } else {
+                    displayGoal = displayTarget
+                }
+            } else if ring.isDaysReaching {
+                displayGoal = goalEdited ? min(displayGoal, Double(maxDays)) : suggestedDays
+            } else if !goalEdited {
+                // An average goal is per day, so it stays the same when the period changes.
                 displayGoal = Self.rounded(ring.metric.toDisplay(ring.metric.suggestedGoal(for: ring.isAverage ? .today : period)))
             }
         }
+        .onChange(of: ring.days) {
+            if ring.isDaysReaching { displayGoal = min(displayGoal, Double(maxDays)) }
+        }
         .onChange(of: ring.aggregation) { old, new in
-            // Keep the goal meaning the same: a week's 70,000 steps is 10,000 a day.
+            // Keep the goal meaning the same: a week's 70,000 steps is 10,000 a day, or 10,000 on 5 days.
             let days = Double(ring.period.nominalDays)
             guard days > 1, old != new else { return }
-            displayGoal = Self.rounded(new == .dailyAverage ? displayGoal / days : displayGoal * days)
+            // What one day is worth in the old way of counting.
+            let perDay: Double = switch old {
+            case .total: displayGoal / days
+            case .dailyAverage: displayGoal
+            case .daysReaching: displayTarget
+            }
+            switch new {
+            case .total: displayGoal = Self.rounded(perDay * days)
+            case .dailyAverage: displayGoal = Self.rounded(perDay)
+            case .daysReaching:
+                displayTarget = Self.rounded(perDay)
+                displayGoal = suggestedDays
+            }
         }
     }
 }
@@ -285,8 +400,6 @@ struct MetricPickerView: View {
     init(selection: Binding<HealthMetric>) {
         current = selection.wrappedValue
         onPick = { metric in
-            // Picking exercise minutes again keeps the workouts left out.
-            if selection.wrappedValue.isSameKind(as: metric), case .exerciseMinutes = metric { return }
             // Keep the chosen workout kinds when switching between workout measures.
             if case .workouts(_, let filter) = selection.wrappedValue, case .workouts(let measure, _) = metric {
                 selection.wrappedValue = .workouts(measure, kind: WorkoutFilter.adapted(filter, to: measure))
@@ -562,16 +675,19 @@ extension RingTint {
 /// Picks the kinds of workouts a ring counts: all, only some, or all except some.
 struct WorkoutFilterView: View {
     let measure: WorkoutMeasure
-    /// Exercise minutes: workouts can only be left out (most exercise minutes come from everyday activity, not
-    /// workouts, so "only these" would mislead).
+    /// Activity rings (steps, exercise minutes, …): workouts can only be left out (most activity comes from everyday
+    /// life, not workouts, so "only these" would mislead).
     var excludeOnly = false
+    /// For `excludeOnly`: what is left out, "Steps".
+    var metricTitle = ""
     @Binding var filter: WorkoutFilter?
     @State private var kinds: Set<WorkoutKind>
     @State private var excludes: Bool
 
-    init(measure: WorkoutMeasure, excludeOnly: Bool = false, filter: Binding<WorkoutFilter?>) {
+    init(measure: WorkoutMeasure, excludeOnly: Bool = false, metricTitle: String = "", filter: Binding<WorkoutFilter?>) {
         self.measure = measure
         self.excludeOnly = excludeOnly
+        self.metricTitle = metricTitle
         _filter = filter
         _kinds = State(initialValue: Set(filter.wrappedValue?.kinds ?? []))
         _excludes = State(initialValue: excludeOnly || filter.wrappedValue?.excludes == true)
@@ -618,7 +734,7 @@ struct WorkoutFilterView: View {
                 }
             } footer: {
                 if excludeOnly {
-                    Text("Exercise minutes logged during workouts of the types you pick are left out. All other exercise minutes still count, including everyday activity and workouts you didn't record.")
+                    Text("\(metricTitle) logged during workouts of the types you pick is left out. Everything else still counts, including everyday activity and workouts you didn't record.")
                 }
             }
         }
@@ -635,5 +751,64 @@ struct WorkoutFilterView: View {
 
     private func save() {
         filter = WorkoutFilter.make(kinds, excludes: excludes)
+    }
+}
+
+/// Picks the apps and devices whose data a ring counts.
+struct SourcesView: View {
+    @Environment(RingsModel.self) private var model
+    let metric: HealthMetric
+    @Binding var selection: [String]
+    @State private var sources: [HealthSource]?
+
+    var body: some View {
+        Form {
+            Section {
+                Button {
+                    selection = []
+                } label: {
+                    HStack {
+                        Text("All sources").foregroundStyle(.primary)
+                        Spacer()
+                        if selection.isEmpty { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    }
+                }
+            }
+            Section {
+                if let sources {
+                    if sources.isEmpty {
+                        Text("No apps or devices have written \(metric.title.lowercased()) to Health yet.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(sources) { source in
+                        Button {
+                            if let index = selection.firstIndex(of: source.id) {
+                                selection.remove(at: index)
+                            } else {
+                                selection.append(source.id)
+                            }
+                        } label: {
+                            HStack {
+                                Text(source.name).foregroundStyle(.primary)
+                                Spacer()
+                                if selection.contains(source.id) {
+                                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                                }
+                            }
+                        }
+                        .accessibilityAddTraits(selection.contains(source.id) ? .isSelected : [])
+                    }
+                } else {
+                    ProgressView().frame(maxWidth: .infinity)
+                }
+            } header: {
+                Text("Only from")
+            } footer: {
+                Text("Only data from the apps and devices you pick counts. Health already avoids counting the same activity twice from your iPhone and Apple Watch, so most rings need no change.")
+            }
+        }
+        .navigationTitle("Sources")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { sources = await model.sources(for: metric) }
     }
 }

@@ -211,7 +211,9 @@ extension RingPeriod {
 enum DemoHistory {
     static func daily(for ring: Ring, from start: Date, to now: Date, calendar: Calendar) -> [Date: Double] {
         var result: [Date: Double] = [:]
-        let perDay = ring.isAverage ? ring.goal : ring.goal / Double(ring.period.nominalDays)
+        let perDay = ring.isAverage ? ring.goal
+            : ring.isDaysReaching ? ring.dailyTarget
+            : ring.goal / Double(ring.period.nominalDays)
         var day = calendar.startOfDay(for: start)
         while day <= now {
             let ordinal = Int(day.timeIntervalSinceReferenceDate / 86_400)

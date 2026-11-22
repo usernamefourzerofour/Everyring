@@ -191,4 +191,8 @@ Manual logging, notifications, iCloud sync, sharing/social, quarter and year per
   of times fallen: Everyring can't vouch for their precision and must not give medical advice (decided 2026-11-16).
 - Rings can be goals to reach or limits to stay under (turn red when exceeded).
 - Rings of several days can count a total or a daily average (goal per day, e.g. 8 h sleep a night over the last 30 days). The average divides by all the days of a finished period or rolling window, and by the days so far (today included) in a fixed period in progress; days without data count as zero by default; a ring setting can leave them out instead.
-- Workout rings can count only some workout types or all but some. Exercise-minute rings can only leave out the minutes logged during chosen workout types (Health doesn't tie exercise minutes to workouts, so a minute belongs to a workout when it falls inside the workout's time; most exercise minutes come from everyday activity, so "only these" would mislead).
+- Workout rings can count only some workout types or all but some, and can ignore short workouts.
+- Activity rings (steps, active energy, exercise minutes, walking + running distance) can leave out what was logged while workouts of chosen types ran (Health doesn't tie samples to workouts, so it goes by time; most activity is everyday life, so there is no "only these"). Their detail screen lists the period's workouts with what was logged during each.
+- Rings of several days can count a total, a daily average, or the days that reach a daily target ("10,000 steps on 5 days"); and can count only weekdays or weekends.
+- Any ring can be limited to data from chosen apps and devices.
+- Sleep stages (core, deep, REM) are rings of their own, counted on the night they belong to.

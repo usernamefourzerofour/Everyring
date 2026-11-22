@@ -21,12 +21,12 @@ enum ProgressUpdater {
             do {
                 let value: Double
                 if ring.needsDailyValues {
-                    // Leaving out empty days needs to know which days have data.
+                    // Counting days one by one (left-out days, days reaching a target, days with data) needs each day.
                     let daily = try await health.dailyValues(of: ring.metric, from: interval.start, to: min(interval.end, now),
-                                                             calendar: calendar)
+                                                             calendar: calendar, filter: ring.healthFilter)
                     value = ring.measure(daily: daily, in: interval, now: now, calendar: calendar)
                 } else {
-                    let total = try await health.value(of: ring.metric, in: interval)
+                    let total = try await health.value(of: ring.metric, in: interval, filter: ring.healthFilter)
                     value = ring.measure(total, in: interval, now: now, calendar: calendar)
                 }
                 result.snapshots[ring.id] = RingSnapshot(value: value, intervalStart: interval.start,

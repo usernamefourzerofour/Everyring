@@ -46,35 +46,26 @@ struct WorkoutFilterTests {
         #expect(try JSONDecoder().decode(HealthMetric.self, from: JSONEncoder().encode(all)) == all)
     }
 
-    @Test func exerciseMinutesLeaveOutWorkouts() throws {
-        #expect(HealthMetric.exerciseMinutes().title == "Exercise minutes")
-        let walking = HealthMetric.exerciseMinutes(excluding: .make([.walking], excludes: true))
-        #expect(walking.title == "Exercise minutes except Walking")
-        #expect(walking.pickerTitle == "Exercise minutes")
-        #expect(walking.isSameKind(as: .exerciseMinutes()))
-        // Rings saved before the filter existed.
-        let old = try JSONDecoder().decode(HealthMetric.self, from: Data(#"{"exerciseMinutes":{}}"#.utf8))
-        #expect(old == .exerciseMinutes())
-        #expect(try JSONDecoder().decode(HealthMetric.self, from: JSONEncoder().encode(walking)) == walking)
-    }
-
-    @Test func exerciseMinutesAreAssignedToTheWorkoutHoldingThem() {
-        let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        func span(_ a: Double, _ b: Double) -> DateInterval { DateInterval(start: t0 + a * 60, end: t0 + b * 60) }
-        let workouts = [span(0, 30), span(60, 90)]
-        // Minutes inside the first workout, one between workouts, one straddling the second workout's start.
-        let samples = [(span(5, 6), 1.0), (span(10, 11), 1.0), (span(40, 41), 1.0), (span(59.8, 60.8), 1.0)]
-            .map { (interval: $0.0, minutes: $0.1) }
-        #expect(LoggedWorkout.minutes(of: samples, in: workouts) == [2, 1])
-    }
-
-    @Test func leftOutFollowsTheRing() {
-        let ring = Ring(name: "Exercise", color: .magenta, symbol: "bolt.heart",
-                        metric: .exerciseMinutes(excluding: .make([.walking], excludes: true)), goal: 150, period: .rollingDays(7))
-        let walk = LoggedWorkout(id: UUID(), kind: .walking, start: .now, end: .now, exerciseMinutes: 5)
+    @Test func activityRingsLeaveOutWorkouts() {
+        var ring = Ring(name: "Exercise", color: .magenta, symbol: "bolt.heart", metric: .exerciseMinutes, goal: 150,
+                        period: .rollingDays(7), leftOutWorkouts: [.walking])
+        #expect(ring.healthFilter.leftOutWorkouts == [.walking])
+        let walk = LoggedWorkout(id: UUID(), kind: .walking, start: .now, end: .now, value: 5)
         var run = walk
         run.kind = .running
         #expect(walk.isLeftOut(by: ring))
         #expect(!run.isLeftOut(by: ring))
+        // Metrics without workouts to leave out ignore the setting.
+        ring.metric = .sleep
+        #expect(ring.healthFilter.leftOutWorkouts.isEmpty)
+        #expect(!walk.isLeftOut(by: ring))
+    }
+
+    @Test func minimumLengthOnlyForWorkoutRings() {
+        var ring = Ring(name: "W", color: .indigo, symbol: "dumbbell", metric: .workouts(.count, kind: nil), goal: 3,
+                        period: .thisWeek, minimumWorkoutMinutes: 20)
+        #expect(ring.healthFilter.minimumWorkoutMinutes == 20)
+        ring.metric = .steps
+        #expect(ring.healthFilter.minimumWorkoutMinutes == 0)
     }
 }

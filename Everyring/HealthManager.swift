@@ -17,18 +17,31 @@ extension HealthMetric {
         case .water: HKQuantityType(.dietaryWater)
         case .quantity(let kind): HKQuantityType(kind.identifier)
         case .nutrient(let kind): HKQuantityType(kind.identifier)
-        case .standHours, .workouts, .sleep, .mindfulMinutes, .events: nil
+        case .standHours, .workouts, .sleep, .sleepStage, .mindfulMinutes, .events: nil
+        }
+    }
+
+    /// The type of sample the metric reads, for listing its sources.
+    var sampleType: HKSampleType? {
+        if let quantityType { return quantityType }
+        switch self {
+        case .standHours: return HKCategoryType(.appleStandHour)
+        case .sleep, .sleepStage: return HKCategoryType(.sleepAnalysis)
+        case .mindfulMinutes: return HKCategoryType(.mindfulSession)
+        case .events(let kind): return HKCategoryType(kind.identifier)
+        case .workouts: return HKObjectType.workoutType()
+        default: return nil
         }
     }
 
     /// Everything this metric needs read access to.
     var readTypes: Set<HKObjectType> {
-        // Exercise minutes: workouts too, to leave some out and to list them on the ring's detail screen.
-        if case .exerciseMinutes = self { return [HKQuantityType(.appleExerciseTime), HKObjectType.workoutType()] }
+        // Activity measured all day: workouts too, to leave some out and to list them on the ring's detail screen.
+        if supportsWorkoutLeaveOut, let quantityType { return [quantityType, HKObjectType.workoutType()] }
         if let quantityType { return [quantityType] }
         switch self {
         case .standHours: return [HKCategoryType(.appleStandHour)]
-        case .sleep: return [HKCategoryType(.sleepAnalysis)]
+        case .sleep, .sleepStage: return [HKCategoryType(.sleepAnalysis)]
         case .mindfulMinutes: return [HKCategoryType(.mindfulSession)]
         case .events(let kind): return [HKCategoryType(kind.identifier)]
         case .workouts(let measure, _):
@@ -125,6 +138,16 @@ extension NutrientKind {
     }
 }
 
+extension SleepStage {
+    var categoryValue: HKCategoryValueSleepAnalysis {
+        switch self {
+        case .core: .asleepCore
+        case .deep: .asleepDeep
+        case .rem: .asleepREM
+        }
+    }
+}
+
 extension EventKind {
     var identifier: HKCategoryTypeIdentifier {
         switch self {
@@ -208,193 +231,184 @@ final class HealthManager {
 
     /// The ring's value over `interval`, in `metric.baseUnit`. Missing data (or no access, which HealthKit doesn't
     /// reveal for reading) counts as zero.
-    func value(of metric: HealthMetric, in interval: DateInterval) async throws -> Double {
-        guard Self.isAvailable else { return 0 }
-        do {
-            return try await readValue(of: metric, in: interval)
-        } catch let error as HKError where error.code == .errorNoData {
-            return 0
-        } catch let error as HKError where error.code == .errorAuthorizationNotDetermined {
-            // Never asked for this type (e.g. the request failed while a sheet was closing): ask now, then read again.
-            try await requestAuthorization(for: [metric])
-            return try await readValue(of: metric, in: interval)
+    func value(of metric: HealthMetric, in interval: DateInterval, filter: HealthFilter = .none) async throws -> Double {
+        guard Self.isAvailable, interval.duration > 0 else { return 0 }
+        let values = try await reading(metric) {
+            try await self.read(metric, filter: filter, in: interval, by: .whole, calendar: .current)
         }
-    }
-
-    private func readValue(of metric: HealthMetric, in interval: DateInterval) async throws -> Double {
-        if case .exerciseMinutes(let excluded?) = metric {
-            let total = try await readValue(of: .exerciseMinutes(), in: interval)
-            let left = try await exerciseMinutes(during: excluded, in: interval) { _ in interval.start }
-            return max(0, total - left.values.reduce(0, +))
-        }
-        if let type = metric.quantityType {
-            return try await sum(type, unit: metric.hkUnit, in: interval)
-        }
-        switch metric {
-        case .events(let kind):
-            return Double(try await categorySamples(kind.identifier, in: interval, strictStart: true).count)
-        case .standHours:
-            let samples = try await categorySamples(.appleStandHour, in: interval, strictStart: true)
-            return Double(samples.filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }.count)
-        case .mindfulMinutes:
-            let samples = try await categorySamples(.mindfulSession, in: interval)
-            return IntervalMath.covered(samples.map(\.interval), within: interval) / 60
-        case .sleep:
-            // A night belongs to the day you wake up: look back far enough to catch its start, and a bit past the end
-            // so a night still in progress at the end of the period isn't cut in two.
-            let fetch = DateInterval(start: interval.start.addingTimeInterval(-24 * 3600),
-                                     end: interval.end.addingTimeInterval(18 * 3600))
-            let asleep = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
-            let samples = try await categorySamples(.sleepAnalysis, in: fetch)
-                .filter { asleep.contains($0.value) }
-            return IntervalMath.asleep(samples.map(\.interval), attributedTo: interval) / 3600
-        case .workouts(let measure, let kind):
-            let workouts = try await workouts(filter: kind, in: interval)
-            switch measure {
-            case .count: return Double(workouts.count)
-            case .minutes: return workouts.reduce(0) { $0 + $1.duration } / 60
-            case .distance:
-                return workouts.reduce(0) { total, workout in
-                    total + HealthMetric.workoutDistanceTypes.reduce(0) { sum, type in
-                        sum + (workout.statistics(for: type)?.sumQuantity()?.doubleValue(for: .meter()) ?? 0)
-                    }
-                }
-            }
-        default:
-            return 0
-        }
+        return values.values.reduce(0, +)
     }
 
     /// The metric's value per calendar day from `start` up to `end`, keyed by start of day (days without data are
     /// missing). One query for the whole range: daily statistics for quantities, samples bucketed by day otherwise.
-    func dailyValues(of metric: HealthMetric, from start: Date, to end: Date,
-                     calendar: Calendar) async throws -> [Date: Double] {
-        do {
-            return try await readDailyValues(of: metric, from: start, to: end, calendar: calendar)
-        } catch let error as HKError where error.code == .errorNoData {
-            return [:]
-        } catch let error as HKError where error.code == .errorAuthorizationNotDetermined {
-            try await requestAuthorization(for: [metric])
-            return try await readDailyValues(of: metric, from: start, to: end, calendar: calendar)
-        }
-    }
-
-    private func readDailyValues(of metric: HealthMetric, from start: Date, to end: Date,
-                                 calendar: Calendar) async throws -> [Date: Double] {
+    func dailyValues(of metric: HealthMetric, from start: Date, to end: Date, calendar: Calendar,
+                     filter: HealthFilter = .none) async throws -> [Date: Double] {
         guard Self.isAvailable, start < end else { return [:] }
         let range = DateInterval(start: calendar.startOfDay(for: start), end: end)
-        if case .exerciseMinutes(let excluded?) = metric {
-            var daily = try await readDailyValues(of: .exerciseMinutes(), from: start, to: end, calendar: calendar)
-            let left = try await exerciseMinutes(during: excluded, in: range) { calendar.startOfDay(for: $0) }
-            for (day, minutes) in left { daily[day] = max(0, (daily[day] ?? 0) - minutes) }
-            return daily
-        }
-        if let type = metric.quantityType {
-            let predicate = HKQuery.predicateForSamples(withStart: range.start, end: range.end)
-            let descriptor = HKStatisticsCollectionQueryDescriptor(
-                predicate: .quantitySample(type: type, predicate: predicate), options: .cumulativeSum,
-                anchorDate: range.start, intervalComponents: DateComponents(day: 1))
-            var result: [Date: Double] = [:]
-            do {
-                let collection = try await descriptor.result(for: store)
-                collection.enumerateStatistics(from: range.start, to: range.end) { statistics, _ in
-                    if let sum = statistics.sumQuantity()?.doubleValue(for: metric.hkUnit) {
-                        result[calendar.startOfDay(for: statistics.startDate), default: 0] += sum
-                    }
-                }
-            } catch let error as HKError where error.code == .errorNoData {
-                return [:]
-            }
-            return result
-        }
-        switch metric {
-        case .events(let kind):
-            let events = try await categorySamples(kind.identifier, in: range, strictStart: true)
-            return Dictionary(grouping: events) { calendar.startOfDay(for: $0.startDate) }.mapValues { Double($0.count) }
-        case .standHours:
-            let stood = try await categorySamples(.appleStandHour, in: range, strictStart: true)
-                .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
-            return Dictionary(grouping: stood) { calendar.startOfDay(for: $0.startDate) }.mapValues { Double($0.count) }
-        case .mindfulMinutes:
-            let samples = try await categorySamples(.mindfulSession, in: range)
-            return IntervalMath.coveredByDay(samples.map(\.interval), calendar: calendar)
-                .filter { $0.key >= range.start }
-                .mapValues { $0 / 60 }
-        case .sleep:
-            let asleep = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
-            let fetch = DateInterval(start: range.start.addingTimeInterval(-24 * 3600),
-                                     end: range.end.addingTimeInterval(18 * 3600))
-            let samples = try await categorySamples(.sleepAnalysis, in: fetch).filter { asleep.contains($0.value) }
-            return IntervalMath.asleepByDay(samples.map(\.interval), calendar: calendar)
-                .filter { $0.key >= range.start && $0.key < range.end }
-                .mapValues { $0 / 3600 }
-        case .workouts(let measure, let kind):
-            let workouts = try await workouts(filter: kind, in: range)
-            return Dictionary(grouping: workouts) { calendar.startOfDay(for: $0.startDate) }.mapValues { list in
-                switch measure {
-                case .count: Double(list.count)
-                case .minutes: list.reduce(0) { $0 + $1.duration } / 60
-                case .distance: list.reduce(0) { $0 + Self.distance(of: $1) }
-                }
-            }
-        default:
-            return [:]
+        return try await reading(metric) {
+            try await self.read(metric, filter: filter, in: range, by: .day, calendar: calendar)
         }
     }
 
     /// The metric's value per hour inside `interval`, keyed by the start of each hour. Sleep and mindful minutes have
     /// no meaningful hourly build-up and return nothing.
     func hourlyValues(of metric: HealthMetric, in interval: DateInterval, calendar: Calendar,
-                      askForAccess: Bool = true) async throws -> [Date: Double] {
+                      filter: HealthFilter = .none) async throws -> [Date: Double] {
         guard Self.isAvailable, interval.duration > 0 else { return [:] }
-        func hour(_ date: Date) -> Date { calendar.dateInterval(of: .hour, for: date)?.start ?? date }
+        return try await reading(metric) {
+            try await self.read(metric, filter: filter, in: interval, by: .hour, calendar: calendar)
+        }
+    }
+
+    /// The apps and devices that wrote the metric's data, for picking a ring's sources.
+    func sources(for metric: HealthMetric) async -> [HealthSource] {
+        guard Self.isAvailable, let type = metric.sampleType else { return [] }
+        let found = (try? await reading(metric) { try await self.sources(of: type) }) ?? []
+        return found.map { HealthSource(id: $0.bundleIdentifier, name: $0.name) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// The workouts that started inside `interval`, newest first, each with what `metric` logged during it.
+    func workoutLog(of metric: HealthMetric, in interval: DateInterval, filter: HealthFilter = .none) async throws -> [LoggedWorkout] {
+        guard Self.isAvailable, let type = metric.quantityType else { return [] }
+        return try await reading(metric) {
+            let scope = try await self.scope(for: metric, filter: filter)
+            let workouts = try await self.workouts(kinds: nil, in: interval)
+            var log: [LoggedWorkout] = []
+            for workout in workouts.reversed() {
+                let span = DateInterval(start: workout.startDate, end: max(workout.startDate, workout.endDate))
+                let value = try await self.sum(type, unit: metric.hkUnit, in: span, scope: scope)
+                log.append(LoggedWorkout(id: workout.uuid, kind: WorkoutKind(activityType: workout.workoutActivityType),
+                                         start: workout.startDate, end: workout.endDate, value: value))
+            }
+            return log
+        }
+    }
+
+    // MARK: Reading
+
+    /// Runs a read, treating "no data" as nothing, and asking for access once if it was never asked for (e.g. the
+    /// request failed while a sheet was closing).
+    private func reading<T>(_ metric: HealthMetric, _ read: () async throws -> T) async throws -> T where T: EmptyableResult {
         do {
-            if case .exerciseMinutes(let excluded?) = metric {
-                var hourly = try await hourlyValues(of: .exerciseMinutes(), in: interval, calendar: calendar,
-                                                    askForAccess: askForAccess)
-                let left = try await exerciseMinutes(during: excluded, in: interval, bucket: hour)
-                for (start, minutes) in left { hourly[start] = max(0, (hourly[start] ?? 0) - minutes) }
-                return hourly
-            }
-            if let type = metric.quantityType {
-                let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
-                let descriptor = HKStatisticsCollectionQueryDescriptor(
-                    predicate: .quantitySample(type: type, predicate: predicate), options: .cumulativeSum,
-                    anchorDate: interval.start, intervalComponents: DateComponents(hour: 1))
-                var result: [Date: Double] = [:]
-                let collection = try await descriptor.result(for: store)
-                collection.enumerateStatistics(from: interval.start, to: interval.end) { statistics, _ in
-                    if let sum = statistics.sumQuantity()?.doubleValue(for: metric.hkUnit) {
-                        result[hour(statistics.startDate), default: 0] += sum
-                    }
-                }
-                return result
-            }
-            switch metric {
-            case .events(let kind):
-                let events = try await categorySamples(kind.identifier, in: interval, strictStart: true)
-                return Dictionary(grouping: events) { hour($0.startDate) }.mapValues { Double($0.count) }
-            case .standHours:
-                let stood = try await categorySamples(.appleStandHour, in: interval, strictStart: true)
-                    .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
-                return Dictionary(grouping: stood) { hour($0.startDate) }.mapValues { Double($0.count) }
-            case .workouts(let measure, let kind):
-                let workouts = try await workouts(filter: kind, in: interval)
-                return Dictionary(grouping: workouts) { hour($0.startDate) }.mapValues { list in
-                    switch measure {
-                    case .count: Double(list.count)
-                    case .minutes: list.reduce(0) { $0 + $1.duration } / 60
-                    case .distance: list.reduce(0) { $0 + Self.distance(of: $1) }
-                    }
-                }
-            default:
-                return [:]
-            }
+            return try await read()
         } catch let error as HKError where error.code == .errorNoData {
-            return [:]
-        } catch let error as HKError where error.code == .errorAuthorizationNotDetermined && askForAccess {
+            return T.empty
+        } catch let error as HKError where error.code == .errorAuthorizationNotDetermined {
             try await requestAuthorization(for: [metric])
-            return try await hourlyValues(of: metric, in: interval, calendar: calendar, askForAccess: false)
+            do { return try await read() } catch let error as HKError where error.code == .errorNoData { return T.empty }
+        }
+    }
+
+    private enum Bucket { case whole, day, hour }
+
+    /// What a read is limited to.
+    private struct Scope {
+        /// `nil`: every source.
+        var sources: Set<HKSource>?
+        var minimumWorkoutDuration: TimeInterval = 0
+        var leftOutWorkouts: [WorkoutKind] = []
+
+        func apply(_ predicate: NSPredicate) -> NSPredicate {
+            guard let sources else { return predicate }
+            return NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, HKQuery.predicateForObjects(from: sources)])
+        }
+    }
+
+    private func scope(for metric: HealthMetric, filter: HealthFilter) async throws -> Scope {
+        var scope = Scope(minimumWorkoutDuration: Double(filter.minimumWorkoutMinutes) * 60,
+                          leftOutWorkouts: filter.leftOutWorkouts)
+        if !filter.sources.isEmpty, let type = metric.sampleType {
+            let wanted = Set(filter.sources)
+            scope.sources = try await sources(of: type).filter { wanted.contains($0.bundleIdentifier) }
+        }
+        return scope
+    }
+
+    private func sources(of type: HKSampleType) async throws -> Set<HKSource> {
+        Set(try await HKSourceQueryDescriptor(predicate: .sample(type: type)).result(for: store))
+    }
+
+    /// The metric's values in `range`, summed per bucket (keyed by the bucket's start; `.whole`: by `range.start`).
+    private func read(_ metric: HealthMetric, filter: HealthFilter, in range: DateInterval, by bucket: Bucket,
+                      calendar: Calendar) async throws -> [Date: Double] {
+        let scope = try await self.scope(for: metric, filter: filter)
+        func key(_ date: Date) -> Date {
+            switch bucket {
+            case .whole: range.start
+            case .day: calendar.startOfDay(for: date)
+            case .hour: calendar.dateInterval(of: .hour, for: date)?.start ?? date
+            }
+        }
+        func counted<S: HKSample>(_ samples: [S], value: (S) -> Double = { _ in 1 }) -> [Date: Double] {
+            samples.reduce(into: [:]) { result, sample in result[key(sample.startDate), default: 0] += value(sample) }
+        }
+
+        if let type = metric.quantityType {
+            var result = try await quantities(type, unit: metric.hkUnit, in: range, by: bucket, scope: scope, key: key)
+            // Leave out what was logged while workouts of the left-out kinds ran (Health doesn't tie it to them).
+            if !scope.leftOutWorkouts.isEmpty {
+                let fetch = DateInterval(start: range.start.addingTimeInterval(-12 * 3600), end: range.end)
+                let spans = IntervalMath.merged(try await workouts(kinds: scope.leftOutWorkouts, in: fetch)
+                    .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) })
+                    .compactMap { $0.intersection(with: range) }
+                    .filter { $0.duration > 0 }
+                for span in spans {
+                    let during = try await sum(type, unit: metric.hkUnit, in: span, scope: scope)
+                    result[key(span.start)] = max(0, (result[key(span.start)] ?? 0) - during)
+                }
+            }
+            return result
+        }
+
+        switch metric {
+        case .events(let kind):
+            return counted(try await categorySamples(kind.identifier, in: range, scope: scope, strictStart: true))
+        case .standHours:
+            let stood = try await categorySamples(.appleStandHour, in: range, scope: scope, strictStart: true)
+                .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
+            return counted(stood)
+        case .mindfulMinutes:
+            let sessions = try await categorySamples(.mindfulSession, in: range, scope: scope).map(\.interval)
+            switch bucket {
+            case .whole: return [range.start: IntervalMath.covered(sessions, within: range) / 60]
+            case .day:
+                return IntervalMath.coveredByDay(sessions, calendar: calendar)
+                    .filter { range.contains($0.key) }.mapValues { $0 / 60 }
+            case .hour: return [:]
+            }
+        case .sleep, .sleepStage:
+            guard bucket != .hour else { return [:] }
+            // A night belongs to the day you wake up: look back far enough to catch its start, and a bit past the end
+            // so a night still in progress at the end of the period isn't cut in two.
+            let fetch = DateInterval(start: range.start.addingTimeInterval(-24 * 3600), end: range.end.addingTimeInterval(18 * 3600))
+            let asleepValues = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
+            let samples = try await categorySamples(.sleepAnalysis, in: fetch, scope: scope)
+            let asleep = samples.filter { asleepValues.contains($0.value) }.map(\.interval)
+            var seconds: [Date: TimeInterval]
+            if case .sleepStage(let stage) = metric {
+                let stageIntervals = samples.filter { $0.value == stage.categoryValue.rawValue }.map(\.interval)
+                seconds = bucket == .whole
+                    ? [range.start: IntervalMath.stage(stageIntervals, asleep: asleep, attributedTo: range)]
+                    : IntervalMath.stageByDay(stageIntervals, asleep: asleep, calendar: calendar)
+            } else {
+                seconds = bucket == .whole
+                    ? [range.start: IntervalMath.asleep(asleep, attributedTo: range)]
+                    : IntervalMath.asleepByDay(asleep, calendar: calendar)
+            }
+            if bucket == .day { seconds = seconds.filter { range.contains($0.key) } }
+            return seconds.mapValues { $0 / 3600 }
+        case .workouts(let measure, let filter):
+            let workouts = try await workouts(filter: filter, in: range, scope: scope)
+            return counted(workouts) { workout in
+                switch measure {
+                case .count: 1
+                case .minutes: workout.duration / 60
+                case .distance: Self.distance(of: workout)
+                }
+            }
+        default:
+            return [:]
         }
     }
 
@@ -406,8 +420,35 @@ final class HealthManager {
 
     // MARK: Queries
 
-    private func sum(_ type: HKQuantityType, unit: HKUnit, in interval: DateInterval) async throws -> Double {
-        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
+    /// Sums of a quantity per bucket (Health's statistics, which don't double count overlapping sources).
+    private func quantities(_ type: HKQuantityType, unit: HKUnit, in range: DateInterval, by bucket: Bucket,
+                            scope: Scope, key: (Date) -> Date) async throws -> [Date: Double] {
+        let step: DateComponents
+        switch bucket {
+        case .whole: return [range.start: try await sum(type, unit: unit, in: range, scope: scope)]
+        case .day: step = DateComponents(day: 1)
+        case .hour: step = DateComponents(hour: 1)
+        }
+        let predicate = scope.apply(HKQuery.predicateForSamples(withStart: range.start, end: range.end))
+        let descriptor = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: type, predicate: predicate), options: .cumulativeSum,
+            anchorDate: range.start, intervalComponents: step)
+        var result: [Date: Double] = [:]
+        do {
+            let collection = try await descriptor.result(for: store)
+            collection.enumerateStatistics(from: range.start, to: range.end) { statistics, _ in
+                if let sum = statistics.sumQuantity()?.doubleValue(for: unit) {
+                    result[key(statistics.startDate), default: 0] += sum
+                }
+            }
+        } catch let error as HKError where error.code == .errorNoData {
+            return [:]
+        }
+        return result
+    }
+
+    private func sum(_ type: HKQuantityType, unit: HKUnit, in interval: DateInterval, scope: Scope) async throws -> Double {
+        let predicate = scope.apply(HKQuery.predicateForSamples(withStart: interval.start, end: interval.end))
         let descriptor = HKStatisticsQueryDescriptor(
             predicate: .quantitySample(type: type, predicate: predicate), options: .cumulativeSum)
         do {
@@ -417,67 +458,19 @@ final class HealthManager {
         }
     }
 
-    private func categorySamples(_ identifier: HKCategoryTypeIdentifier, in interval: DateInterval,
+    private func categorySamples(_ identifier: HKCategoryTypeIdentifier, in interval: DateInterval, scope: Scope,
                                  strictStart: Bool = false) async throws -> [HKCategorySample] {
-        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end,
-                                                    options: strictStart ? .strictStartDate : [])
+        let predicate = scope.apply(HKQuery.predicateForSamples(withStart: interval.start, end: interval.end,
+                                                                options: strictStart ? .strictStartDate : []))
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.categorySample(type: HKCategoryType(identifier), predicate: predicate)],
             sortDescriptors: [SortDescriptor(\.startDate)])
         return try await descriptor.result(for: store)
     }
 
-    /// Exercise minutes logged during workouts of the kinds `excluded` names, inside `interval`, summed per
-    /// `bucket` of each sample's start. Apple doesn't tie exercise minutes to a workout, so a minute belongs to a
-    /// workout when its middle falls inside the workout's time.
-    private func exerciseMinutes(during excluded: WorkoutFilter, in interval: DateInterval,
-                                 bucket: (Date) -> Date) async throws -> [Date: Double] {
-        // A workout may have started before the interval (an evening workout past midnight).
-        let fetch = DateInterval(start: interval.start.addingTimeInterval(-12 * 3600), end: interval.end)
-        let spans = try await workouts(filter: WorkoutFilter.make(excluded.kinds), in: fetch)
-            .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) }
-            .filter { $0.intersects(interval) }
-        guard !spans.isEmpty else { return [:] }
-        var result: [Date: Double] = [:]
-        for sample in try await exerciseSamples(in: interval) {
-            let middle = sample.startDate.addingTimeInterval(sample.endDate.timeIntervalSince(sample.startDate) / 2)
-            guard interval.contains(middle), spans.contains(where: { $0.contains(middle) }) else { continue }
-            result[bucket(sample.startDate), default: 0] += sample.quantity.doubleValue(for: .minute())
-        }
-        return result
-    }
-
-    private func exerciseSamples(in interval: DateInterval) async throws -> [HKQuantitySample] {
-        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
-        let descriptor = HKSampleQueryDescriptor(
-            predicates: [.quantitySample(type: HKQuantityType(.appleExerciseTime), predicate: predicate)],
-            sortDescriptors: [SortDescriptor(\.startDate)])
-        return try await descriptor.result(for: store)
-    }
-
-    /// The workouts that started inside `interval`, newest first, each with the exercise minutes logged during it.
-    func workoutLog(in interval: DateInterval) async throws -> [LoggedWorkout] {
-        guard Self.isAvailable else { return [] }
-        do {
-            let workouts = try await workouts(filter: nil, in: interval)
-            guard let first = workouts.first else { return [] }
-            let spans = workouts.map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) }
-            let reach = DateInterval(start: first.startDate, end: max(first.startDate, spans.map(\.end).max() ?? first.endDate))
-            let samples = try await exerciseSamples(in: reach).map {
-                (interval: $0.interval, minutes: $0.quantity.doubleValue(for: .minute()))
-            }
-            let minutes = LoggedWorkout.minutes(of: samples, in: spans)
-            return zip(workouts, minutes).map { workout, minutes in
-                LoggedWorkout(id: workout.uuid, kind: WorkoutKind(activityType: workout.workoutActivityType),
-                              start: workout.startDate, end: workout.endDate, exerciseMinutes: minutes)
-            }.reversed()
-        } catch let error as HKError where error.code == .errorNoData {
-            return []
-        }
-    }
-
-    /// Workouts that start inside `interval`: all, only some kinds, or all but some.
-    private func workouts(filter: WorkoutFilter?, in interval: DateInterval) async throws -> [HKWorkout] {
+    /// Workouts that start inside `interval`: all, only some kinds, or all but some, at least as long as the scope's
+    /// minimum.
+    private func workouts(filter: WorkoutFilter?, in interval: DateInterval, scope: Scope = Scope()) async throws -> [HKWorkout] {
         var predicates = [HKQuery.predicateForSamples(withStart: interval.start, end: interval.end,
                                                       options: .strictStartDate)]
         if let filter {
@@ -485,12 +478,26 @@ final class HealthManager {
                 filter.kinds.flatMap(\.activityTypes).map { HKQuery.predicateForWorkouts(with: $0) })
             predicates.append(filter.excludes ? NSCompoundPredicate(notPredicateWithSubpredicate: kinds) : kinds)
         }
-        let descriptor = HKSampleQueryDescriptor(
-            predicates: [.workout(NSCompoundPredicate(andPredicateWithSubpredicates: predicates))],
-            sortDescriptors: [SortDescriptor(\.startDate)])
-        return try await descriptor.result(for: store)
+        let predicate = scope.apply(NSCompoundPredicate(andPredicateWithSubpredicates: predicates))
+        let descriptor = HKSampleQueryDescriptor(predicates: [.workout(predicate)], sortDescriptors: [SortDescriptor(\.startDate)])
+        let workouts = try await descriptor.result(for: store)
+        return scope.minimumWorkoutDuration > 0 ? workouts.filter { $0.duration >= scope.minimumWorkoutDuration } : workouts
+    }
+
+    /// Workouts of `kinds` (all workouts for `nil`) that start inside `interval`, from any source.
+    private func workouts(kinds: [WorkoutKind]?, in interval: DateInterval) async throws -> [HKWorkout] {
+        try await workouts(filter: kinds.flatMap { WorkoutFilter.make($0) }, in: interval)
     }
 }
+
+/// What a read returns when Health has no data.
+protocol EmptyableResult {
+    static var empty: Self { get }
+}
+
+extension Dictionary: EmptyableResult { static var empty: Self { [:] } }
+extension Array: EmptyableResult { static var empty: Self { [] } }
+extension Set: EmptyableResult { static var empty: Self { [] } }
 
 private extension HKSample {
     var interval: DateInterval { DateInterval(start: startDate, end: max(startDate, endDate)) }

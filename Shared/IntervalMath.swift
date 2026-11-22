@@ -79,4 +79,29 @@ enum IntervalMath {
         }
         return result
     }
+
+    // MARK: Sleep stages
+
+    /// Time in one sleep stage per calendar day: the stage's intervals inside each night, counted on the day the night
+    /// ends. Nights come from all asleep intervals, so a night with stage gaps stays one night.
+    static func stageByDay(_ stage: [DateInterval], asleep: [DateInterval], calendar: Calendar,
+                           maxGap: TimeInterval = 2 * 3600) -> [Date: TimeInterval] {
+        var result: [Date: TimeInterval] = [:]
+        for night in sessions(asleep, maxGap: maxGap) {
+            guard let start = night.first?.start, let end = night.last?.end else { continue }
+            let day = calendar.startOfDay(for: end.addingTimeInterval(-1))
+            result[day, default: 0] += covered(stage, within: DateInterval(start: start, end: end))
+        }
+        return result
+    }
+
+    /// Time in one sleep stage for a period: in the nights that end inside `window`.
+    static func stage(_ stage: [DateInterval], asleep: [DateInterval], attributedTo window: DateInterval,
+                      maxGap: TimeInterval = 2 * 3600) -> TimeInterval {
+        sessions(asleep, maxGap: maxGap).reduce(0) { total, night in
+            guard let start = night.first?.start, let end = night.last?.end,
+                  end > window.start, end <= window.end else { return total }
+            return total + covered(stage, within: DateInterval(start: start, end: end))
+        }
+    }
 }

@@ -62,8 +62,8 @@ struct MetricFormatTests {
     }
 
     @Test func durations() {
-        #expect(HealthMetric.exerciseMinutes().format(45, locale: us) == "45 min")
-        #expect(HealthMetric.exerciseMinutes().format(0, locale: us) == "0 min")
+        #expect(HealthMetric.exerciseMinutes.format(45, locale: us) == "45 min")
+        #expect(HealthMetric.exerciseMinutes.format(0, locale: us) == "0 min")
         let sleep = HealthMetric.sleep.format(7.5, locale: us)
         #expect(sleep.contains("7 hr"))
         #expect(sleep.contains("30 min"))
@@ -79,7 +79,7 @@ struct MetricFormatTests {
 
     @Test func accessibilityText() {
         let calendar = makeCalendar()
-        let ring = Ring(name: "Exercise", color: .violet, symbol: "flame", metric: .exerciseMinutes(), goal: 150,
+        let ring = Ring(name: "Exercise", color: .violet, symbol: "flame", metric: .exerciseMinutes, goal: 150,
                         period: .rollingDays(7))
         let text = ring.accessibilityText(75, now: date(2026, 11, 18, 12, in: calendar), calendar: calendar)
         #expect(text.hasPrefix("Exercise, "))

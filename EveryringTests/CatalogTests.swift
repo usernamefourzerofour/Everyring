@@ -12,7 +12,7 @@ struct DisplayUnitTests {
     @Test func progressUsesGoalUnit() {
         #expect(HealthMetric.walkingRunningDistance.formatProgress(0, goal: 100_000, locale: us) == "0 of 62.1 mi")
         #expect(HealthMetric.steps.formatProgress(6_512, goal: 10_000, locale: us) == "6,512 of 10,000 steps")
-        #expect(HealthMetric.exerciseMinutes().formatProgress(45, goal: 150, locale: us) == "45 of 150 min")
+        #expect(HealthMetric.exerciseMinutes.formatProgress(45, goal: 150, locale: us) == "45 of 150 min")
     }
 
     @Test func standHoursAreACount() {
@@ -69,7 +69,7 @@ struct CatalogTests {
 
     @Test func suggestedGoals() {
         #expect(HealthMetric.steps.suggestedGoal(for: .today, locale: dk) == 8_000)
-        #expect(HealthMetric.exerciseMinutes().suggestedGoal(for: .rollingDays(7), locale: dk) == 200)
+        #expect(HealthMetric.exerciseMinutes.suggestedGoal(for: .rollingDays(7), locale: dk) == 200)
         #expect(HealthMetric.workouts(.count, kind: nil).suggestedGoal(for: .thisWeek, locale: dk) == 3)
         #expect(HealthMetric.workouts(.count, kind: nil).suggestedGoal(for: .today, locale: dk) == 1)
         #expect(HealthMetric.walkingRunningDistance.suggestedGoal(for: .thisWeek, locale: dk) == 35_000)

@@ -24,11 +24,11 @@ extension HealthMetric {
             let more = QuantityKind.allCases.filter { $0.category == self }.map(HealthMetric.quantity)
                 + NutrientKind.allCases.filter { $0.category == self }.map(HealthMetric.nutrient)
             switch self {
-            case .activity: return [.steps, .activeEnergy, .exerciseMinutes(), .standHours, .flightsClimbed] + more
+            case .activity: return [.steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed] + more
             case .distance:
                 return [.walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance] + more
             case .workouts: return [.workouts(.count, kind: nil), .workouts(.minutes, kind: nil), .workouts(.distance, kind: nil)]
-            case .recovery: return [.sleep, .mindfulMinutes, .timeInDaylight]
+            case .recovery: return [.sleep] + SleepStage.allCases.map(HealthMetric.sleepStage) + [.mindfulMinutes, .timeInDaylight]
             case .nutrition: return [.water] + more
             case .vitamins, .minerals: return more
             case .hygiene: return EventKind.allCases.map(HealthMetric.events)
@@ -41,7 +41,7 @@ extension HealthMetric {
         case .steps, .activeEnergy, .exerciseMinutes, .standHours, .flightsClimbed: .activity
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance: .distance
         case .workouts: .workouts
-        case .sleep, .mindfulMinutes, .timeInDaylight: .recovery
+        case .sleep, .sleepStage, .mindfulMinutes, .timeInDaylight: .recovery
         case .water: .nutrition
         case .quantity(let kind): kind.category
         case .events: .hygiene
@@ -62,6 +62,9 @@ extension HealthMetric {
         case .wheelchairDistance: "figure.roll"
         case .workouts(_, let filter): filter?.single?.symbol ?? "dumbbell"
         case .sleep: "bed.double"
+        case .sleepStage(.core): "moon"
+        case .sleepStage(.deep): "moon.zzz"
+        case .sleepStage(.rem): "moon.stars"
         case .mindfulMinutes: "brain.head.profile"
         case .timeInDaylight: "sun.max"
         case .water: "drop"
@@ -74,7 +77,7 @@ extension HealthMetric {
     var defaultPeriod: RingPeriod {
         switch self {
         case .steps, .activeEnergy, .standHours, .flightsClimbed, .timeInDaylight, .water: .today
-        case .exerciseMinutes, .sleep: .rollingDays(7)
+        case .exerciseMinutes, .sleep, .sleepStage: .rollingDays(7)
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance, .workouts, .mindfulMinutes:
             .thisWeek
         case .quantity(let kind): kind.defaultPeriod
@@ -98,6 +101,9 @@ extension HealthMetric {
         case .workouts(.minutes, _): 30
         case .workouts(.distance, _): 4_000
         case .sleep: 8
+        case .sleepStage(.core): 4
+        case .sleepStage(.deep): 1.5
+        case .sleepStage(.rem): 1.75
         case .mindfulMinutes: 10
         case .timeInDaylight: 30
         case .water: 2
@@ -135,6 +141,9 @@ extension HealthMetric {
         case .wheelchairDistance: .violet
         case .workouts(_, let filter): filter?.single?.defaultColor ?? .indigo
         case .sleep: .indigo
+        case .sleepStage(.core): .violet
+        case .sleepStage(.deep): .indigo
+        case .sleepStage(.rem): .magenta
         case .mindfulMinutes: .violet
         case .timeInDaylight: .citrus
         case .water: .lagoon
@@ -185,21 +194,32 @@ extension HealthMetric {
         if case .workouts = self { true } else { false }
     }
 
-    /// The name in the editor's Metric row: workouts and exercise minutes have their filters in rows of their own.
+    /// The name in the editor's Metric row: workouts have their kinds in a row of their own.
     var pickerTitle: String {
-        switch self {
-        case .workouts: String(localized: "Workouts")
-        case .exerciseMinutes: String(localized: "Exercise minutes")
-        default: title
-        }
+        isWorkouts ? String(localized: "Workouts") : title
     }
 
-    /// Whether picking `other` in the metric list keeps this metric (only its filter differs).
+    /// Whether picking `other` in the metric list keeps this metric (only its workout kinds differ).
     func isSameKind(as other: HealthMetric) -> Bool {
         switch (self, other) {
         case (.workouts(let a, _), .workouts(let b, _)): a == b
-        case (.exerciseMinutes, .exerciseMinutes): true
         default: self == other
+        }
+    }
+
+    /// Activity measured all day, where what was logged during workouts can be left out (and the workouts listed).
+    var supportsWorkoutLeaveOut: Bool {
+        switch self {
+        case .steps, .activeEnergy, .exerciseMinutes, .walkingRunningDistance: true
+        default: false
+        }
+    }
+
+    /// Sleep and mindful minutes have no meaningful build-up hour by hour.
+    var hasHourlyBuildUp: Bool {
+        switch self {
+        case .sleep, .sleepStage, .mindfulMinutes: false
+        default: true
         }
     }
 }

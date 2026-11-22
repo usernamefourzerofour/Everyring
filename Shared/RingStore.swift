@@ -34,7 +34,7 @@ extension RingSet {
             Ring(name: String(localized: "Active calories"), color: .sunrise, symbol: "flame",
                  metric: .activeEnergy, goal: 500, period: .today),
             Ring(name: String(localized: "Move minutes"), color: .magenta, symbol: "bolt.heart",
-                 metric: .exerciseMinutes(), goal: 150, period: .rollingDays(7)),
+                 metric: .exerciseMinutes, goal: 150, period: .rollingDays(7)),
             Ring(name: String(localized: "Stand hours"), color: .lagoon, symbol: "figure.stand",
                  metric: .standHours, goal: 12, period: .today),
             Ring(name: String(localized: "Steps"), color: .fern, symbol: "figure.walk",

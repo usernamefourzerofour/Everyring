@@ -151,20 +151,54 @@ extension Ring {
 
     /// "6,512 of 10,000 steps", shown under the ring name.
     func progressText(_ value: Double) -> String {
+        if isDaysReaching {
+            return String(localized: "\(Int(value.rounded())) of \(Int(goal.rounded())) days")
+        }
         let text = metric.formatProgress(value, goal: goal)
         return isAverage ? String(localized: "\(text) a day") : text
     }
 
-    /// The goal as listed: "10,000 steps", or "8 hr a day" for an average ring.
+    /// The goal as listed: "10,000 steps", "8 hr a day", or "10,000 steps on 5 days".
     var goalText: String {
-        isAverage ? String(localized: "\(metric.format(goal)) a day") : metric.format(goal)
+        if isDaysReaching {
+            let target = metric.format(dailyTarget)
+            let days = Int(goal.rounded())
+            return goalKind == .limit ? String(localized: "Under \(target) on \(days) days")
+                                      : String(localized: "\(target) on \(days) days")
+        }
+        return isAverage ? String(localized: "\(metric.format(goal)) a day") : metric.format(goal)
+    }
+
+    /// A value of the ring as text: in the metric's unit, or a number of days for a days-reaching ring.
+    func formatValue(_ value: Double) -> String {
+        guard isDaysReaching else { return metric.format(value) }
+        let days = Int(value.rounded())
+        return days == 1 ? String(localized: "1 day") : String(localized: "\(days) days")
+    }
+
+    /// A value of the ring in the unit it's shown in (km, mi, kcal, …; days for a days-reaching ring), for charts.
+    func toDisplay(_ value: Double) -> Double {
+        isDaysReaching ? value : metric.toDisplay(value)
+    }
+
+    /// The unit of the ring's values, for chart axes.
+    var valueUnitName: String {
+        isDaysReaching ? String(localized: "days") : metric.unitName()
     }
 
     /// What VoiceOver reads: "Running, 14 of 20 kilometers, This week · 3 days left, 70 percent".
     func accessibilityText(_ value: Double, now: Date = .now, calendar: Calendar = .current) -> String {
         let percent = Int((fraction(value) * 100).rounded(.down))
         let total = metric.formatProgress(value, goal: goal, style: .wide)
-        let progress = isAverage ? String(localized: "\(total) a day on average") : total
+        let progress: String
+        if isDaysReaching {
+            // "3 of 5 days with 10,000 steps" / "3 of 5 days under 2,000 kilocalories"
+            let target = metric.format(dailyTarget, style: .wide)
+            progress = goalKind == .limit ? String(localized: "\(progressText(value)) under \(target)")
+                                          : String(localized: "\(progressText(value)) with \(target)")
+        } else {
+            progress = isAverage ? String(localized: "\(total) a day on average") : total
+        }
         let status = period.status(now: now, calendar: calendar)
         if isOverLimit(value) {
             return String(localized: "\(name), \(progress), \(status), \(percent) percent, over the limit")

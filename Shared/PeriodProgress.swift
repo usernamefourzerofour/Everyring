@@ -45,6 +45,8 @@ struct PeriodProgress: Hashable, Sendable {
         let now = min(now, interval.end)
         let bucket = bucket(for: ring.period)
         let average = ring.isAverage && bucket == .day
+        let daysReaching = ring.isDaysReaching && bucket == .day
+        let today = calendar.startOfDay(for: now)
         // An average ring charts its running average per day, which has no meaningful zero at the start.
         var points = average ? [] : [Point(date: interval.start, total: 0)]
         var total = 0.0
@@ -52,10 +54,20 @@ struct PeriodProgress: Hashable, Sendable {
         var start = interval.start
         while start < min(interval.end, now) {
             guard let next = calendar.date(byAdding: bucket, value: 1, to: start) else { break }
-            let value = buckets[start] ?? 0
-            total += value
-            if !ring.averageSkipsEmptyDays || value > 0 { days += 1 }
-            points.append(Point(date: min(next, now), total: average ? (days > 0 ? total / Double(days) : 0) : total))
+            // Days the ring leaves out (e.g. weekends for a weekdays ring) add nothing.
+            let counted = ring.effectiveDays.includes(start, calendar: calendar)
+            let value = counted ? buckets[start] ?? 0 : 0
+            if daysReaching {
+                if counted && ring.dayMeetsTarget(value) && (ring.goalKind != .limit || start < today) { total += 1 }
+                points.append(Point(date: min(next, now), total: total))
+            } else if average {
+                total += value
+                if counted && (!ring.averageSkipsEmptyDays || value > 0) { days += 1 }
+                points.append(Point(date: min(next, now), total: days > 0 ? total / Double(days) : 0))
+            } else {
+                total += value
+                points.append(Point(date: min(next, now), total: total))
+            }
             start = next
         }
         var pace: Double?
@@ -99,14 +111,15 @@ struct DailyPace: Hashable, Sendable {
     /// `nil` for one-day periods, where the average is the value itself.
     static func make(for ring: Ring, value: Double, interval: DateInterval, now: Date,
                      calendar: Calendar) -> DailyPace? {
-        // An average ring already shows its value per day.
-        guard !ring.isAverage else { return nil }
-        let wholeDays = RingPeriod.wholeDays(of: interval, calendar: calendar)
-        guard wholeDays > 1 else { return nil }
-        let days = ring.period.averageDays(in: interval, now: now, calendar: calendar)
+        // An average ring already shows its value per day; a days-reaching ring counts days.
+        guard !ring.isAverage, !ring.isDaysReaching else { return nil }
+        guard RingPeriod.wholeDays(of: interval, calendar: calendar) > 1 else { return nil }
+        let days = max(1, ring.countedDays(in: interval, now: now, calendar: calendar).count)
         var daysLeft = 0
         if interval.end > now && !ring.period.isRolling {
-            daysLeft = max(0, wholeDays - days + 1)
+            // The counted days from today to the end of the period.
+            let today = calendar.startOfDay(for: now)
+            daysLeft = ring.countedDays(in: interval, now: interval.end, calendar: calendar).filter { $0 >= today }.count
         }
         var pace = DailyPace(average: value / Double(days), days: days, daysLeft: daysLeft)
         let remaining = ring.goal - value
@@ -137,24 +150,48 @@ extension RingPeriod {
 }
 
 extension Ring {
-    /// Whether the average needs to know which days have data (and so daily values, not just a total).
-    var needsDailyValues: Bool { isAverage && averageSkipsEmptyDays }
+    /// Whether the value needs values per day rather than one total: days that are left out or counted one by one,
+    /// or an average over the days with data.
+    var needsDailyValues: Bool {
+        (isAverage && averageSkipsEmptyDays) || isDaysReaching || effectiveDays != .everyDay
+    }
 
-    /// The value the ring shows for a period's total: the total itself, or for an average ring the average per day.
-    /// - Parameter daysWithData: for a ring that skips empty days, how many of the period's days have data.
-    func measure(_ total: Double, in interval: DateInterval, now: Date, calendar: Calendar,
-                 daysWithData: Int? = nil) -> Double {
-        guard isAverage else { return total }
-        if averageSkipsEmptyDays, let daysWithData {
-            return daysWithData > 0 ? total / Double(daysWithData) : 0
+    /// The days of `interval` that count (keyed by start of day): for a fixed period in progress only those up to
+    /// today; a finished period or a rolling window, all of them. Days the day filter leaves out are skipped.
+    func countedDays(in interval: DateInterval, now: Date, calendar: Calendar) -> [Date] {
+        let inProgress = interval.end > now && !period.isRolling
+        let last = calendar.startOfDay(for: inProgress ? now : interval.end.addingTimeInterval(-1))
+        var result: [Date] = []
+        var day = calendar.startOfDay(for: interval.start)
+        while day <= last {
+            if effectiveDays.includes(day, calendar: calendar) { result.append(day) }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
         }
+        return result
+    }
+
+    /// The value the ring shows for a period's total, for rings that don't need values per day: the total itself, or
+    /// for an average ring the average per day.
+    func measure(_ total: Double, in interval: DateInterval, now: Date, calendar: Calendar) -> Double {
+        guard isAverage else { return total }
         return total / Double(period.averageDays(in: interval, now: now, calendar: calendar))
     }
 
     /// The value the ring shows for `interval`, from values per day (keyed by start of day).
     func measure(daily: [Date: Double], in interval: DateInterval, now: Date, calendar: Calendar) -> Double {
-        let total = RingHistory.sum(daily, in: interval, calendar: calendar)
-        return measure(total, in: interval, now: now, calendar: calendar,
-                       daysWithData: RingHistory.daysWithData(daily, in: interval, calendar: calendar))
+        let days = countedDays(in: interval, now: now, calendar: calendar)
+        let values = days.map { daily[$0] ?? 0 }
+        if isDaysReaching {
+            let today = calendar.startOfDay(for: now)
+            // A day under a limit only counts once it's over: it could still go over.
+            return Double(zip(days, values).filter { day, value in
+                dayMeetsTarget(value) && (goalKind != .limit || day < today)
+            }.count)
+        }
+        let total = values.reduce(0, +)
+        guard isAverage else { return total }
+        let divisor = averageSkipsEmptyDays ? values.filter { $0 > 0 }.count : values.count
+        return divisor > 0 ? total / Double(divisor) : 0
     }
 }

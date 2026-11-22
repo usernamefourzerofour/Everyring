@@ -3,10 +3,7 @@ import Foundation
 /// A Health metric a ring can measure. Goals are stored in the metric's `baseUnit` and formatted for the user's locale.
 enum HealthMetric: Codable, Hashable, Sendable {
     // Activity
-    case steps, activeEnergy, standHours, flightsClimbed
-    /// Apple's exercise minutes, optionally leaving out the minutes logged during workouts of some kinds (always an
-    /// excluding filter). Saved rings without the value decode as `nil`.
-    case exerciseMinutes(excluding: WorkoutFilter? = nil)
+    case steps, activeEnergy, exerciseMinutes, standHours, flightsClimbed
     // Distance
     case walkingRunningDistance, cyclingDistance, swimmingDistance, wheelchairDistance
     // Workouts, optionally only some kinds or all but some (nil = all workouts). The label stays `kind` so rings
@@ -14,6 +11,8 @@ enum HealthMetric: Codable, Hashable, Sendable {
     case workouts(WorkoutMeasure, kind: WorkoutFilter?)
     // Recovery and mind
     case sleep, mindfulMinutes, timeInDaylight
+    /// Time in one sleep stage (as recorded by Apple Watch or a sleep app).
+    case sleepStage(SleepStage)
     // Nutrition
     case water
     /// More cumulative quantities (resting energy, nutrients, more distances, …).
@@ -32,7 +31,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .steps, .flightsClimbed: .count
         case .activeEnergy: .kilocalories
         case .exerciseMinutes, .mindfulMinutes, .timeInDaylight: .minutes
-        case .standHours, .sleep: .hours
+        case .standHours, .sleep, .sleepStage: .hours
         case .walkingRunningDistance, .cyclingDistance, .swimmingDistance, .wheelchairDistance: .meters
         case .workouts(let measure, _):
             switch measure {
@@ -51,8 +50,7 @@ enum HealthMetric: Codable, Hashable, Sendable {
         switch self {
         case .steps: String(localized: "Steps")
         case .activeEnergy: String(localized: "Active energy")
-        case .exerciseMinutes(.none): String(localized: "Exercise minutes")
-        case .exerciseMinutes(let excluded?): String(localized: "Exercise minutes except \(excluded.listed)")
+        case .exerciseMinutes: String(localized: "Exercise minutes")
         case .standHours: String(localized: "Stand hours")
         case .flightsClimbed: String(localized: "Flights climbed")
         case .walkingRunningDistance: String(localized: "Walking + running distance")
@@ -62,12 +60,26 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .workouts(let measure, let filter):
             WorkoutFilter.title(measure: measure, filter: filter)
         case .sleep: String(localized: "Sleep")
+        case .sleepStage(let stage): stage.title
         case .mindfulMinutes: String(localized: "Mindful minutes")
         case .timeInDaylight: String(localized: "Time in daylight")
         case .water: String(localized: "Water")
         case .quantity(let kind): kind.title
         case .events(let kind): kind.title
         case .nutrient(let kind): kind.title
+        }
+    }
+}
+
+/// Sleep stages Health records.
+enum SleepStage: String, Codable, CaseIterable, Sendable {
+    case core, deep, rem
+
+    var title: String {
+        switch self {
+        case .core: String(localized: "Core sleep")
+        case .deep: String(localized: "Deep sleep")
+        case .rem: String(localized: "REM sleep")
         }
     }
 }
@@ -233,6 +245,31 @@ enum GoalAggregation: String, Codable, CaseIterable, Sendable {
     case total
     /// The average per day over the period (8 hours of sleep a night over the last 30 days). The goal is per day.
     case dailyAverage
+    /// The number of days that reach `dailyTarget` (or, for a limit, stay under it): "10,000 steps on 5 days a week".
+    /// The goal is a number of days.
+    case daysReaching
+}
+
+/// Which days of a period of several days count.
+enum DayFilter: String, Codable, CaseIterable, Sendable {
+    case everyDay, weekdays, weekends
+
+    var title: String {
+        switch self {
+        case .everyDay: String(localized: "Every day")
+        case .weekdays: String(localized: "Weekdays")
+        case .weekends: String(localized: "Weekends")
+        }
+    }
+
+    /// Whether the day that contains `date` counts (weekends as the calendar's locale defines them).
+    func includes(_ date: Date, calendar: Calendar) -> Bool {
+        switch self {
+        case .everyDay: true
+        case .weekdays: !calendar.isDateInWeekend(date)
+        case .weekends: calendar.isDateInWeekend(date)
+        }
+    }
 }
 
 /// Whether a ring's goal is something to reach or a limit to stay under.
@@ -256,14 +293,26 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var goalKind: GoalKind = .reach
     /// A freely picked colour that replaces `color` when set.
     var customTint: RingTint?
-    /// Total or daily average; only counts for periods of several days (see `isAverage`).
+    /// Total, daily average or days reaching a target; only counts for periods of several days.
     var aggregation: GoalAggregation = .total
     /// For a daily average: leave out days without any data (a night without the watch) instead of counting them as 0.
     var averageSkipsEmptyDays = false
+    /// For days reaching: what a day must reach (or stay under, for a limit), in `metric.baseUnit`.
+    var dailyTarget: Double = 0
+    /// Which days of a period of several days count.
+    var days: DayFilter = .everyDay
+    /// Activity metrics: leave out what was logged during workouts of these kinds (empty: leave out nothing).
+    var leftOutWorkouts: [WorkoutKind] = []
+    /// Only data from these apps and devices (bundle identifiers; empty: all sources).
+    var sources: [String] = []
+    /// Workout rings: only workouts at least this long (0: all).
+    var minimumWorkoutMinutes = 0
 
     init(id: UUID = UUID(), name: String, color: RingColor, symbol: String, metric: HealthMetric, goal: Double,
          period: RingPeriod, goalKind: GoalKind = .reach, customTint: RingTint? = nil,
-         aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false) {
+         aggregation: GoalAggregation = .total, averageSkipsEmptyDays: Bool = false, dailyTarget: Double = 0,
+         days: DayFilter = .everyDay, leftOutWorkouts: [WorkoutKind] = [], sources: [String] = [],
+         minimumWorkoutMinutes: Int = 0) {
         self.id = id
         self.name = name
         self.color = color
@@ -275,10 +324,16 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         self.customTint = customTint
         self.aggregation = aggregation
         self.averageSkipsEmptyDays = averageSkipsEmptyDays
+        self.dailyTarget = dailyTarget
+        self.days = days
+        self.leftOutWorkouts = leftOutWorkouts
+        self.sources = sources
+        self.minimumWorkoutMinutes = minimumWorkoutMinutes
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
+        case dailyTarget, days, leftOutWorkouts, sources, minimumWorkoutMinutes
     }
 
     init(from decoder: Decoder) throws {
@@ -295,12 +350,31 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         customTint = try c.decodeIfPresent(RingTint.self, forKey: .customTint)
         aggregation = try c.decodeIfPresent(GoalAggregation.self, forKey: .aggregation) ?? .total
         averageSkipsEmptyDays = try c.decodeIfPresent(Bool.self, forKey: .averageSkipsEmptyDays) ?? false
+        dailyTarget = try c.decodeIfPresent(Double.self, forKey: .dailyTarget) ?? 0
+        days = try c.decodeIfPresent(DayFilter.self, forKey: .days) ?? .everyDay
+        leftOutWorkouts = try c.decodeIfPresent([WorkoutKind].self, forKey: .leftOutWorkouts) ?? []
+        sources = try c.decodeIfPresent([String].self, forKey: .sources) ?? []
+        minimumWorkoutMinutes = try c.decodeIfPresent(Int.self, forKey: .minimumWorkoutMinutes) ?? 0
     }
 
-    var isLimit: Bool { goalKind == .limit }
+    /// Whether the ring's value must stay under its goal. A days-reaching ring always counts days up to its goal; its
+    /// limit applies to each day's target instead.
+    var isLimit: Bool { goalKind == .limit && !isDaysReaching }
 
     /// Whether the ring shows a daily average (its goal is per day). A one-day period is its own average.
     var isAverage: Bool { aggregation == .dailyAverage && period.nominalDays > 1 }
+
+    /// Whether the ring counts days that reach `dailyTarget` (its goal is a number of days).
+    var isDaysReaching: Bool { aggregation == .daysReaching && period.nominalDays > 1 }
+
+    /// The days that count: only periods of several days can leave days out.
+    var effectiveDays: DayFilter { period.nominalDays > 1 ? days : .everyDay }
+
+    /// Whether a day's value meets `dailyTarget` (reached, or for a limit: logged and stayed under).
+    func dayMeetsTarget(_ value: Double) -> Bool {
+        guard dailyTarget > 0 else { return false }
+        return goalKind == .limit ? value > 0 && value <= dailyTarget : value >= dailyTarget
+    }
 
     /// Whether a finished period met the ring: reached the goal, or (for a limit) logged something and stayed
     /// within it. A goal of zero or less is never met.

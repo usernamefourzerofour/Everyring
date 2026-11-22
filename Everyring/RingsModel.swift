@@ -140,7 +140,8 @@ final class RingsModel {
         for set in library.sets {
             for (index, ring) in set.rings.enumerated() {
                 let interval = ring.period.interval(now: now, calendar: calendar)
-                result[ring.id] = RingSnapshot(value: ring.goal * Self.demoFractions[index % 5],
+                let made = ring.goal * Self.demoFractions[index % 5]
+                result[ring.id] = RingSnapshot(value: ring.isDaysReaching ? made.rounded(.down) : made,
                                                intervalStart: interval.start, intervalEnd: interval.end, updated: now)
             }
         }
@@ -156,7 +157,12 @@ final class RingsModel {
     }
 
     /// Daily values per metric, so opening a ring's details again doesn't re-read months of Health data.
-    private var dailyCache: [HealthMetric: DailyCache] = [:]
+    private var dailyCache: [DailyKey: DailyCache] = [:]
+
+    private struct DailyKey: Hashable {
+        var metric: HealthMetric
+        var filter: HealthFilter
+    }
 
     /// The ring's history and streak, from one daily-values query. `nil` if Health couldn't be read.
     func history(for ring: Ring, now: Date = .now) async -> RingHistory? {
@@ -169,10 +175,13 @@ final class RingsModel {
             let current = ring.period.interval(now: now, calendar: calendar)
             let days = (0..<ring.period.nominalDays).compactMap { calendar.date(byAdding: .day, value: $0, to: current.start) }
                 .filter { $0 <= now }
-            for day in days { daily[day] = ring.isAverage ? value(for: ring) : value(for: ring) / Double(max(1, days.count)) }
+            // (Rings that count days one by one keep the made-up days.)
+            if !ring.needsDailyValues {
+                for day in days { daily[day] = ring.isAverage ? value(for: ring) : value(for: ring) / Double(max(1, days.count)) }
+            }
         } else {
             do {
-                daily = try await dailyValues(of: ring.metric, from: start, now: now, calendar: calendar)
+                daily = try await dailyValues(for: ring, from: start, now: now, calendar: calendar)
             } catch {
                 return nil
             }
@@ -201,10 +210,7 @@ final class RingsModel {
         let end = min(now, interval.end)
         let buckets: [Date: Double]
         if PeriodProgress.bucket(for: ring.period) == .hour {
-            switch ring.metric {
-            case .sleep, .mindfulMinutes: return nil
-            default: break
-            }
+            guard ring.metric.hasHourlyBuildUp else { return nil }
             if Self.isDemo {
                 let total = isPast
                     ? DemoHistory.daily(for: ring, from: interval.start, to: interval.start, calendar: calendar).values.reduce(0, +)
@@ -213,10 +219,10 @@ final class RingsModel {
             } else {
                 guard let hourly = try? await health.hourlyValues(
                     of: ring.metric, in: DateInterval(start: interval.start, end: max(interval.start, end)),
-                    calendar: calendar) else { return nil }
+                    calendar: calendar, filter: ring.healthFilter) else { return nil }
                 buckets = hourly
             }
-        } else if Self.isDemo && isPast {
+        } else if Self.isDemo && (isPast || ring.needsDailyValues) {
             buckets = DemoHistory.daily(for: ring, from: interval.start, to: end, calendar: calendar)
         } else if Self.isDemo {
             // Spread the home screen's demo value over the days so far, so the chart ends where the ring is.
@@ -225,19 +231,28 @@ final class RingsModel {
             buckets = Dictionary(uniqueKeysWithValues: days.map { ($0, share) })
         } else {
             // Daily values from the cache cover past periods too (it reaches back as far as the history needs).
-            guard let daily = try? await dailyValues(of: ring.metric, from: interval.start, now: now, calendar: calendar)
+            guard let daily = try? await dailyValues(for: ring, from: interval.start, now: now, calendar: calendar)
             else { return nil }
             buckets = daily
         }
         return PeriodProgress.make(for: ring, buckets: buckets, interval: interval, now: now, calendar: calendar)
     }
 
-    /// The workouts in `interval` with the exercise minutes logged during each, for an exercise-minute ring;
-    /// `nil` for other rings or if Health couldn't be read.
+    /// The workouts in `interval` with what the ring's metric logged during each, for activity rings (steps, energy,
+    /// exercise minutes, distance); `nil` for other rings or if Health couldn't be read.
     func workoutLog(for ring: Ring, interval: DateInterval, now: Date = .now) async -> [LoggedWorkout]? {
-        guard case .exerciseMinutes = ring.metric else { return nil }
-        if Self.isDemo { return DemoHistory.workouts(in: interval, now: now, calendar: calendar) }
-        return try? await health.workoutLog(in: interval)
+        guard ring.metric.supportsWorkoutLeaveOut else { return nil }
+        if Self.isDemo { return DemoHistory.workouts(for: ring, in: interval, now: now, calendar: calendar) }
+        return try? await health.workoutLog(of: ring.metric, in: interval, filter: ring.healthFilter)
+    }
+
+    /// The apps and devices that wrote data for `metric`, for picking a ring's sources.
+    func sources(for metric: HealthMetric) async -> [HealthSource] {
+        if Self.isDemo {
+            return [HealthSource(id: "com.apple.health.demo-watch", name: "Apple Watch"),
+                    HealthSource(id: "com.apple.health.demo-phone", name: "iPhone")]
+        }
+        return await health.sources(for: metric)
     }
 
     /// One page of the ring's history (`offset` 0 = this month, or this year for monthly rings).
@@ -250,7 +265,7 @@ final class RingsModel {
             daily = DemoHistory.daily(for: ring, from: start, to: now, calendar: calendar)
         } else {
             do {
-                daily = try await dailyValues(of: ring.metric, from: start, now: now, calendar: calendar)
+                daily = try await dailyValues(for: ring, from: start, now: now, calendar: calendar)
             } catch {
                 return nil
             }
@@ -258,18 +273,21 @@ final class RingsModel {
         return HistoryPage.make(for: ring, daily: daily, range: range, now: now, calendar: calendar)
     }
 
-    private func dailyValues(of metric: HealthMetric, from start: Date, now: Date,
+    private func dailyValues(for ring: Ring, from start: Date, now: Date,
                              calendar: Calendar) async throws -> [Date: Double] {
+        let key = DailyKey(metric: ring.metric, filter: ring.healthFilter)
         // Past days rarely change: within an hour, only re-read yesterday and today.
-        if var cached = dailyCache[metric], cached.from <= start, now.timeIntervalSince(cached.fetched) < 3600,
+        if var cached = dailyCache[key], cached.from <= start, now.timeIntervalSince(cached.fetched) < 3600,
            let recent = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) {
-            let fresh = try await health.dailyValues(of: metric, from: recent, to: now, calendar: calendar)
+            let fresh = try await health.dailyValues(of: key.metric, from: recent, to: now, calendar: calendar,
+                                                     filter: key.filter)
             cached.values = cached.values.filter { $0.key < recent }.merging(fresh) { $1 }
-            dailyCache[metric] = cached
+            dailyCache[key] = cached
             return cached.values
         }
-        let values = try await health.dailyValues(of: metric, from: start, to: now, calendar: calendar)
-        dailyCache[metric] = DailyCache(from: start, fetched: now, values: values)
+        let values = try await health.dailyValues(of: key.metric, from: start, to: now, calendar: calendar,
+                                                  filter: key.filter)
+        dailyCache[key] = DailyCache(from: start, fetched: now, values: values)
         return values
     }
 

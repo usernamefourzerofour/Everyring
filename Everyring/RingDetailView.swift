@@ -18,7 +18,7 @@ struct RingDetailView: View {
     @State private var pageRing: Ring?
     /// The ring the chart and streak were read for.
     @State private var loadedRing: Ring?
-    /// Exercise-minute rings: the shown period's workouts.
+    /// Activity rings: the shown period's workouts.
     @State private var workoutLog: [LoggedWorkout]?
 
     var body: some View {
@@ -86,7 +86,7 @@ struct RingDetailView: View {
                             .id("chart")
                     }
 
-                    if case .exerciseMinutes = ring.metric {
+                    if ring.metric.supportsWorkoutLeaveOut {
                         WorkoutLogCard(ring: ring, workouts: workoutLog, calendar: model.calendar)
                     }
 
@@ -140,7 +140,7 @@ struct RingDetailView: View {
                 loading = false
             }
             .task(id: WorkoutLogKey(ring: ring, selected: selected)) {
-                guard case .exerciseMinutes = ring.metric else { workoutLog = nil; return }
+                guard ring.metric.supportsWorkoutLeaveOut else { workoutLog = nil; return }
                 workoutLog = nil
                 let interval = selected ?? ring.period.interval(now: .now, calendar: model.calendar)
                 workoutLog = await withTimeout { await model.workoutLog(for: ring, interval: interval) } ?? nil
@@ -168,8 +168,8 @@ struct ProgressChartCard: View {
     var onShowCurrent: (() -> Void)?
 
     var body: some View {
-        let goal = ring.metric.toDisplay(ring.goal)
-        let points = progress.points.map { (date: $0.date, value: ring.metric.toDisplay($0.total)) }
+        let goal = ring.toDisplay(ring.goal)
+        let points = progress.points.map { (date: $0.date, value: ring.toDisplay($0.total)) }
         let lineColor = ring.tint(progress.points.last?.total ?? 0)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -227,8 +227,8 @@ struct ProgressChartCard: View {
                     .foregroundStyle(ring.isLimit ? RingDisplay.warningGradient.end : Color.secondary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     .annotation(position: .top, alignment: .leading) {
-                        Text(ring.isLimit ? LocalizedStringKey("Limit \(ring.metric.format(ring.goal))")
-                                          : LocalizedStringKey("Goal \(ring.metric.format(ring.goal))"))
+                        Text(ring.isLimit ? LocalizedStringKey("Limit \(ring.formatValue(ring.goal))")
+                                          : LocalizedStringKey("Goal \(ring.formatValue(ring.goal))"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -240,7 +240,7 @@ struct ProgressChartCard: View {
                     AxisValueLabel(format: axisFormat)
                 }
             }
-            .chartYAxisLabel(ring.metric.unitName())
+            .chartYAxisLabel(ring.valueUnitName)
             .frame(height: 200)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(summary)
@@ -286,9 +286,12 @@ struct ProgressChartCard: View {
             if ring.isAverage {
                 return String(localized: "Your average per day so far, day by day.")
             }
+            if ring.isDaysReaching {
+                return String(localized: "Days that reached your target, day by day.")
+            }
             return String(localized: "Your total over the window, day by day.")
         }
-        let difference = ring.metric.format(abs(total - pace))
+        let difference = ring.formatValue(abs(total - pace))
         if ring.isLimit {
             return total <= pace
                 ? String(localized: "Under an even pace for your limit by \(difference).")
@@ -482,8 +485,8 @@ struct RollingChart: View {
     @State private var rawSelection: Date?
 
     var body: some View {
-        let display = days.map { DayValue(day: $0.day, value: ring.metric.toDisplay($0.value)) }
-        let goal = ring.metric.toDisplay(ring.goal)
+        let display = days.map { DayValue(day: $0.day, value: ring.toDisplay($0.value)) }
+        let goal = ring.toDisplay(ring.goal)
         Chart {
             ForEach(display) { day in
                 AreaMark(x: .value("Day", day.day, unit: .day), y: .value("Value", day.value))
@@ -499,7 +502,7 @@ struct RollingChart: View {
                 .foregroundStyle(.secondary)
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 .annotation(position: .top, alignment: .leading) {
-                    Text("Goal \(ring.metric.format(ring.goal))")
+                    Text("Goal \(ring.formatValue(ring.goal))")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -516,7 +519,7 @@ struct RollingChart: View {
             else { return }
             onSelectDay(day.day)
         }
-        .chartYAxisLabel(ring.metric.unitName())
+        .chartYAxisLabel(ring.valueUnitName)
         .frame(height: 200)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
@@ -694,8 +697,8 @@ private struct WorkoutLogKey: Hashable {
     var selected: DateInterval?
 }
 
-/// Exercise-minute rings: the period's workouts and how many exercise minutes fell during each, so you can see where
-/// the minutes came from (and which a "leave out" setting removes).
+/// Activity rings (steps, energy, exercise minutes, distance): the period's workouts and what was logged during each,
+/// so you can see where the numbers came from (and what "leave out workouts" removes).
 struct WorkoutLogCard: View {
     let ring: Ring
     /// `nil` while loading.
@@ -724,7 +727,7 @@ struct WorkoutLogCard: View {
                             .font(.subheadline.weight(.semibold))
                             .tint(ring.accent)
                     }
-                    Text("Exercise minutes logged during each workout. The rest of your exercise minutes come from everyday activity.")
+                    Text("\(ring.metric.title) logged while each workout ran. The rest comes from everyday activity.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -744,7 +747,7 @@ private struct WorkoutRow: View {
 
     var body: some View {
         let leftOut = workout.isLeftOut(by: ring)
-        let minutes = ring.metric.format(workout.exerciseMinutes)
+        let logged = ring.metric.format(workout.value)
         HStack(spacing: 12) {
             Image(systemName: workout.symbol)
                 .font(.title3)
@@ -759,19 +762,21 @@ private struct WorkoutRow: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(minutes)
+                Text(logged)
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                     .strikethrough(leftOut)
                     .foregroundStyle(leftOut ? .secondary : .primary)
-                Text(leftOut ? LocalizedStringKey("Left out") : "exercise")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if leftOut {
+                    Text("Left out")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(leftOut
-            ? String(localized: "\(workout.title), \(when), \(duration), \(minutes) of exercise, left out")
-            : String(localized: "\(workout.title), \(when), \(duration), \(minutes) of exercise"))
+            ? String(localized: "\(workout.title), \(when), \(duration), \(logged), left out")
+            : String(localized: "\(workout.title), \(when), \(duration), \(logged)"))
     }
 
     private var when: String {
