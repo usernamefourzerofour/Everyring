@@ -359,7 +359,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var whenClosed: ClosedAppearance = .show
     /// Screen Time rings: the apps, categories and websites followed (an encoded `FamilyActivitySelection`).
     var screenTimeSelection: Data?
-    /// Limits: past the limit, a red ! at the ring's tip (and the percentage in the warning colour). Off: the ring
+    /// Limits: past the limit, the part beyond it hatched (and the percentage in the warning colour). Off: the ring
     /// looks the same over and under its limit.
     var marksOverLimit = true
 

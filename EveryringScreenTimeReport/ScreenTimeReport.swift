@@ -224,8 +224,8 @@ struct CalendarView: View {
     }
 }
 
-/// One day: a small ring filled towards the daily limit (or the busiest day, without one), the date inside, and the
-/// red ! at the tip on a day over the limit.
+/// One day: a small ring filled towards the daily limit (or the busiest day, without one), the date inside, and on a
+/// day over the limit the part past it hatched, as on the ring itself.
 struct DayRing: View {
     let day: Date
     let minutes: Double?
@@ -247,22 +247,16 @@ struct DayRing: View {
                             style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
+            if over {
+                // The part past the limit, hatched: short white strokes across the ring.
+                Circle()
+                    .trim(from: 0, to: min(fraction - 1, 1))
+                    .stroke(Color.white.opacity(0.75), style: StrokeStyle(lineWidth: 4, dash: [1, 1.6]))
+                    .rotationEffect(.degrees(-90))
+            }
             Text(day, format: .dateTime.day())
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(future ? .tertiary : .primary)
-            if over {
-                GeometryReader { geo in
-                    let r = min(geo.size.width, geo.size.height) / 2 - 2
-                    let tip = fraction - fraction.rounded(.down)
-                    let angle = (tip * 2 - 0.5) * .pi
-                    ZStack {
-                        Circle().fill(.white).frame(width: 11, height: 11)
-                        Circle().fill(warningRed).frame(width: 9, height: 9)
-                        Image(systemName: "exclamationmark").font(.system(size: 6, weight: .black)).foregroundStyle(.white)
-                    }
-                    .position(x: geo.size.width / 2 + r * cos(angle), y: geo.size.height / 2 + r * sin(angle))
-                }
-            }
         }
         .frame(width: 36, height: 36)
         .frame(maxWidth: .infinity)

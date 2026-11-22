@@ -14,7 +14,7 @@ struct ScreenTimeReportStyle: Codable, Hashable, Sendable {
     var isLimit: Bool
     /// The month the History calendar shows (its first day).
     var calendarMonth: Date?
-    /// Whether the ring has a past-the-limit mark (the red ! at the tip); off, over-limit days look like the others.
+    /// Whether the ring has a past-the-limit mark (the part past it hatched); off, over-limit days look like the others.
     var marksOverLimit: Bool = true
 
     private static let key = "screenTime.reportStyle"

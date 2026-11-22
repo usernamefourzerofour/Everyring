@@ -18,10 +18,9 @@ struct ToneRing: View {
     let lineWidth: CGFloat
     /// How strong the ring is in one colour (neighbouring rings alternate).
     var emphasis = 1.0
-    /// A limit past its limit: the tip carries a red ! instead of the white dot (also over a label).
+    /// A limit past its limit: the part beyond the limit is hatched like a cut section in a CAD drawing, in the ring's
+    /// own colour, so it reads the same on every colour and in one-colour widgets.
     var warning = false
-    /// Whether this view draws the ! itself (a stack with labels draws it above the label instead).
-    var drawsBadge = true
     /// The white dot isn't drawn while the tip is between 12 o'clock and this fraction of a lap (where a label sits).
     var dotHiddenUntil = 0.0
 
@@ -58,16 +57,7 @@ struct ToneRing: View {
                             .mask(progress(f: f, laps: laps, pos: pos).luminanceToAlpha())
                             .widgetAccentable()
                     }
-                    if warning {
-                        if drawsBadge {
-                            // A red ! on a white disc where you went too far, in place of the white dot.
-                            let angle = (pos * 2 - 0.5) * .pi
-                            WarningBadge(size: lineWidth, fullColor: fullColor)
-                                .position(x: geo.size.width / 2 + radius * cos(angle),
-                                          y: geo.size.height / 2 + radius * sin(angle))
-                                .accessibilityHidden(true)
-                        }
-                    } else if pos > dotHiddenUntil {
+                    if pos > dotHiddenUntil {
                         // A small white dot where you have reached (left out under a label).
                         let angle = (pos * 2 - 0.5) * .pi
                         Circle()
@@ -87,6 +77,8 @@ struct ToneRing: View {
     /// previous lap, then the new lap on top from 12 o'clock to the tip. Round ends drawn as dots in their colour.
     private func progress(f: Double, laps: Double, pos: Double) -> some View {
         let darkEdge = fullColor && colorScheme == .dark
+        let hatch = warning
+        let hatchColor = fullColor ? Color.white.opacity(0.7) : Color.black
         let lw = lineWidth
         return Canvas { context, canvasSize in
             let r = min(canvasSize.width, canvasSize.height) / 2 - lw / 2
@@ -124,6 +116,25 @@ struct ToneRing: View {
                 dot(0, radius: lw / 2, tone(laps / f))
                 stroke(from: 0, to: pos) { tone((laps + $0) / f) }       // the new lap
                 dot(pos, radius: lw / 2, tone(1))
+                if hatch {
+                    // Past the limit: from 12 o'clock to the tip on this lap (all of it from the third lap on).
+                    var band = Path()
+                    band.addArc(center: center, radius: r, startAngle: .degrees(-90), endAngle: .degrees(270), clockwise: false)
+                    let over = laps >= 2 ? band : band.trimmedPath(from: 0, to: pos)
+                    var hatched = context
+                    hatched.clip(to: over.strokedPath(StrokeStyle(lineWidth: lw, lineCap: .round)))
+                    // Thin parallel lines at 45°; in one colour black, which the luminance mask turns into gaps.
+                    let gap = max(3, lw * 0.3)
+                    let lines = hatchColor
+                    var k = -canvasSize.height
+                    while k < canvasSize.width + canvasSize.height {
+                        var line = Path()
+                        line.move(to: CGPoint(x: k, y: 0))
+                        line.addLine(to: CGPoint(x: k - canvasSize.height, y: canvasSize.height))
+                        hatched.stroke(line, with: .color(lines), lineWidth: max(0.8, lw * 0.07))
+                        k += gap
+                    }
+                }
             }
         }
     }
@@ -172,31 +183,3 @@ struct ToneRingStack: View {
     }
 }
 
-/// The ! at the tip of a limit ring past its limit: red with a white edge; in one colour a disc with the ! cut out.
-struct WarningBadge: View {
-    let size: CGFloat
-    let fullColor: Bool
-
-    var body: some View {
-        if fullColor {
-            ZStack {
-                Circle().fill(Color.white)
-                Circle().fill(RingDisplay.warningGradient.start).padding(size * 0.09)
-                Image(systemName: "exclamationmark")
-                    .font(.system(size: size * 0.52, weight: .black))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: size, height: size)
-        } else {
-            ZStack {
-                Circle().fill(Color.white)
-                Image(systemName: "exclamationmark")
-                    .font(.system(size: size * 0.52, weight: .black))
-                    .blendMode(.destinationOut)
-            }
-            .compositingGroup()
-            .frame(width: size, height: size)
-            .widgetAccentable()
-        }
-    }
-}

@@ -152,11 +152,10 @@ struct RingStackView: View {
                     ZStack {
                         // Drawn as in Heart Minutes: light at the start building to deep at the tip, a white dot
                         // where you have reached (see ToneRing).
-                        // Past a limit the ring keeps its own colours; a red ! at its tip says it is over.
+                        // Past a limit the ring keeps its own colours; the part beyond the limit is hatched.
                         ToneRing(light: ring.end, deep: ring.start, fraction: ring.fraction, lineWidth: lw,
                                  // In one colour, neighbouring rings alternate strong and softer to tell them apart.
                                  emphasis: index.isMultiple(of: 2) ? 1 : 0.72,
-                                 // Past a limit the tip is a red !, under the label where they meet.
                                  warning: ring.warning,
                                  // The tip's dot stays behind the label: not drawn where the text is.
                                  dotHiddenUntil: showsLabels
