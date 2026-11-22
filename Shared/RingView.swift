@@ -136,13 +136,15 @@ struct RingStackView: View {
     }
 
     var body: some View {
+        // Hidden rings (closed, set to hide) are left out entirely: the rest close up and grow, as if it was never
+        // there.
+        let shown = rings.filter { !$0.hidden }
         GeometryReader { geo in
             let diameter = min(geo.size.width, geo.size.height)
-            let lw = Self.lineWidth(diameter: diameter, count: rings.count)
+            let lw = Self.lineWidth(diameter: diameter, count: shown.count)
             ZStack {
-                ForEach(Array(rings.enumerated()), id: \.element.id) { index, ring in
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, ring in
                     let radius = diameter / 2 - lw / 2 - CGFloat(index) * lw * (1 + Self.gapUnits)
-                    if !ring.hidden {
                     ZStack {
                         SingleRing(start: ring.start, end: ring.end, fraction: ring.fraction, lineWidth: lw,
                                    trackOpacity: trackOpacity,
@@ -155,12 +157,11 @@ struct RingStackView: View {
                     // A closed ring steps back: matte (no colour) and see-through.
                     .saturation(ring.faded ? 0.15 : 1)
                     .opacity(ring.faded ? 0.3 : 1)
-                    }
                 }
             }
             .overlay {
                 // Every ring closed and hidden: a quiet check in their place.
-                if !rings.isEmpty && rings.allSatisfy(\.hidden) {
+                if !rings.isEmpty && shown.isEmpty {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: diameter * 0.35, weight: .light))
                         .foregroundStyle(.secondary)

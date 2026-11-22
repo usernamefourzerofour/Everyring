@@ -290,7 +290,7 @@ struct RingEditorView: View {
                     switch ring.whenClosed {
                     case .show: Text("The ring stays as it is.")
                     case .fade: Text("The ring turns pale and matte on the home screen, in widgets and on the watch, so rings still to do stand out.")
-                    case .hide: Text("The ring disappears from the home screen, widgets and the watch until its next period. Its place stays empty, so the other rings don't move.")
+                    case .hide: Text("The ring disappears from the home screen, widgets and the watch until its next period. The other rings close up and grow to fill its place.")
                     }
                 }
             }

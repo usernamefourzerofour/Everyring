@@ -263,7 +263,7 @@ enum ClosedAppearance: String, Codable, CaseIterable, Sendable {
     case show
     /// Pale and matte, so rings still to do stand out.
     case fade
-    /// Not drawn at all (its place in the stack stays empty, so the other rings don't move).
+    /// Not drawn at all: the other rings close up and grow, as if it was never there.
     case hide
 
     var title: String {
