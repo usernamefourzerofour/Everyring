@@ -493,51 +493,46 @@ struct ScreenTimePeriodCard: View {
                 .frame(height: 340)
         }
         .card()
-        .onAppear { ring.screenTimeReportStyle(month: ScreenTimeReportStyle.load()?.calendarMonth).save() }
+        .onAppear { ring.screenTimeReportStyle().save() }
     }
 }
 
-/// A calendar of day rings from Screen Time, also for the days before the ring was made.
+/// A calendar of day rings from Screen Time for the last five weeks (about all Screen Time keeps), also for the days
+/// before the ring was made. One report for all five weeks: Screen Time takes a long while for each new range.
 struct ScreenTimeCalendarCard: View {
     let ring: Ring
-    @State private var offset = 0
     /// Two Screen Time reports on one page sometimes leave the second one blank: this one starts a moment after the
     /// page, and can be reloaded by hand.
     @State private var showsReport = false
     @State private var reload = 0
     private let calendar = Calendar.current
 
-    private var month: Date {
-        let thisMonth = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
-        return calendar.date(byAdding: .month, value: offset, to: thisMonth) ?? thisMonth
+    /// From the start of the week four weeks back to the end of this week (as the report draws it).
+    private var range: DateInterval {
+        let thisWeek = calendar.dateInterval(of: .weekOfYear, for: .now) ?? DateInterval(start: .now, duration: 0)
+        let start = calendar.date(byAdding: .weekOfYear, value: -4, to: thisWeek.start) ?? thisWeek.start
+        return DateInterval(start: start, end: thisWeek.end)
     }
 
     var body: some View {
-        let shown = month
-        let end = calendar.date(byAdding: .month, value: 1, to: shown) ?? shown
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label("History", systemImage: "calendar")
                     .font(.headline)
                     .foregroundStyle(ring.accent)
                 Spacer()
-                // Screen Time keeps about a month of history.
-                Button { move(-1) } label: { Image(systemName: "chevron.backward") }
-                    .disabled(offset <= -1)
-                Text(shown, format: .dateTime.month(.wide).year())
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                Button { move(1) } label: { Image(systemName: "chevron.forward") }
-                    .disabled(offset >= 0)
+                Text("Last 5 weeks")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Button { reload += 1 } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel("Reload")
             }
             if showsReport {
-                DeviceActivityReport(.calendar, filter: ring.screenTimeFilter(DateInterval(start: shown, end: end), hourly: false))
-                    .id("\(offset)-\(reload)")
-                    .frame(height: 300)
+                DeviceActivityReport(.calendar, filter: ring.screenTimeFilter(range, hourly: false))
+                    .id(reload)
+                    .frame(height: 260)
             } else {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 300)
+                ProgressView().frame(maxWidth: .infinity, minHeight: 260)
             }
             Label("History comes straight from Screen Time, also from before the ring was added. The ring, widgets and watch count from when it was added.",
                   systemImage: "info.circle")
@@ -545,19 +540,11 @@ struct ScreenTimeCalendarCard: View {
                 .foregroundStyle(.secondary)
         }
         .card()
-        .onAppear { ring.screenTimeReportStyle(month: month).save() }
+        .onAppear { ring.screenTimeReportStyle().save() }
         .task {
             try? await Task.sleep(for: .milliseconds(700))
             showsReport = true
         }
-    }
-
-    private func move(_ step: Int) {
-        let next = calendar.date(byAdding: .month, value: offset + step,
-                                 to: calendar.dateInterval(of: .month, for: .now)?.start ?? .now) ?? .now
-        // The report reads the month when it draws: save it before the filter changes.
-        ring.screenTimeReportStyle(month: next).save()
-        offset += step
     }
 }
 #endif

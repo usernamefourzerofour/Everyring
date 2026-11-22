@@ -197,17 +197,13 @@ struct CalendarView: View {
     let style: ScreenTimeReportStyle?
     private let calendar = Calendar.current
 
-    private var month: Date {
-        style?.calendarMonth ?? calendar.dateInterval(of: .month, for: .now)?.start ?? .now
-    }
-
-    /// The month's days, with blanks before the first so it starts on the right weekday.
-    private var cells: [Date?] {
-        guard let range = calendar.range(of: .day, in: .month, for: month) else { return [] }
-        let first = calendar.component(.weekday, from: month)
-        let blanks = (first - calendar.firstWeekday + 7) % 7
-        return Array(repeating: nil, count: blanks)
-            + range.compactMap { calendar.date(byAdding: .day, value: $0 - 1, to: month) }
+    /// The weeks shown: the last five, ending with this one (Screen Time keeps about that much).
+    static func weeks(calendar: Calendar = .current, now: Date = .now) -> [[Date]] {
+        guard let thisWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start,
+              let first = calendar.date(byAdding: .weekOfYear, value: -4, to: thisWeek) else { return [] }
+        return (0..<5).map { week in
+            (0..<7).compactMap { calendar.date(byAdding: .day, value: week * 7 + $0, to: first) }
+        }
     }
 
     private var weekdays: [String] {
@@ -216,22 +212,19 @@ struct CalendarView: View {
     }
 
     var body: some View {
+        let weeks = Self.weeks(calendar: calendar)
         // A plain grid (not lazy): the report is drawn once, in another process.
-        let rows = stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<min($0 + 7, cells.count)]) }
         Grid(horizontalSpacing: 6, verticalSpacing: 6) {
             GridRow {
                 ForEach(weekdays.indices, id: \.self) { i in
                     Text(weekdays[i]).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
                 }
             }
-            ForEach(rows.indices, id: \.self) { r in
+            ForEach(weeks.indices, id: \.self) { w in
                 GridRow {
-                    ForEach(0..<7, id: \.self) { c in
-                        if c < rows[r].count, let day = rows[r][c] {
-                            DayRing(day: day, minutes: days[day], style: style, top: days.values.max() ?? 1)
-                        } else {
-                            Color.clear.frame(height: 36)
-                        }
+                    ForEach(weeks[w], id: \.self) { day in
+                        DayRing(day: day, minutes: days[day], style: style, top: days.values.max() ?? 1,
+                                showsMonth: calendar.component(.day, from: day) == 1 || (w == 0 && day == weeks[0][0]))
                     }
                 }
             }
@@ -247,6 +240,8 @@ struct DayRing: View {
     let minutes: Double?
     let style: ScreenTimeReportStyle?
     let top: Double
+    /// The first day shown and the 1st of a month also name the month.
+    var showsMonth = false
 
     var body: some View {
         let goal = style?.dailyMinutes ?? max(top, 1)
@@ -269,9 +264,16 @@ struct DayRing: View {
                             style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
-            Text(day, format: .dateTime.day())
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(future ? .tertiary : .primary)
+            VStack(spacing: -1) {
+                Text(day, format: .dateTime.day())
+                    .font(.caption2.weight(.medium))
+                if showsMonth {
+                    Text(day, format: .dateTime.month(.abbreviated))
+                        .font(.system(size: 7, weight: .semibold))
+                        .textCase(.uppercase)
+                }
+            }
+            .foregroundStyle(future ? .tertiary : .primary)
         }
         .frame(width: 36, height: 36)
         .dayMark(mark, size: 13)
