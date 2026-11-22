@@ -237,7 +237,7 @@ final class HealthManager {
                 .filter { asleep.contains($0.value) }
             return IntervalMath.asleep(samples.map(\.interval), attributedTo: interval) / 3600
         case .workouts(let measure, let kind):
-            let workouts = try await workouts(kind: kind, in: interval)
+            let workouts = try await workouts(filter: kind, in: interval)
             switch measure {
             case .count: return Double(workouts.count)
             case .minutes: return workouts.reduce(0) { $0 + $1.duration } / 60
@@ -311,7 +311,7 @@ final class HealthManager {
                 .filter { $0.key >= range.start && $0.key < range.end }
                 .mapValues { $0 / 3600 }
         case .workouts(let measure, let kind):
-            let workouts = try await workouts(kind: kind, in: range)
+            let workouts = try await workouts(filter: kind, in: range)
             return Dictionary(grouping: workouts) { calendar.startOfDay(for: $0.startDate) }.mapValues { list in
                 switch measure {
                 case .count: Double(list.count)
@@ -354,7 +354,7 @@ final class HealthManager {
                     .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
                 return Dictionary(grouping: stood) { hour($0.startDate) }.mapValues { Double($0.count) }
             case .workouts(let measure, let kind):
-                let workouts = try await workouts(kind: kind, in: interval)
+                let workouts = try await workouts(filter: kind, in: interval)
                 return Dictionary(grouping: workouts) { hour($0.startDate) }.mapValues { list in
                     switch measure {
                     case .count: Double(list.count)
@@ -402,13 +402,14 @@ final class HealthManager {
         return try await descriptor.result(for: store)
     }
 
-    /// Workouts that start inside `interval`, optionally of one kind.
-    private func workouts(kind: WorkoutKind?, in interval: DateInterval) async throws -> [HKWorkout] {
+    /// Workouts that start inside `interval`: all, only some kinds, or all but some.
+    private func workouts(filter: WorkoutFilter?, in interval: DateInterval) async throws -> [HKWorkout] {
         var predicates = [HKQuery.predicateForSamples(withStart: interval.start, end: interval.end,
                                                       options: .strictStartDate)]
-        if let kind {
-            predicates.append(NSCompoundPredicate(orPredicateWithSubpredicates:
-                kind.activityTypes.map { HKQuery.predicateForWorkouts(with: $0) }))
+        if let filter {
+            let kinds = NSCompoundPredicate(orPredicateWithSubpredicates:
+                filter.kinds.flatMap(\.activityTypes).map { HKQuery.predicateForWorkouts(with: $0) })
+            predicates.append(filter.excludes ? NSCompoundPredicate(notPredicateWithSubpredicate: kinds) : kinds)
         }
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout(NSCompoundPredicate(andPredicateWithSubpredicates: predicates))],

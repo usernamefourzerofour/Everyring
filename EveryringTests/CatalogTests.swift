@@ -32,7 +32,7 @@ struct DisplayUnitTests {
         #expect(HealthMetric.cyclingDistance.displayUnit(locale: us) == UnitLength.miles)
         #expect(HealthMetric.cyclingDistance.displayUnit(locale: gb) == UnitLength.miles)
         #expect(HealthMetric.swimmingDistance.displayUnit(locale: dk) == UnitLength.meters)
-        #expect(HealthMetric.workouts(.distance, kind: .swimming).displayUnit(locale: us) == UnitLength.yards)
+        #expect(HealthMetric.workouts(.distance, kind: .only(.swimming)).displayUnit(locale: us) == UnitLength.yards)
         #expect(HealthMetric.steps.displayUnit(locale: dk) == nil)
     }
 

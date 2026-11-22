@@ -22,7 +22,8 @@ extension HealthMetric {
 
     private var isSwimming: Bool {
         switch self {
-        case .swimmingDistance, .workouts(.distance, kind: .swimming): true
+        case .swimmingDistance: true
+        case .workouts(.distance, let filter): filter?.single == .swimming
         default: false
         }
     }

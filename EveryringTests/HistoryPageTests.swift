@@ -93,7 +93,7 @@ struct MoreMetricsTests {
     }
 
     @Test func codableRoundTrip() throws {
-        let metrics: [HealthMetric] = [.quantity(.fiber), .events(.handwashing), .workouts(.minutes, kind: .tennis)]
+        let metrics: [HealthMetric] = [.quantity(.fiber), .events(.handwashing), .workouts(.minutes, kind: .only(.tennis))]
         let data = try JSONEncoder().encode(metrics)
         #expect(try JSONDecoder().decode([HealthMetric].self, from: data) == metrics)
     }

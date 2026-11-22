@@ -58,27 +58,33 @@ struct RingEditorView: View {
                     HStack {
                         Text("Metric")
                         Spacer()
-                        Text(ring.metric.title)
+                        // Workouts: the kinds have their own row below, so name only the category here.
+                        Text(ring.metric.isWorkouts ? String(localized: "Workouts") : ring.metric.title)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.trailing)
                     }
                 }
-                if case .workouts(let measure, let kind) = ring.metric {
+                if case .workouts(let measure, let filter) = ring.metric {
                     Picker("Count", selection: Binding(
                         get: { measure },
-                        set: { ring.metric = .workouts($0, kind: $0 == .distance && kind?.hasDistance == false ? nil : kind) }
+                        set: { ring.metric = .workouts($0, kind: WorkoutFilter.adapted(filter, to: $0)) }
                     )) {
                         Text("Workouts").tag(WorkoutMeasure.count)
                         Text("Minutes").tag(WorkoutMeasure.minutes)
                         Text("Distance").tag(WorkoutMeasure.distance)
                     }
-                    Picker("Type", selection: Binding(
-                        get: { kind },
-                        set: { ring.metric = .workouts(measure, kind: $0) }
-                    )) {
-                        Text("All workouts").tag(WorkoutKind?.none)
-                        ForEach(WorkoutKind.allCases.filter { measure != .distance || $0.hasDistance }, id: \.self) { kind in
-                            Label(kind.title, systemImage: kind.symbol).tag(Optional(kind))
+                    NavigationLink {
+                        WorkoutFilterView(measure: measure, filter: Binding(
+                            get: { filter },
+                            set: { ring.metric = .workouts(measure, kind: $0) }
+                        ))
+                    } label: {
+                        HStack {
+                            Text("Types")
+                            Spacer()
+                            Text(WorkoutFilter.summary(filter))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
                 }
@@ -263,10 +269,9 @@ struct MetricPickerView: View {
     init(selection: Binding<HealthMetric>) {
         current = selection.wrappedValue
         onPick = { metric in
-            // Keep a chosen workout kind when switching between workout measures.
-            if case .workouts(_, let kind) = selection.wrappedValue, case .workouts(let measure, _) = metric {
-                selection.wrappedValue = .workouts(measure,
-                                                   kind: measure == .distance && kind?.hasDistance == false ? nil : kind)
+            // Keep the chosen workout kinds when switching between workout measures.
+            if case .workouts(_, let filter) = selection.wrappedValue, case .workouts(let measure, _) = metric {
+                selection.wrappedValue = .workouts(measure, kind: WorkoutFilter.adapted(filter, to: measure))
             } else {
                 selection.wrappedValue = metric
             }
@@ -534,5 +539,74 @@ extension RingTint {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
         self.init(red: Double(min(1, max(0, r))), green: Double(min(1, max(0, g))), blue: Double(min(1, max(0, b))))
+    }
+}
+
+/// Picks the kinds of workouts a ring counts: all, only some, or all except some.
+struct WorkoutFilterView: View {
+    let measure: WorkoutMeasure
+    @Binding var filter: WorkoutFilter?
+    @State private var kinds: Set<WorkoutKind>
+    @State private var excludes: Bool
+
+    init(measure: WorkoutMeasure, filter: Binding<WorkoutFilter?>) {
+        self.measure = measure
+        _filter = filter
+        _kinds = State(initialValue: Set(filter.wrappedValue?.kinds ?? []))
+        _excludes = State(initialValue: filter.wrappedValue?.excludes ?? false)
+    }
+
+    private var available: [WorkoutKind] {
+        WorkoutKind.allCases.filter { measure != .distance || $0.hasDistance }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Mode", selection: $excludes) {
+                    Text("Only these").tag(false)
+                    Text("All except these").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            } footer: {
+                Text(kinds.isEmpty
+                     ? LocalizedStringKey("No types picked: the ring counts all workouts.")
+                     : excludes ? "The ring counts every workout except the types you pick."
+                                : "The ring counts only the types you pick.")
+            }
+
+            Section {
+                ForEach(available, id: \.self) { kind in
+                    Button {
+                        if kinds.contains(kind) { kinds.remove(kind) } else { kinds.insert(kind) }
+                    } label: {
+                        HStack {
+                            Label(kind.title, systemImage: kind.symbol)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if kinds.contains(kind) {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                    }
+                    .accessibilityAddTraits(kinds.contains(kind) ? .isSelected : [])
+                }
+            }
+        }
+        .navigationTitle("Workout Types")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !kinds.isEmpty {
+                Button("Clear") { kinds.removeAll() }
+            }
+        }
+        .onChange(of: kinds) { save() }
+        .onChange(of: excludes) { save() }
+    }
+
+    private func save() {
+        filter = WorkoutFilter.make(kinds, excludes: excludes)
     }
 }

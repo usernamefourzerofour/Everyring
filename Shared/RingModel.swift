@@ -6,8 +6,9 @@ enum HealthMetric: Codable, Hashable, Sendable {
     case steps, activeEnergy, exerciseMinutes, standHours, flightsClimbed
     // Distance
     case walkingRunningDistance, cyclingDistance, swimmingDistance, wheelchairDistance
-    // Workouts, optionally only one kind (nil = all workouts)
-    case workouts(WorkoutMeasure, kind: WorkoutKind?)
+    // Workouts, optionally only some kinds or all but some (nil = all workouts). The label stays `kind` so rings
+    // saved when it held a single kind still decode.
+    case workouts(WorkoutMeasure, kind: WorkoutFilter?)
     // Recovery and mind
     case sleep, mindfulMinutes, timeInDaylight
     // Nutrition
@@ -54,15 +55,8 @@ enum HealthMetric: Codable, Hashable, Sendable {
         case .cyclingDistance: String(localized: "Cycling distance")
         case .swimmingDistance: String(localized: "Swimming distance")
         case .wheelchairDistance: String(localized: "Wheelchair distance")
-        case .workouts(let measure, let kind):
-            switch (measure, kind) {
-            case (.count, nil): String(localized: "Workouts")
-            case (.minutes, nil): String(localized: "Workout minutes")
-            case (.distance, nil): String(localized: "Workout distance")
-            case (.count, let kind?): String(localized: "\(kind.title) workouts")
-            case (.minutes, let kind?): String(localized: "\(kind.title) minutes")
-            case (.distance, let kind?): String(localized: "\(kind.title) distance")
-            }
+        case .workouts(let measure, let filter):
+            WorkoutFilter.title(measure: measure, filter: filter)
         case .sleep: String(localized: "Sleep")
         case .mindfulMinutes: String(localized: "Mindful minutes")
         case .timeInDaylight: String(localized: "Time in daylight")
@@ -132,6 +126,88 @@ enum WorkoutKind: String, Codable, CaseIterable, Sendable {
              .crossCountrySkiing, .paddling, .skating: true
         default: false
         }
+    }
+}
+
+/// Which workouts a workout ring counts: only some kinds, or all but some.
+struct WorkoutFilter: Codable, Hashable, Sendable {
+    /// In `WorkoutKind.allCases` order, never empty (no filter is `nil`).
+    private(set) var kinds: [WorkoutKind]
+    /// Count every workout except `kinds`.
+    var excludes: Bool
+
+    /// `nil` (all workouts) when `kinds` is empty and nothing is excluded or included.
+    static func make(_ kinds: some Sequence<WorkoutKind>, excludes: Bool = false) -> WorkoutFilter? {
+        let set = Set(kinds)
+        let ordered = WorkoutKind.allCases.filter(set.contains)
+        return ordered.isEmpty ? nil : WorkoutFilter(kinds: ordered, excludes: excludes)
+    }
+
+    static func only(_ kind: WorkoutKind) -> WorkoutFilter { WorkoutFilter(kinds: [kind], excludes: false) }
+
+    private init(kinds: [WorkoutKind], excludes: Bool) {
+        self.kinds = kinds
+        self.excludes = excludes
+    }
+
+    /// The one kind counted, if that's what the filter is.
+    var single: WorkoutKind? { !excludes && kinds.count == 1 ? kinds[0] : nil }
+
+    func includes(_ kind: WorkoutKind) -> Bool { kinds.contains(kind) != excludes }
+
+    /// The filter for a distance ring: kinds without a distance can't be counted, so they are dropped.
+    static func adapted(_ filter: WorkoutFilter?, to measure: WorkoutMeasure) -> WorkoutFilter? {
+        guard let filter, measure == .distance else { return filter }
+        return make(filter.kinds.filter(\.hasDistance), excludes: filter.excludes)
+    }
+
+    /// "Strength", "Running and Cycling" or "3 types".
+    private var listed: String {
+        kinds.count <= 2 ? kinds.map(\.title).formatted(.list(type: .and)) : String(localized: "\(kinds.count) types")
+    }
+
+    /// "Strength", "Running and Cycling", "3 types", "All except Walking"; "All workouts" for no filter.
+    static func summary(_ filter: WorkoutFilter?) -> String {
+        guard let filter else { return String(localized: "All workouts") }
+        return filter.excludes ? String(localized: "All except \(filter.listed)") : filter.listed
+    }
+
+    /// "Workouts", "Strength workouts", "Running and Cycling distance", "Workout minutes except Walking".
+    static func title(measure: WorkoutMeasure, filter: WorkoutFilter?) -> String {
+        switch (measure, filter) {
+        case (.count, nil): String(localized: "Workouts")
+        case (.minutes, nil): String(localized: "Workout minutes")
+        case (.distance, nil): String(localized: "Workout distance")
+        case (.count, let f?) where f.excludes: String(localized: "Workouts except \(f.listed)")
+        case (.minutes, let f?) where f.excludes: String(localized: "Workout minutes except \(f.listed)")
+        case (.distance, let f?) where f.excludes: String(localized: "Workout distance except \(f.listed)")
+        case (.count, let f?): String(localized: "\(f.listed) workouts")
+        case (.minutes, let f?): String(localized: "\(f.listed) minutes")
+        case (.distance, let f?): String(localized: "\(f.listed) distance")
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case kinds, excludes }
+
+    init(from decoder: Decoder) throws {
+        // Rings saved before filters existed hold a single kind.
+        if let single = try? decoder.singleValueContainer().decode(WorkoutKind.self) {
+            self.init(kinds: [single], excludes: false)
+            return
+        }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let kinds = try c.decode([WorkoutKind].self, forKey: .kinds)
+        let excludes = try c.decodeIfPresent(Bool.self, forKey: .excludes) ?? false
+        guard let filter = Self.make(kinds, excludes: excludes) else {
+            throw DecodingError.dataCorruptedError(forKey: .kinds, in: c, debugDescription: "No workout kinds")
+        }
+        self = filter
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(kinds, forKey: .kinds)
+        try c.encode(excludes, forKey: .excludes)
     }
 }
 

@@ -60,7 +60,7 @@ extension HealthMetric {
         case .cyclingDistance: "figure.outdoor.cycle"
         case .swimmingDistance: "figure.pool.swim"
         case .wheelchairDistance: "figure.roll"
-        case .workouts(_, let kind): kind?.symbol ?? "dumbbell"
+        case .workouts(_, let filter): filter?.single?.symbol ?? "dumbbell"
         case .sleep: "bed.double"
         case .mindfulMinutes: "brain.head.profile"
         case .timeInDaylight: "sun.max"
@@ -133,7 +133,7 @@ extension HealthMetric {
         case .flightsClimbed, .cyclingDistance: .indigo
         case .swimmingDistance: .lagoon
         case .wheelchairDistance: .violet
-        case .workouts(_, let kind): kind?.defaultColor ?? .indigo
+        case .workouts(_, let filter): filter?.single?.defaultColor ?? .indigo
         case .sleep: .indigo
         case .mindfulMinutes: .violet
         case .timeInDaylight: .citrus
@@ -176,6 +176,12 @@ extension HealthMetric {
 
     /// Metrics that can be limited to one workout kind.
     var isWorkout: Bool {
+        if case .workouts = self { true } else { false }
+    }
+}
+
+extension HealthMetric {
+    var isWorkouts: Bool {
         if case .workouts = self { true } else { false }
     }
 }

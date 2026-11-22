@@ -237,7 +237,7 @@ struct CodableTests {
 
     @Test func ringSetRoundTripsAndCapsAtFive() throws {
         let ring = Ring(name: "Running", color: .tangerine, symbol: "figure.run",
-                        metric: .workouts(.distance, kind: .running), goal: 20_000, period: .thisWeek)
+                        metric: .workouts(.distance, kind: .only(.running)), goal: 20_000, period: .thisWeek)
         var set = RingSet(name: "Weekly", rings: Array(repeating: ring, count: 7))
         #expect(set.rings.count == 5)
         #expect(!set.canAddRing)
