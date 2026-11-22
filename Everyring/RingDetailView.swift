@@ -741,7 +741,7 @@ struct WorkoutLogCard: View {
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityHint(isExpanded ? "Hides the chart" : "Shows a chart of the workout")
+                        .accessibilityHint(isExpanded ? LocalizedStringKey("Hides the chart") : "Shows a chart of the workout")
                         if isExpanded {
                             WorkoutTimelineView(ring: ring, workout: workout, calendar: calendar)
                                 .transition(.opacity.combined(with: .move(edge: .top)))
