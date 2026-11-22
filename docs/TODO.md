@@ -77,6 +77,10 @@ Time (see Next), then places.
 - **Manual rings and Shortcuts (App Intents).** Rings you count up yourself: a + button in the app, an interactive
   widget button, Siri ("read 20 pages", "played guitar", "called mum", "coffee"). Plus a Shortcuts action "Add to
   ring" so automations and other apps can log values. Values stored by Everyring in the App Group (not Health).
+  - **Action Button:** a manual counter must work from the Action Button (iPhone 15 Pro and later). Do it with an App
+    Intent "Add to ring" (pick the ring and the amount; also offered as an App Shortcut) and a Control (iOS 18
+    ControlWidget button), which can be put on the Action Button, in Control Center and on the Lock Screen. A press
+    adds one (or the chosen amount) without opening the app, with a confirmation and haptic. No Apple approval needed.
 - **Motion (Core Motion, `CMMotionActivityManager`).** No extra approval beyond Motion & Fitness. Minute by minute:
   - Time in a car (driving), e.g. a limit of 1 hr a day, or less car than last week.
   - Time cycling; time walking and running, also outside workouts.
