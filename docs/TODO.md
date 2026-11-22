@@ -4,6 +4,8 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 
 ## Next
 
+- **Top priority: make the direction of ring progress clear.** Start each ring with a lighter colour at 12 o’clock and build to the strongest colour at the moving tip. Keep the tip visible where the ends overlap. Check the 98% sleep-ring example, exactly 100%, and rings beyond one full lap.
+
 - **Graph widget from Heart Minutes.** Bring Heart Minutes' graph widget over: a widget that shows a ring's
   history as a chart (bars or a line per day, with the goal), in Everyring's own look and for any ring. Fits Erik's
   wish for few widgets: one widget with a setting for which ring, not one widget per metric.
