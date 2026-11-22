@@ -10,6 +10,21 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
 - **Rings on the watch:** should the watch also write icon and percentage on its rings, like the iPhone? (Asked,
   not answered yet.)
 
+- **Bedtime and get-up time rings.** Add Bedtime and Get-up Time as separate metrics. Each ring can use either mode:
+  - **Clock-time target:** Set a local target time and a tolerance (e.g. bedtime at 22:30 ± 30 min).
+    For a single night, show the actual time and its deviation from the target. Over multiple nights,
+    score the share of recorded nights within tolerance.
+  - **Consistency:** Choose a fixed or rolling period (e.g. the last 14 days) and a maximum acceptable
+    variation in minutes. Measure how much the recorded times vary within that period, independently of
+    any target time. Show the variation in minutes alongside the ring. A schedule can be consistent
+    even when it regularly misses the clock-time target.
+  - Treat clock times on either side of midnight as close together (23:55 and 00:05 are 10 min apart).
+    Assign each night to its wake date, following the existing sleep rings. Exclude missing nights
+    from the calculations, show how many nights were recorded, and require at least two observations
+    for consistency.
+  - Check whether Apple Health provides actual in-bed and get-up times. If only sleep onset and final
+    awakening are available, label those clearly as estimates of bedtime and get-up time.
+
 ## Before the App Store
 
 - Remove `SENSITIVE_METRICS` from `project.yml` (medical, reproductive and symptom types), unless it is decided they
