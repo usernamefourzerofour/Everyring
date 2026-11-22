@@ -300,9 +300,12 @@ final class HealthManager {
     /// Asks for read access to the types `metrics` need. HealthKit only shows the sheet for types not asked for before,
     /// so this is cheap to call whenever a ring is added.
     func requestAuthorization(for metrics: some Sequence<HealthMetric>) async throws {
-        guard Self.isAvailable else { return }
-        let types = metrics.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.readTypes) }
-        guard !types.isEmpty else { return }
+        try await requestAuthorization(types: metrics.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.readTypes) })
+    }
+
+    /// Asks for read access to `types` (see `requestAuthorization(for:)`).
+    func requestAuthorization(types: Set<HKObjectType>) async throws {
+        guard Self.isAvailable, !types.isEmpty else { return }
         // iOS shows one access sheet at a time: requests made while one is open wait for it and then run one by one,
         // instead of racing (several screens ask for the same new type at once).
         let previous = authorization
@@ -390,6 +393,50 @@ final class HealthManager {
                 .filter { $0.day(calendar: calendar) >= first && $0.day(calendar: calendar) < interval.end }
                 .reversed()
         }
+    }
+
+    /// Heart rate and `metric` minute by minute through a workout. Asks for heart rate access the first time.
+    func workoutTimeline(of metric: HealthMetric, in interval: DateInterval,
+                         filter: HealthFilter = .none) async throws -> WorkoutTimeline {
+        guard Self.isAvailable, interval.duration > 0 else { return WorkoutTimeline() }
+        let heartRateType = HKQuantityType(.heartRate)
+        try? await requestAuthorization(types: [heartRateType])
+        var timeline = WorkoutTimeline()
+        let scope = try await self.scope(for: metric, filter: HealthFilter(sources: filter.sources))
+        if let type = metric.quantityType {
+            timeline.perMinute = try await series(type, unit: metric.hkUnit, options: .cumulativeSum, in: interval,
+                                                  step: DateComponents(minute: 1), scope: scope, fillsGaps: true)
+        }
+        // Heart rate every 30 seconds for an hour and a half, every minute for longer workouts.
+        let step = interval.duration <= 90 * 60 ? DateComponents(second: 30) : DateComponents(minute: 1)
+        timeline.heartRate = (try? await series(heartRateType, unit: .count().unitDivided(by: .minute()),
+                                                options: .discreteAverage, in: interval, step: step, scope: Scope(),
+                                                fillsGaps: false)) ?? []
+        return timeline
+    }
+
+    /// A quantity per step through `interval`: sums, or averages for discrete types.
+    private func series(_ type: HKQuantityType, unit: HKUnit, options: HKStatisticsOptions, in interval: DateInterval,
+                        step: DateComponents, scope: Scope, fillsGaps: Bool) async throws -> [WorkoutTimeline.Point] {
+        let predicate = scope.apply(HKQuery.predicateForSamples(withStart: interval.start, end: interval.end))
+        let descriptor = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: type, predicate: predicate), options: options,
+            anchorDate: interval.start, intervalComponents: step)
+        var points: [WorkoutTimeline.Point] = []
+        do {
+            let collection = try await descriptor.result(for: store)
+            collection.enumerateStatistics(from: interval.start, to: interval.end) { statistics, _ in
+                let quantity = options.contains(.discreteAverage) ? statistics.averageQuantity() : statistics.sumQuantity()
+                if let value = quantity?.doubleValue(for: unit) {
+                    points.append(.init(date: statistics.startDate, value: value))
+                } else if fillsGaps {
+                    points.append(.init(date: statistics.startDate, value: 0))
+                }
+            }
+        } catch let error as HKError where error.code == .errorNoData {
+            return []
+        }
+        return points
     }
 
     // MARK: Reading

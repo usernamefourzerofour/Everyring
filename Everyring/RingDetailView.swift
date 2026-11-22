@@ -717,6 +717,8 @@ struct WorkoutLogCard: View {
     let workouts: [LoggedWorkout]?
     let calendar: Calendar
     @State private var showsAll = false
+    /// The workout whose timeline is showing.
+    @State private var expanded: LoggedWorkout.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -731,7 +733,19 @@ struct WorkoutLogCard: View {
                 } else {
                     let shown = showsAll ? workouts : Array(workouts.prefix(8))
                     ForEach(shown) { workout in
-                        WorkoutRow(workout: workout, ring: ring, calendar: calendar)
+                        let isExpanded = expanded == workout.id
+                        Button {
+                            withAnimation(.snappy) { expanded = isExpanded ? nil : workout.id }
+                        } label: {
+                            WorkoutRow(workout: workout, ring: ring, calendar: calendar, isExpanded: isExpanded)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(isExpanded ? "Hides the chart" : "Shows a chart of the workout")
+                        if isExpanded {
+                            WorkoutTimelineView(ring: ring, workout: workout, calendar: calendar)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                         if workout.id != shown.last?.id { Divider() }
                     }
                     if workouts.count > shown.count {
@@ -756,6 +770,7 @@ private struct WorkoutRow: View {
     let workout: LoggedWorkout
     let ring: Ring
     let calendar: Calendar
+    var isExpanded = false
 
     var body: some View {
         let leftOut = workout.isLeftOut(by: ring)
@@ -784,6 +799,11 @@ private struct WorkoutRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            Image(systemName: "chevron.down")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .accessibilityHidden(true)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(leftOut
@@ -976,5 +996,113 @@ private struct StageLegend: View {
             Circle().fill(color).frame(width: 7, height: 7)
             Text(title)
         }
+    }
+}
+
+/// A workout unfolded: heart rate and the ring's metric minute by minute.
+private struct WorkoutTimelineView: View {
+    @Environment(RingsModel.self) private var model
+    let ring: Ring
+    let workout: LoggedWorkout
+    let calendar: Calendar
+    @State private var timeline: WorkoutTimeline?
+    @State private var loaded = false
+
+    private static let heartColor = Color(hex: 0xE8562E)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let timeline, !timeline.isEmpty {
+                if !timeline.heartRate.isEmpty {
+                    heartRateChart(timeline)
+                }
+                if timeline.perMinute.contains(where: { $0.value > 0 }) {
+                    perMinuteChart(timeline)
+                }
+            } else if loaded {
+                Text("No data recorded during this workout.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            }
+        }
+        .padding(.vertical, 4)
+        .task(id: workout.id) {
+            timeline = await withTimeout { await model.workoutTimeline(for: ring, workout: workout) } ?? nil
+            loaded = true
+        }
+    }
+
+    private func heartRateChart(_ timeline: WorkoutTimeline) -> some View {
+        let values = timeline.heartRate.map(\.value)
+        let low = (values.min() ?? 60) - 10
+        let high = (values.max() ?? 180) + 10
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Heart rate", systemImage: "heart.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Self.heartColor)
+                Spacer()
+                if let average = timeline.averageHeartRate, let peak = timeline.maxHeartRate {
+                    Text("Avg \(Int(average.rounded())) · Max \(Int(peak.rounded())) bpm")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Chart(timeline.heartRate) { point in
+                AreaMark(x: .value("Time", point.date), yStart: .value("Low", low), yEnd: .value("Heart rate", point.value))
+                    .foregroundStyle(.linearGradient(colors: [Self.heartColor.opacity(0.25), Self.heartColor.opacity(0.02)],
+                                                     startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.monotone)
+                LineMark(x: .value("Time", point.date), y: .value("Heart rate", point.value))
+                    .foregroundStyle(Self.heartColor)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .interpolationMethod(.monotone)
+            }
+            .chartYScale(domain: low...high)
+            .chartXScale(domain: workout.start...workout.end)
+            .chartXAxis { timeAxis }
+            .frame(height: 110)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(heartRateSummary(timeline))
+        }
+    }
+
+    private func perMinuteChart(_ timeline: WorkoutTimeline) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(ring.metric.title) per minute")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ring.accent)
+            Chart(timeline.perMinute) { point in
+                BarMark(x: .value("Time", point.date, unit: .minute), y: .value("Value", ring.metric.toDisplay(point.value)))
+                    .foregroundStyle(ring.accent.gradient)
+            }
+            .chartXScale(domain: workout.start...workout.end)
+            .chartXAxis { timeAxis }
+            .chartYAxisLabel(ring.metric.unitName())
+            .frame(height: 90)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "\(ring.metric.title) per minute, \(ring.metric.format(workout.value, style: .wide)) in all"))
+        }
+    }
+
+    private var timeAxis: some AxisContent {
+        AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+            AxisGridLine()
+            AxisValueLabel(format: timeFormat)
+        }
+    }
+
+    private var timeFormat: Date.FormatStyle {
+        var style = Date.FormatStyle.dateTime.hour().minute()
+        style.timeZone = calendar.timeZone
+        return style
+    }
+
+    private func heartRateSummary(_ timeline: WorkoutTimeline) -> String {
+        guard let average = timeline.averageHeartRate, let peak = timeline.maxHeartRate else { return "" }
+        return String(localized: "Heart rate, average \(Int(average.rounded())), highest \(Int(peak.rounded())) beats per minute")
     }
 }

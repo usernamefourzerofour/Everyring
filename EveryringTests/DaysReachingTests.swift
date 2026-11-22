@@ -166,3 +166,24 @@ struct LoggedNightTests {
         #expect(ring.dayIsMet(8.2) == true)
     }
 }
+
+struct WorkoutTimelineTests {
+    @Test func heartRateSummary() {
+        let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        var timeline = WorkoutTimeline()
+        #expect(timeline.isEmpty && timeline.averageHeartRate == nil)
+        timeline.heartRate = [.init(date: t0, value: 100), .init(date: t0 + 30, value: 140), .init(date: t0 + 60, value: 150)]
+        #expect(timeline.averageHeartRate == 130)
+        #expect(timeline.maxHeartRate == 150)
+        #expect(!timeline.isEmpty)
+    }
+
+    @Test func demoTimelineFollowsTheWorkout() {
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let workout = LoggedWorkout(id: UUID(), kind: .running, start: start, end: start + 30 * 60, value: 300)
+        let timeline = DemoHistory.timeline(for: workout)
+        #expect(timeline.perMinute.count == 30)
+        #expect(timeline.heartRate.count == 60)
+        #expect(timeline.perMinute.allSatisfy { $0.date >= workout.start && $0.date < workout.end })
+    }
+}
