@@ -402,6 +402,11 @@ struct ScreenTimeNoDataCard: View {
                 check(manager.isMonitoring(ring), "Followed by iOS")
             }
             .font(.subheadline)
+            if !manager.isAuthorized || picked == 0 {
+                Text("Tap Edit to allow Screen Time access and choose the apps this ring follows.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             if let error = manager.lastError {
                 Text(error)
                     .font(.caption.monospaced())
