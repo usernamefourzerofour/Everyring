@@ -514,7 +514,7 @@ final class HealthManager {
 
     /// Sums of a quantity per bucket (Health's statistics, which don't double count overlapping sources).
     private func quantities(_ type: HKQuantityType, unit: HKUnit, in range: DateInterval, by bucket: Bucket,
-                            scope: Scope, key: (Date) -> Date) async throws -> [Date: Double] {
+                            scope: Scope, key: @escaping (Date) -> Date) async throws -> [Date: Double] {
         let step: DateComponents
         switch bucket {
         case .whole: return [range.start: try await sum(type, unit: unit, in: range, scope: scope)]
