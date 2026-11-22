@@ -131,11 +131,12 @@ struct ToneRingStack: View {
                     ToneRing(light: light, deep: deep, fraction: ring.fraction, lineWidth: diameter * 0.14)
                         .saturation(ring.faded ? 0.15 : 1)
                         .opacity(ring.faded ? 0.3 : 1)
-                    Text(max(0, ring.fraction), format: .percent.precision(.fractionLength(0)))
-                        .font(.system(size: diameter * 0.26, weight: .bold, design: .rounded))
+                    // As Heart Minutes: just the number, big (no % sign taking up room).
+                    Text(Int((max(0, ring.fraction) * 100).rounded()), format: .number)
+                        .font(.system(size: diameter * 0.36, weight: .bold, design: .rounded))
                         .minimumScaleFactor(0.4)
                         .lineLimit(1)
-                        .frame(width: diameter * 0.62)
+                        .frame(width: diameter * 0.68)
                 } else {
                     // Several rings (or every ring hidden: a check in their place).
                     RingStackView(rings: rings)
