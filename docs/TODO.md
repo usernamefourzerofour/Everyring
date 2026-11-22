@@ -68,3 +68,33 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
   matching workouts in the period. A 10 km monthly walking goal in this mode requires one 10 km walk.
 - **Longest uninterrupted sleep.** Track the longest recorded sleep stretch per night. Join adjacent sleep
   stages across transitions, split at recorded awakenings, and avoid counting gaps in the data as sleep.
+
+## Rings from data outside Apple Health
+
+Suggested order: manual rings and Shortcuts first (easy, very useful), then motion (no extra permission), then Screen
+Time (see Next), then places.
+
+- **Manual rings and Shortcuts (App Intents).** Rings you count up yourself: a + button in the app, an interactive
+  widget button, Siri ("read 20 pages", "played guitar", "called mum", "coffee"). Plus a Shortcuts action "Add to
+  ring" so automations and other apps can log values. Values stored by Everyring in the App Group (not Health).
+- **Motion (Core Motion, `CMMotionActivityManager`).** No extra approval beyond Motion & Fitness. Minute by minute:
+  - Time in a car (driving), e.g. a limit of 1 hr a day, or less car than last week.
+  - Time cycling; time walking and running, also outside workouts.
+  - Time stationary, e.g. at most 8 hr still.
+  - Share of active transport: cycling and walking versus car ("70 % without a car").
+  - iOS keeps only the last 7 days: Everyring must record history itself (e.g. on each refresh and in the background).
+- **Places (Core Location: visits and regions).** Needs location "Always" (App Review is strict; explain it well).
+  Battery use is low with visit monitoring.
+  - Time at home and away from home ("at least 2 hr out every day").
+  - Visits to a place ("gym 3 times a week", "forest or beach once a week").
+  - Time at work ("at most 40 hr a week").
+  - New places visited ("one new place a month").
+  - Distance travelled, e.g. by car ("at most 200 km a week"), together with motion.
+- **Calendar and reminders (EventKit).**
+  - Time in meetings ("at most 15 hr a week"); free evenings without events.
+  - Completed reminders ("20 tasks a week").
+- **Photos (PhotoKit).** Photos taken ("one photo a day", as a diary).
+- **Weather (WeatherKit) with location.** Time outdoors in good weather; walks in daylight (time in daylight is
+  already a Health ring).
+- **Spending (FinanceKit).** US only for now: Apple Card / Apple Cash spending, e.g. a limit on takeaway.
+
