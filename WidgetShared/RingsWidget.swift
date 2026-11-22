@@ -221,10 +221,11 @@ struct RingsWidgetView: View {
 
     // MARK: Lock Screen
 
+    /// Drawn the way Heart Minutes draws its round complication (see ToneRing).
     private var circular: some View {
-        RingStackView(rings: entry.displays, trackOpacity: 0.3)
-            .padding(2)
-            .widgetAccentable()
+        ToneRingStack(rings: entry.displays)
+            // Slightly smaller than the area, so the outer edge isn't cut off in a watch face's corners.
+            .scaleEffect(0.95)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(entry.items.map { $0.ring.accessibilityText($0.value, now: entry.date, calendar: entry.calendar) }
                 .joined(separator: "; "))
