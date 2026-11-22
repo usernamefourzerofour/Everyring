@@ -964,12 +964,28 @@ struct WeekdayPicker: View {
 private struct ScreenTimeRows: View {
     @Binding var selection: Data?
     @State private var picking = false
+    /// The picker's own copy: the system picker only reliably hands back its choice through a stored selection, not
+    /// one decoded afresh on every read.
+    @State private var picked = FamilyActivitySelection()
+    @State private var loaded = false
     @State private var authorized = ScreenTimeManager.shared.isAuthorized
     @State private var problem: String?
 
     var body: some View {
-        let current = selection.flatMap { try? JSONDecoder().decode(FamilyActivitySelection.self, from: $0) }
-            ?? FamilyActivitySelection()
+        Group { content }
+            .onAppear {
+                guard !loaded else { return }
+                loaded = true
+                if let stored = selection.flatMap({ try? JSONDecoder().decode(FamilyActivitySelection.self, from: $0) }) {
+                    picked = stored
+                }
+            }
+            .onChange(of: picked) { _, new in
+                selection = ScreenTimeManager.encode(new)
+            }
+    }
+
+    @ViewBuilder private var content: some View {
         if !authorized {
             Button("Allow Screen Time Access") {
                 Task {
@@ -992,13 +1008,10 @@ private struct ScreenTimeRows: View {
                 HStack {
                     Text("Apps and categories").foregroundStyle(.primary)
                     Spacer()
-                    Text(summary(current)).foregroundStyle(.secondary)
+                    Text(summary(picked)).foregroundStyle(.secondary)
                 }
             }
-            .familyActivityPicker(isPresented: $picking, selection: Binding(
-                get: { current },
-                set: { selection = ScreenTimeManager.encode($0) }
-            ))
+            .familyActivityPicker(isPresented: $picking, selection: $picked)
         }
     }
 
