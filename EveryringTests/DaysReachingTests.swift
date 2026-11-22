@@ -157,6 +157,9 @@ struct LoggedNightTests {
         #expect(first.stages[.deep] == 3600)
         #expect(first.hours(for: .sleepStage(.rem)) == 3.5)
         #expect(nights[1].unspecified == 8 * 3600)
+        // Minute by minute: core, deep, the awake gap, REM.
+        #expect(first.segments.map(\.phase) == [.core, .deep, .awake, .rem])
+        #expect(nights[1].segments.map(\.phase) == [.asleep])
     }
 
     @Test func dailyGoalMarksNights() {

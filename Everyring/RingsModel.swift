@@ -263,6 +263,12 @@ final class RingsModel {
                                                  filter: ring.healthFilter)
     }
 
+    /// Heart rate through a night; `nil` if Health couldn't be read.
+    func heartRate(during night: LoggedNight) async -> [WorkoutTimeline.Point]? {
+        if Self.isDemo { return DemoHistory.nightHeartRate(night) }
+        return try? await health.heartRate(in: night.interval)
+    }
+
     /// The nights in `interval`, for sleep rings; `nil` for other rings or if Health couldn't be read.
     func nightLog(for ring: Ring, interval: DateInterval, now: Date = .now) async -> [LoggedNight]? {
         guard ring.metric.isSleep else { return nil }

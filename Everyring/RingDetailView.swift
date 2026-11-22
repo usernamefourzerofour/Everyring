@@ -875,6 +875,8 @@ struct NightsCard: View {
     let nights: [LoggedNight]?
     let calendar: Calendar
     @State private var showsAll = false
+    /// The night whose chart is showing.
+    @State private var expanded: LoggedNight.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -889,7 +891,18 @@ struct NightsCard: View {
                 } else {
                     let shown = showsAll ? nights : Array(nights.prefix(7))
                     ForEach(shown) { night in
-                        NightRow(night: night, ring: ring, calendar: calendar)
+                        let isExpanded = expanded == night.id
+                        Button {
+                            expanded = isExpanded ? nil : night.id
+                        } label: {
+                            NightRow(night: night, ring: ring, calendar: calendar, isExpanded: isExpanded)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(isExpanded ? LocalizedStringKey("Hides the chart") : "Shows a chart of the night")
+                        if isExpanded {
+                            NightDetailView(night: night, calendar: calendar)
+                        }
                         if night.id != shown.last?.id { Divider() }
                     }
                     if nights.count > shown.count {
@@ -936,6 +949,7 @@ private struct NightRow: View {
     let night: LoggedNight
     let ring: Ring
     let calendar: Calendar
+    var isExpanded = false
 
     var body: some View {
         let value = night.hours(for: ring.metric)
@@ -960,6 +974,12 @@ private struct NightRow: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    .animation(.snappy, value: isExpanded)
+                    .accessibilityHidden(true)
             }
             StageBar(night: night, highlighted: highlightedStage)
                 .frame(height: 8)
@@ -1063,8 +1083,6 @@ private struct WorkoutTimelineView: View {
     @State private var timeline: WorkoutTimeline?
     @State private var loaded = false
 
-    private static let heartColor = Color(hex: 0xE8562E)
-
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let timeline, !timeline.isEmpty {
@@ -1091,38 +1109,7 @@ private struct WorkoutTimelineView: View {
     }
 
     private func heartRateChart(_ timeline: WorkoutTimeline) -> some View {
-        let values = timeline.heartRate.map(\.value)
-        let low = (values.min() ?? 60) - 10
-        let high = (values.max() ?? 180) + 10
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Label("Heart rate", systemImage: "heart.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Self.heartColor)
-                Spacer()
-                if let average = timeline.averageHeartRate, let peak = timeline.maxHeartRate {
-                    Text("Avg \(Int(average.rounded())) · Max \(Int(peak.rounded())) bpm")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Chart(timeline.heartRate) { point in
-                AreaMark(x: .value("Time", point.date), yStart: .value("Low", low), yEnd: .value("Heart rate", point.value))
-                    .foregroundStyle(.linearGradient(colors: [Self.heartColor.opacity(0.25), Self.heartColor.opacity(0.02)],
-                                                     startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
-                LineMark(x: .value("Time", point.date), y: .value("Heart rate", point.value))
-                    .foregroundStyle(Self.heartColor)
-                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .interpolationMethod(.monotone)
-            }
-            .chartYScale(domain: low...high)
-            .chartXScale(domain: workout.start...workout.end)
-            .chartXAxis { timeAxis }
-            .frame(height: 110)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(heartRateSummary(timeline))
-        }
+        HeartRateChart(points: timeline.heartRate, domain: workout.start...workout.end, calendar: calendar)
     }
 
     /// The ring's metric adding up through the workout, from zero at the start to the workout's total.
@@ -1170,10 +1157,6 @@ private struct WorkoutTimelineView: View {
         return style
     }
 
-    private func heartRateSummary(_ timeline: WorkoutTimeline) -> String {
-        guard let average = timeline.averageHeartRate, let peak = timeline.maxHeartRate else { return "" }
-        return String(localized: "Heart rate, average \(Int(average.rounded())), highest \(Int(peak.rounded())) beats per minute")
-    }
 }
 
 /// How much of the period came from workouts and how much from everyday activity, as a split bar with both amounts.
@@ -1273,6 +1256,152 @@ private struct ShadedDayLabelStyle: LabelStyle {
                 .fill(Color.secondary.opacity(0.25))
                 .frame(width: 12, height: 12)
             configuration.title
+        }
+    }
+}
+
+/// Heart rate as a line with a soft area, with average and highest above it. For workouts and nights.
+struct HeartRateChart: View {
+    let points: [WorkoutTimeline.Point]
+    let domain: ClosedRange<Date>
+    let calendar: Calendar
+
+    static let color = Color(hex: 0xE8562E)
+
+    var body: some View {
+        let values = points.map(\.value)
+        let low = (values.min() ?? 60) - 10
+        let high = (values.max() ?? 180) + 10
+        let average = values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+        let peak = values.max()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Heart rate", systemImage: "heart.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Self.color)
+                Spacer()
+                if let average, let peak {
+                    Text("Avg \(Int(average.rounded())) · Max \(Int(peak.rounded())) bpm")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Chart(points) { point in
+                AreaMark(x: .value("Time", point.date), yStart: .value("Low", low), yEnd: .value("Heart rate", point.value))
+                    .foregroundStyle(.linearGradient(colors: [Self.color.opacity(0.25), Self.color.opacity(0.02)],
+                                                     startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.monotone)
+                LineMark(x: .value("Time", point.date), y: .value("Heart rate", point.value))
+                    .foregroundStyle(Self.color)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .interpolationMethod(.monotone)
+            }
+            .chartYScale(domain: low...high)
+            .chartXScale(domain: domain)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: TimeAxis.format(calendar))
+                }
+            }
+            .frame(height: 110)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(average.map { average in
+                String(localized: "Heart rate, average \(Int(average.rounded())), highest \(Int((peak ?? average).rounded())) beats per minute")
+            } ?? "")
+        }
+    }
+}
+
+enum TimeAxis {
+    /// "05.21": hours and minutes in the ring calendar's time zone.
+    static func format(_ calendar: Calendar) -> Date.FormatStyle {
+        var style = Date.FormatStyle.dateTime.hour().minute()
+        style.timeZone = calendar.timeZone
+        return style
+    }
+}
+
+/// A night unfolded: the sleep stages through the night (awake at the top, deep at the bottom) and the heart rate.
+private struct NightDetailView: View {
+    @Environment(RingsModel.self) private var model
+    let night: LoggedNight
+    let calendar: Calendar
+    @State private var heartRate: [WorkoutTimeline.Point]?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if !night.segments.isEmpty {
+                hypnogram
+            }
+            if let heartRate, !heartRate.isEmpty {
+                HeartRateChart(points: heartRate, domain: night.interval.start...night.interval.end, calendar: calendar)
+            }
+        }
+        .padding(.vertical, 4)
+        .task(id: night.id) {
+            heartRate = await withTimeout { await model.heartRate(during: night) } ?? nil
+        }
+    }
+
+    private var phases: [LoggedNight.Phase] {
+        let present = Set(night.segments.map(\.phase))
+        return LoggedNight.Phase.allCases.filter { present.contains($0) || $0 != .asleep }
+    }
+
+    private var hypnogram: some View {
+        let rows = phases
+        return VStack(alignment: .leading, spacing: 6) {
+            Label("Sleep stages", systemImage: "moon.zzz")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(StageStyle.color(.core))
+            Chart(Array(night.segments.enumerated()), id: \.offset) { _, segment in
+                let row = Double(rows.firstIndex(of: segment.phase) ?? 0)
+                RectangleMark(xStart: .value("Start", segment.interval.start), xEnd: .value("End", segment.interval.end),
+                              yStart: .value("Low", row - 0.38), yEnd: .value("High", row + 0.38))
+                    .foregroundStyle(Self.color(segment.phase))
+                    .clipShape(.rect(cornerRadius: 2))
+            }
+            .chartXScale(domain: night.interval.start...night.interval.end)
+            .chartYScale(domain: -0.5...(Double(rows.count) - 0.5))
+            .chartYAxis {
+                AxisMarks(position: .leading, values: Array(0..<rows.count).map(Double.init)) { value in
+                    AxisValueLabel {
+                        if let index = value.as(Double.self).map(Int.init), rows.indices.contains(index) {
+                            Text(Self.title(rows[index]))
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: TimeAxis.format(calendar))
+                }
+            }
+            .frame(height: CGFloat(rows.count) * 26 + 24)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "Sleep stages through the night"))
+        }
+    }
+
+    static func color(_ phase: LoggedNight.Phase) -> Color {
+        switch phase {
+        case .deep: StageStyle.color(.deep)
+        case .core: StageStyle.color(.core)
+        case .rem: StageStyle.color(.rem)
+        case .asleep: StageStyle.color(.core).opacity(0.6)
+        case .awake: StageStyle.awake
+        }
+    }
+
+    static func title(_ phase: LoggedNight.Phase) -> String {
+        switch phase {
+        case .deep: StageStyle.title(.deep)
+        case .core: StageStyle.title(.core)
+        case .rem: StageStyle.title(.rem)
+        case .asleep: String(localized: "Asleep")
+        case .awake: String(localized: "Awake")
         }
     }
 }

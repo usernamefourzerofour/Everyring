@@ -434,6 +434,17 @@ final class HealthManager {
         return timeline
     }
 
+    /// Average heart rate through `interval` (a night: every 2 minutes). Asks for heart rate access the first time.
+    func heartRate(in interval: DateInterval) async throws -> [WorkoutTimeline.Point] {
+        guard Self.isAvailable, interval.duration > 0 else { return [] }
+        let type = HKQuantityType(.heartRate)
+        try? await requestAuthorization(types: [type])
+        let step = interval.duration <= 90 * 60 ? DateComponents(second: 30)
+            : interval.duration <= 4 * 3600 ? DateComponents(minute: 1) : DateComponents(minute: 2)
+        return (try? await series(type, unit: .count().unitDivided(by: .minute()), options: .discreteAverage,
+                                  in: interval, step: step, scope: Scope(), fillsGaps: false)) ?? []
+    }
+
     /// A quantity per step through `interval`: sums, or averages for discrete types.
     private func series(_ type: HKQuantityType, unit: HKUnit, options: HKStatisticsOptions, in interval: DateInterval,
                         step: DateComponents, scope: Scope, fillsGaps: Bool) async throws -> [WorkoutTimeline.Point] {

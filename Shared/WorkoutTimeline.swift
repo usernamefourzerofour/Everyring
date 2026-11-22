@@ -68,3 +68,25 @@ struct ActivitySplit: Hashable, Sendable {
     /// The share from workouts, 0–1 (0 when nothing was logged).
     var workoutShare: Double { total > 0 ? min(1, duringWorkouts / total) : 0 }
 }
+
+extension DemoHistory {
+    /// A made-up heart rate through a night: lower in deep sleep, higher in REM and awake.
+    static func nightHeartRate(_ night: LoggedNight) -> [WorkoutTimeline.Point] {
+        var result: [WorkoutTimeline.Point] = []
+        var t = night.interval.start
+        var i = 0
+        while t < night.interval.end {
+            let phase = night.segments.last { $0.interval.start <= t }?.phase ?? .core
+            let base: Double = switch phase {
+            case .deep: 50
+            case .core, .asleep: 55
+            case .rem: 62
+            case .awake: 68
+            }
+            result.append(.init(date: t, value: base + Double((i * 7) % 5)))
+            t = t.addingTimeInterval(120)
+            i += 1
+        }
+        return result
+    }
+}
