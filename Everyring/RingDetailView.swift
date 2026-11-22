@@ -480,20 +480,31 @@ extension Ring {
 /// The ring's current period from Screen Time, broken down by app.
 struct ScreenTimePeriodCard: View {
     let ring: Ring
+    /// Made once when the card appears: a new filter on every redraw of the page would make Screen Time run the
+    /// report again and again (the bars kept changing while you looked).
+    @State private var filter: DeviceActivityFilter?
 
     var body: some View {
-        let interval = ring.period.interval(now: .now, calendar: .current)
-        let hourly = ring.period.nominalDays <= 1
         VStack(alignment: .leading, spacing: 8) {
             Label(ring.period.isRolling ? String(localized: "The last \(ring.period.nominalDays) days") : ring.period.title,
                   systemImage: "chart.bar.xaxis")
                 .font(.headline)
                 .foregroundStyle(ring.accent)
-            DeviceActivityReport(.period, filter: ring.screenTimeFilter(interval, hourly: hourly))
-                .frame(height: 340)
+            if let filter {
+                DeviceActivityReport(.period, filter: filter)
+                    .frame(height: 340)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 340)
+            }
         }
         .card()
-        .onAppear { ring.screenTimeReportStyle().save() }
+        .onAppear {
+            ring.screenTimeReportStyle().save()
+            if filter == nil {
+                let interval = ring.period.interval(now: .now, calendar: .current)
+                filter = ring.screenTimeFilter(interval, hourly: ring.period.nominalDays <= 1)
+            }
+        }
     }
 }
 
@@ -505,6 +516,8 @@ struct ScreenTimeCalendarCard: View {
     /// page, and can be reloaded by hand.
     @State private var showsReport = false
     @State private var reload = 0
+    /// Made once (see ScreenTimePeriodCard).
+    @State private var filter: DeviceActivityFilter?
     private let calendar = Calendar.current
 
     /// From the start of the week four weeks back to the end of this week (as the report draws it).
@@ -527,8 +540,8 @@ struct ScreenTimeCalendarCard: View {
                 Button { reload += 1 } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel("Reload")
             }
-            if showsReport {
-                DeviceActivityReport(.calendar, filter: ring.screenTimeFilter(range, hourly: false))
+            if showsReport, let filter {
+                DeviceActivityReport(.calendar, filter: filter)
                     .id(reload)
                     .frame(height: 260)
             } else {
@@ -540,7 +553,10 @@ struct ScreenTimeCalendarCard: View {
                 .foregroundStyle(.secondary)
         }
         .card()
-        .onAppear { ring.screenTimeReportStyle().save() }
+        .onAppear {
+            ring.screenTimeReportStyle().save()
+            if filter == nil { filter = ring.screenTimeFilter(range, hourly: false) }
+        }
         .task {
             try? await Task.sleep(for: .milliseconds(700))
             showsReport = true
