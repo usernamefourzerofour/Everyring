@@ -157,12 +157,23 @@ struct RingStackView: View {
                                  // In one colour, neighbouring rings alternate strong and softer to tell them apart.
                                  emphasis: index.isMultiple(of: 2) ? 1 : 0.72,
                                  warning: ring.warning,
+                                 // With a label the ! is drawn above it, below.
+                                 drawsBadge: !showsLabels,
                                  // The tip's dot stays behind the label: not drawn where the text is.
                                  dotHiddenUntil: showsLabels
                                     ? RingStartLabel(ring: ring, radius: radius, lineWidth: lw).span : 0)
                             .frame(width: (radius + lw / 2) * 2, height: (radius + lw / 2) * 2)
                         if showsLabels {
                             RingStartLabel(ring: ring, radius: radius, lineWidth: lw, monochrome: monochrome)
+                            // Past a limit: the tip is always the red !, on top of the label where they meet.
+                            if ring.warning {
+                                let f = max(0, ring.fraction)
+                                let tip = f > 1 ? f - (f - 0.0005).rounded(.down) : f
+                                let angle = (tip * 2 - 0.5) * .pi
+                                WarningBadge(size: lw * 1.2, fullColor: !monochrome)
+                                    .offset(x: radius * cos(angle), y: radius * sin(angle))
+                                    .accessibilityHidden(true)
+                            }
                         }
                     }
                     // In one colour the label is cut out of the ring (see RingStartLabel), within this ring only.
@@ -235,45 +246,6 @@ struct RingStartLabel: View {
         .accessibilityHidden(true)
     }
 
-    /// A limit past its limit whose tip lies under the label: the label carries the ! in place of the ring's icon
-    /// (the tip's badge would cover the text).
-    private var shownSymbol: String? {
-        guard ring.warning else { return ring.symbol }
-        let f = max(0, ring.fraction)
-        let tip = f > 1 ? f - (f - 0.0005).rounded(.down) : f
-        var plain = self
-        plain.ring.warning = false
-        return tip <= plain.span ? "exclamationmark.circle.fill" : ring.symbol
-    }
-
-    private func glyphLayer(_ glyphs: [Glyph], size: CGFloat, weight: Font.Weight) -> some View {
-        ZStack {
-            ForEach(glyphs) { glyph in
-                Group {
-                    if let symbol = glyph.symbol {
-                        Image(systemName: symbol)
-                            .font(.system(size: size * 0.9, weight: weight))
-                    } else {
-                        Text(glyph.text)
-                            .font(.system(size: size, weight: weight, design: .rounded).monospacedDigit())
-                    }
-                }
-                .fixedSize()
-                .offset(y: -radius)
-                .rotationEffect(.radians(glyph.angle))
-            }
-        }
-    }
-
-    /// Small shifts all round, so the cut-out gap is a little wider than the text itself.
-    private static func haloOffsets(size: CGFloat) -> [CGSize] {
-        let d = max(0.8, size * 0.09)
-        return [CGSize(width: -d, height: 0), CGSize(width: d, height: 0), CGSize(width: 0, height: -d),
-                CGSize(width: 0, height: d), CGSize(width: -d * 0.7, height: -d * 0.7),
-                CGSize(width: d * 0.7, height: -d * 0.7), CGSize(width: -d * 0.7, height: d * 0.7),
-                CGSize(width: d * 0.7, height: d * 0.7)]
-    }
-
     /// How far round the ring the label reaches, as a fraction of a lap (with a little room after it).
     var span: Double {
         let percent = max(0, ring.fraction).formatted(.percent.precision(.fractionLength(0)))
@@ -301,7 +273,7 @@ struct RingStartLabel: View {
         }
         // On a tight inner ring the glyphs' inner edges crowd together; space them a little more.
         let curve = 1 + lineWidth * 0.12 / max(radius, 1)
-        if let symbol = shownSymbol {
+        if let symbol = ring.symbol {
             add(symbol: symbol, text: "", advance: (Self.symbolWidth(symbol, size: size * 0.9) + size * 0.3) * curve)
         }
         for character in percent {

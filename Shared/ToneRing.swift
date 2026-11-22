@@ -20,6 +20,8 @@ struct ToneRing: View {
     var emphasis = 1.0
     /// A limit past its limit: the tip carries a red ! instead of the white dot (also over a label).
     var warning = false
+    /// Whether this view draws the ! itself (a stack with labels draws it above the label instead).
+    var drawsBadge = true
     /// The white dot isn't drawn while the tip is between 12 o'clock and this fraction of a lap (where a label sits).
     var dotHiddenUntil = 0.0
 
@@ -56,15 +58,16 @@ struct ToneRing: View {
                             .mask(progress(f: f, laps: laps, pos: pos).luminanceToAlpha())
                             .widgetAccentable()
                     }
-                    if warning && pos > dotHiddenUntil {
-                        // A red ! on a white disc where you went too far. Under a ring's label the label shows the !
-                        // in place of its icon instead (see RingStartLabel).
-                        let angle = (pos * 2 - 0.5) * .pi
-                        WarningBadge(size: lineWidth * 1.2, fullColor: fullColor)
-                            .position(x: geo.size.width / 2 + radius * cos(angle),
-                                      y: geo.size.height / 2 + radius * sin(angle))
-                            .accessibilityHidden(true)
-                    } else if !warning && pos > dotHiddenUntil {
+                    if warning {
+                        if drawsBadge {
+                            // A red ! on a white disc where you went too far, in place of the white dot.
+                            let angle = (pos * 2 - 0.5) * .pi
+                            WarningBadge(size: lineWidth * 1.2, fullColor: fullColor)
+                                .position(x: geo.size.width / 2 + radius * cos(angle),
+                                          y: geo.size.height / 2 + radius * sin(angle))
+                                .accessibilityHidden(true)
+                        }
+                    } else if pos > dotHiddenUntil {
                         // A small white dot where you have reached (left out under a label).
                         let angle = (pos * 2 - 0.5) * .pi
                         Circle()
