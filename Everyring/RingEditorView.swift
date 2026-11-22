@@ -319,9 +319,11 @@ struct RingEditorView: View {
                 } header: {
                     Text("When the limit is passed")
                 } footer: {
-                    Text(ring.marksOverLimit
-                         ? "A red ! sits at the ring's tip, and the percentage turns red. The ring keeps its colour."
-                         : "The ring looks the same over and under its limit.")
+                    if ring.marksOverLimit {
+                        Text("A red ! sits at the ring's tip, and the percentage turns red. The ring keeps its colour.")
+                    } else {
+                        Text("The ring looks the same over and under its limit.")
+                    }
                 }
             }
 
