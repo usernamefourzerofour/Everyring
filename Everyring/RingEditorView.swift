@@ -72,25 +72,46 @@ struct RingEditorView: View {
         max(1, (Double(maxDays) * 5 / 7).rounded())
     }
 
-    private var isValid: Bool {
+    private var goalIsValid: Bool {
         ring.isDaysReaching ? displayGoal >= 1 && displayTarget > 0 : displayGoal > 0
     }
 
+    /// Whether the ring can be saved.
+    private var isValid: Bool {
+        goalIsValid && (workoutLengthsAreValid || !edited.usesWorkoutLengths)
+    }
+
     /// Only workouts between these lengths count (workout rings, and activity rings that count only during workouts).
+    /// Any whole number of minutes; empty means any length.
     @ViewBuilder private var workoutLengthPickers: some View {
-        Picker("Shortest workout", selection: $ring.minimumWorkoutMinutes) {
-            Text("Any length").tag(0)
-            ForEach([5, 10, 15, 20, 30, 45, 60, 90], id: \.self) { minutes in
-                Text(Self.minutesText(minutes)).tag(minutes)
-            }
+        minutesField("Shortest workout", value: $ring.minimumWorkoutMinutes)
+        minutesField("Longest workout", value: $ring.maximumWorkoutMinutes)
+        if !workoutLengthsAreValid {
+            Text("The longest workout must be longer than the shortest.")
+                .font(.footnote)
+                .foregroundStyle(.red)
         }
-        Picker("Longest workout", selection: $ring.maximumWorkoutMinutes) {
-            Text("Any length").tag(0)
-            // Only lengths above the shortest, so the range is never empty.
-            ForEach([15, 20, 30, 45, 60, 90, 120, 180].filter { $0 > ring.minimumWorkoutMinutes }, id: \.self) { minutes in
-                Text(Self.minutesText(minutes)).tag(minutes)
-            }
+    }
+
+    private func minutesField(_ title: LocalizedStringKey, value: Binding<Int>) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            TextField("Any", value: Binding<Int?>(
+                get: { value.wrappedValue > 0 ? value.wrappedValue : nil },
+                set: { value.wrappedValue = max(0, $0 ?? 0) }
+            ), format: .number)
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.trailing)
+            .frame(maxWidth: 90)
+            Text("min")
+                .foregroundStyle(.secondary)
         }
+    }
+
+    /// No range that leaves out every workout.
+    private var workoutLengthsAreValid: Bool {
+        ring.maximumWorkoutMinutes == 0 || ring.maximumWorkoutMinutes > ring.minimumWorkoutMinutes
     }
 
     var body: some View {
@@ -229,7 +250,7 @@ struct RingEditorView: View {
             } header: {
                 Text("Goal")
             } footer: {
-                if !isValid {
+                if !goalIsValid {
                     Text("The goal must be more than zero.")
                 } else if ring.isDaysReaching {
                     Text(ring.goalKind == .limit
@@ -376,10 +397,6 @@ struct RingEditorView: View {
                 // An average goal is per day, so it stays the same when the period changes.
                 displayGoal = Self.rounded(ring.metric.toDisplay(ring.metric.suggestedGoal(for: ring.isAverage ? .today : period)))
             }
-        }
-        .onChange(of: ring.minimumWorkoutMinutes) { _, shortest in
-            // A longest length at or below the new shortest would leave no workouts.
-            if ring.maximumWorkoutMinutes != 0 && ring.maximumWorkoutMinutes <= shortest { ring.maximumWorkoutMinutes = 0 }
         }
         .onChange(of: ring.days) { _, days in
             // Start custom days from the weekdays.
