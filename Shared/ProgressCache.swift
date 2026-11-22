@@ -68,10 +68,24 @@ struct ProgressCache: Codable, Hashable, Sendable {
     /// The value to show for `ring` at `date`. A fixed ring whose cached period has ended shows 0 (a new period has
     /// started); a rolling ring shows its last value.
     func value(for ring: Ring, at date: Date, calendar: Calendar) -> Double {
+        // Screen Time: straight from what the monitor recorded, so a widget is current as soon as the monitor reloads
+        // it, without waiting for the app to run and refresh this cache.
+        if ring.metric == .screenTime, let live = Self.screenTime(for: ring, at: date, calendar: calendar) {
+            return live
+        }
         guard let snapshot = rings[ring.id] else { return 0 }
         if ring.period.isRolling { return snapshot.value }
         return ring.period.interval(containing: date, calendar: calendar).start == snapshot.intervalStart
             ? snapshot.value : 0
+    }
+
+    /// A Screen Time ring's value from the monitor's log, or nil when this device has no readings for it (the watch).
+    static func screenTime(for ring: Ring, at date: Date, calendar: Calendar) -> Double? {
+        let log = ScreenTimeLog.load()
+        guard let readings = log.rings[ring.id], !readings.isEmpty else { return nil }
+        let interval = ring.period.interval(now: date, calendar: calendar)
+        let daily = log.daily(ring: ring.id, calendar: calendar).filter { interval.contains($0.key) }
+        return ring.measure(daily: daily, in: interval, now: date, calendar: calendar)
     }
 
     /// The ring's chart for the period containing `date`; empty when the cached chart is for another period.
