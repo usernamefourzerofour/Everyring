@@ -95,6 +95,13 @@ struct RingDetailView: View {
                     if ring.metric == .screenTime {
                         // Screen Time: the period and the History calendar come straight from Screen Time, app by
                         // app and also before the ring was made (drawn by the report extension).
+                        // The period built up over time, from what the ring itself counted (as for other rings), then
+                        // the same period app by app.
+                        if let progress {
+                            ProgressChartCard(ring: ring, progress: progress, calendar: model.calendar,
+                                              onShowCurrent: selected == nil ? nil : { withAnimation { selected = nil } })
+                                .id("chart")
+                        }
                         ScreenTimePeriodCard(ring: ring)
                         StreakCard(ring: ring, streak: history?.streak, loading: loading)
                         ScreenTimeCalendarCard(ring: ring)
@@ -493,8 +500,7 @@ struct ScreenTimePeriodCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(ring.period.isRolling ? String(localized: "The last \(ring.period.nominalDays) days") : ring.period.title,
-                  systemImage: "chart.bar.xaxis")
+            Label("By app", systemImage: "chart.bar.xaxis")
                 .font(.headline)
                 .foregroundStyle(ring.accent)
             if let filter {

@@ -35,7 +35,13 @@ struct PeriodProgress: Hashable, Sendable {
 
     /// The whole period the chart spans.
     static func chartInterval(for ring: Ring, now: Date, calendar: Calendar) -> DateInterval {
-        ring.period.interval(containing: now, calendar: calendar)
+        let period = ring.period.interval(containing: now, calendar: calendar)
+        // Screen Time is only counted from the day the ring was added: the chart starts there too.
+        if ring.metric == .screenTime, let first = ScreenTimeLog.load().firstDay(ring: ring.id, calendar: calendar),
+           first > period.start, first < period.end {
+            return DateInterval(start: first, end: period.end)
+        }
+        return period
     }
 
     /// - Parameters:
