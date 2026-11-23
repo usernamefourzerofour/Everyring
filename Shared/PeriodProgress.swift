@@ -56,13 +56,17 @@ struct PeriodProgress: Hashable, Sendable {
         let isPast = interval.end <= now
         let now = min(now, interval.end)
         let bucket = bucketSize ?? bucket(for: ring.period)
-        let average = ring.isAverage && bucket == .day
+        // The period's own unit (days for a week), also when the chart is computed hour by hour.
+        let periodBucket = Self.bucket(for: ring.period)
+        let average = ring.isAverage && periodBucket == .day
         let daysReaching = ring.isDaysReaching && bucket == .day
         let today = calendar.startOfDay(for: now)
         // An average ring charts its running average per day, which has no meaningful zero at the start.
         var points = average ? [] : [Point(date: interval.start, total: 0)]
         var total = 0.0
         var days = 0
+        var begun: Set<Date> = []
+        var dayTotals: [Date: Double] = [:]
         var start = interval.start
         while start < min(interval.end, now) {
             guard let next = calendar.date(byAdding: bucket, value: 1, to: start) else { break }
@@ -73,8 +77,14 @@ struct PeriodProgress: Hashable, Sendable {
                 if counted && ring.dayMeetsTarget(value) && (ring.goalKind != .limit || start < today) { total += 1 }
                 points.append(Point(date: min(next, now), total: total))
             } else if average {
+                // The running average: everything so far over the days begun so far (hour by hour, a day counts
+                // from its first hour, as the ring does).
                 total += value
-                if counted && (!ring.averageSkipsEmptyDays || value > 0) { days += 1 }
+                let day = calendar.startOfDay(for: start)
+                dayTotals[day, default: 0] += value
+                if counted && !begun.contains(day) && !ring.averageSkipsEmptyDays { begun.insert(day) }
+                if counted && ring.averageSkipsEmptyDays && (dayTotals[day] ?? 0) > 0 { begun.insert(day) }
+                days = begun.count
                 points.append(Point(date: min(next, now), total: days > 0 ? total / Double(days) : 0))
             } else {
                 total += value
@@ -84,7 +94,7 @@ struct PeriodProgress: Hashable, Sendable {
         }
         // The days the ring leaves out, to shade in the chart.
         var leftOut: [DateInterval] = []
-        if bucket == .day && ring.effectiveDays != .everyDay {
+        if periodBucket == .day && ring.effectiveDays != .everyDay {
             var day = calendar.startOfDay(for: interval.start)
             while day < interval.end {
                 guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
@@ -96,7 +106,7 @@ struct PeriodProgress: Hashable, Sendable {
         var pace: Double?
         var pacePoints: [Point] = []
         if !ring.period.isRolling, !average, interval.duration > 0 {
-            if bucket == .day {
+            if periodBucket == .day {
                 var days: [(start: Date, end: Date, counted: Bool)] = []
                 var day = calendar.startOfDay(for: interval.start)
                 while day < interval.end {
@@ -123,7 +133,7 @@ struct PeriodProgress: Hashable, Sendable {
                 pace = ring.goal * min(1, max(0, now.timeIntervalSince(interval.start) / interval.duration))
             }
         }
-        return PeriodProgress(interval: interval, points: points, bucket: bucket, paceNow: pace, isPast: isPast,
+        return PeriodProgress(interval: interval, points: points, bucket: periodBucket, paceNow: pace, isPast: isPast,
                               pacePoints: pacePoints, leftOutDays: leftOut)
     }
 }

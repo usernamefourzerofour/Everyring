@@ -257,6 +257,13 @@ final class RingsModel {
             let days = DemoHistory.daily(for: ring, from: interval.start, to: end, calendar: calendar).keys.sorted()
             let share = ring.isAverage ? value(for: ring) : value(for: ring) / Double(max(1, days.count))
             buckets = Dictionary(uniqueKeysWithValues: days.map { ($0, share) })
+        } else if ring.metric.hasHourlyBuildUp, !ring.isDaysReaching, ring.period.nominalDays <= 31,
+                  let hourly = try? await health.hourlyValues(
+                      of: ring.metric, in: DateInterval(start: interval.start, end: max(interval.start, end)),
+                      calendar: calendar, filter: ring.healthFilter) {
+            // Hour by hour, so each day is a curve rather than one point (totals and running averages alike).
+            return PeriodProgress.make(for: ring, buckets: hourly, interval: interval, now: now, calendar: calendar,
+                                       bucketSize: .hour)
         } else {
             // Daily values from the cache cover past periods too (it reaches back as far as the history needs).
             guard let daily = try? await dailyValues(for: ring, from: interval.start, now: now, calendar: calendar)
