@@ -171,6 +171,9 @@ struct PeriodView: View {
             }
         }
         .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Opaque, in the card's colour: covers the app's "Fetching…" text underneath once this has drawn.
+        .background(.background.secondary)
     }
 }
 
@@ -230,6 +233,8 @@ struct CalendarView: View {
             }
         }
         .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(.background.secondary)
     }
 }
 

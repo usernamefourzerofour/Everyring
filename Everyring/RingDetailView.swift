@@ -491,6 +491,23 @@ extension Ring {
     }
 }
 
+/// Shown under a Screen Time report until it draws: Screen Time can take many seconds, and the report itself is blank
+/// until it's done (it covers this with its own background once it draws).
+struct ScreenTimeLoading: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+            Text("Fetching from Screen Time…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("This can take up to half a minute.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// The ring's current period from Screen Time, broken down by app.
 struct ScreenTimePeriodCard: View {
     let ring: Ring
@@ -503,12 +520,13 @@ struct ScreenTimePeriodCard: View {
             Label("By app", systemImage: "chart.bar.xaxis")
                 .font(.headline)
                 .foregroundStyle(ring.accent)
-            if let filter {
-                DeviceActivityReport(.period, filter: filter)
-                    .frame(height: 340)
-            } else {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 340)
+            ZStack {
+                ScreenTimeLoading()
+                if let filter {
+                    DeviceActivityReport(.period, filter: filter)
+                }
             }
+            .frame(height: 340)
         }
         .card()
         .onAppear {
@@ -558,13 +576,14 @@ struct ScreenTimeCalendarCard: View {
                 Button { reload += 1 } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel("Reload")
             }
-            if showsReport, let filter {
-                DeviceActivityReport(.calendar, filter: filter)
-                    .id(reload)
-                    .frame(height: 260)
-            } else {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 260)
+            ZStack {
+                ScreenTimeLoading()
+                if showsReport, let filter {
+                    DeviceActivityReport(.calendar, filter: filter)
+                        .id(reload)
+                }
             }
+            .frame(height: 260)
             Label("History comes straight from Screen Time, also from before the ring was added. The ring, widgets and watch count from when it was added.",
                   systemImage: "info.circle")
                 .font(.footnote)
