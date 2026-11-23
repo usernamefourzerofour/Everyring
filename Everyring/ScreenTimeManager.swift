@@ -69,6 +69,13 @@ final class ScreenTimeManager {
         ring.screenTimeSelection.flatMap { try? JSONDecoder().decode(FamilyActivitySelection.self, from: $0) }
     }
 
+    /// Whether a selection is (about) everything: "All Apps & Categories", or every category picked by hand. Screen
+    /// Time has a dozen top-level categories; a few short means the person left some out on purpose.
+    static func coversEverything(_ selection: FamilyActivitySelection?) -> Bool {
+        guard let selection else { return false }
+        return selection.categoryTokens.count >= 11
+    }
+
     static func encode(_ selection: FamilyActivitySelection) -> Data? {
         try? JSONEncoder().encode(selection)
     }

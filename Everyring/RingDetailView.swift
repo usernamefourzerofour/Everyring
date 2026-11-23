@@ -480,9 +480,16 @@ extension Ring {
 
     /// The Screen Time filter for this ring's apps over `interval`, day by day or hour by hour.
     @MainActor func screenTimeFilter(_ interval: DateInterval, hourly: Bool) -> DeviceActivityFilter {
+        let segment: DeviceActivityFilter.SegmentInterval = hourly ? .hourly(during: interval) : .daily(during: interval)
         let selection = ScreenTimeManager.selection(of: self)
+        // "All Apps & Categories" in the picker hands over every category, but a filter by categories leaves out
+        // what Screen Time files under none of them (Safari, other Apple apps, websites). Then filter by nothing:
+        // all of Screen Time, as in Settings.
+        if ScreenTimeManager.coversEverything(selection) {
+            return DeviceActivityFilter(segment: segment, users: .all, devices: .init([.iPhone, .iPad]))
+        }
         return DeviceActivityFilter(
-            segment: hourly ? .hourly(during: interval) : .daily(during: interval),
+            segment: segment,
             users: .all,
             devices: .init([.iPhone, .iPad]),
             applications: selection?.applicationTokens ?? [],
@@ -537,8 +544,10 @@ struct ScreenTimePeriodCard: View {
                 let period = ring.period.interval(now: .now, calendar: calendar)
                 let added = ScreenTimeLog.load().firstDay(ring: ring.id, calendar: calendar) ?? calendar.startOfDay(for: .now)
                 let start = min(max(period.start, added), period.end)
-                filter = ring.screenTimeFilter(DateInterval(start: start, end: period.end),
-                                               hourly: ring.period.nominalDays <= 1)
+                // Hour by hour while the chart covers a day or two (a single day bar says little), else by day.
+                let shown = DateInterval(start: start, end: period.end)
+                let fewDays = min(period.end, .now).timeIntervalSince(start) <= 2 * 86_400
+                filter = ring.screenTimeFilter(shown, hourly: ring.period.nominalDays <= 1 || fewDays)
             }
         }
     }
