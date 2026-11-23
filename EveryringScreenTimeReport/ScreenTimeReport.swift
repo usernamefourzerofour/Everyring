@@ -86,11 +86,13 @@ struct PeriodReport: DeviceActivityReportScene {
                 }
                 for await category in segment.categories {
                     for await app in category.applications {
-                        let name = app.application.localizedDisplayName ?? app.application.bundleIdentifier ?? "?"
+                        // One entry per app: the same app can come with and without a display name (another device,
+                        // or the website of an app), so group by bundle identifier where there is one.
+                        let name = app.application.bundleIdentifier ?? app.application.localizedDisplayName ?? "?"
                         let minutes = app.totalActivityDuration / 60
                         counted += minutes
                         perSlot[slot, default: [:]][name, default: 0] += minutes
-                        perApp[name] = (app.application.token, (perApp[name]?.minutes ?? 0) + minutes)
+                        perApp[name] = (perApp[name]?.token ?? app.application.token, (perApp[name]?.minutes ?? 0) + minutes)
                     }
                 }
             }

@@ -342,7 +342,7 @@ struct ProgressChartCard: View {
         }
         guard let pace = progress.paceNow else {
             if ring.isAverage {
-                return String(localized: "Your average per day so far, day by day.")
+                return String(localized: "Your average per day so far, hour by hour.")
             }
             if ring.isDaysReaching {
                 return String(localized: "Days that reached your target, day by day.")
