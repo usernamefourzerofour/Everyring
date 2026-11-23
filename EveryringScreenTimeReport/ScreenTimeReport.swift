@@ -55,6 +55,15 @@ struct PeriodBreakdown {
     /// The apps in the order of the stacks (most used first), "Other" last.
     var apps: [App] = []
     var hourly = false
+    struct Site: Identifiable {
+        var token: WebDomainToken?
+        var name: String
+        var minutes: Double
+        var id: String { name }
+    }
+
+    /// The most visited websites, shown under Safari.
+    var sites: [Site] = []
     /// Some apps listed are websites also counted in Safari (see makeConfiguration).
     var websitesInSafari = false
     var total: Double { apps.map(\.minutes).reduce(0, +) }
@@ -75,6 +84,7 @@ struct PeriodReport: DeviceActivityReportScene {
         var perApp: [String: (token: ApplicationToken?, minutes: Double)] = [:]
         var hourly = false
         var overlap = false
+        var perSite: [String: (token: WebDomainToken?, minutes: Double)] = [:]
         for await device in data {
             for await segment in device.activitySegments {
                 if segment.dateInterval.duration < 2 * 3600 { hourly = true }
@@ -106,6 +116,12 @@ struct PeriodReport: DeviceActivityReportScene {
                         perSlot[slot, default: [:]][name, default: 0] += minutes
                         perApp[name] = (perApp[name]?.token ?? app.application.token, (perApp[name]?.minutes ?? 0) + minutes)
                     }
+                    // Websites: shown under Safari in the list (their time is part of the browser's, not extra).
+                    for await site in category.webDomains {
+                        let key = site.webDomain.domain ?? "?"
+                        let minutes = site.totalActivityDuration / 60
+                        perSite[key] = (perSite[key]?.token ?? site.webDomain.token, (perSite[key]?.minutes ?? 0) + minutes)
+                    }
                 }
             }
         }
@@ -114,6 +130,10 @@ struct PeriodReport: DeviceActivityReportScene {
         let other = String(localized: "Other")
         var breakdown = PeriodBreakdown(hourly: hourly)
         breakdown.websitesInSafari = overlap
+        breakdown.sites = perSite.filter { $0.value.minutes >= 1 }
+            .sorted { $0.value.minutes > $1.value.minutes }
+            .prefix(5)
+            .map { .init(token: $0.value.token, name: $0.key, minutes: $0.value.minutes) }
         breakdown.apps = ranked.prefix(Self.named).map { .init(token: $0.value.token, name: $0.key, minutes: $0.value.minutes) }
         let rest = ranked.dropFirst(Self.named).map(\.value.minutes).reduce(0, +) + (perApp[unattributed]?.minutes ?? 0)
         if rest >= 1 { breakdown.apps.append(.init(token: nil, name: other, minutes: rest)) }
@@ -133,6 +153,29 @@ struct PeriodView: View {
 
     /// A distinct colour per app, so the stacks tell apps apart whatever the ring's colour; "Other" grey.
     private static let palette: [Color] = [.blue, .orange, .purple, .teal]
+
+    /// The most visited websites, indented (under Safari, whose time they are part of).
+    private var siteRows: some View {
+        ForEach(breakdown.sites) { site in
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12)
+                if let token = site.token {
+                    Label(token).labelStyle(.titleOnly)
+                } else {
+                    Text(site.name)
+                }
+                Spacer()
+                Text(duration(site.minutes))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .font(.footnote)
+            .lineLimit(1)
+            .padding(.leading, 34)
+        }
+    }
 
     private var shades: [Color] {
         breakdown.apps.enumerated().map { index, app in
@@ -183,6 +226,15 @@ struct PeriodView: View {
                 }
                 .font(.subheadline)
                 .lineLimit(1)
+                if app.name == PeriodReport.safari {
+                    siteRows
+                }
+            }
+            if !breakdown.apps.contains(where: { $0.name == PeriodReport.safari }), !breakdown.sites.isEmpty {
+                Text("Websites")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.top, 4)
+                siteRows
             }
             if breakdown.websitesInSafari {
                 Text("Websites that belong to an app, like YouTube, are listed on their own and also counted in Safari, as in Settings. The bars count them once.")

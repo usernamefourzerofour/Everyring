@@ -533,7 +533,7 @@ struct ScreenTimePeriodCard: View {
                     DeviceActivityReport(.period, filter: filter)
                 }
             }
-            .frame(height: 340)
+            .frame(height: 460)
         }
         .card()
         .onAppear {
