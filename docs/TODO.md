@@ -27,6 +27,11 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
   A trial fix (trim Safari by whatever the apps add up to beyond the segment's total) was dropped as not robust:
   it only knows Safari, and only that *something* overlaps. Find a reliable way, e.g. match `webDomains` to the app
   entries, before counting websites once.
+  More evidence (23 Nov, build 34): Safari 1 h 31, its websites listed only ~8 min (electrek.co, dr.dk, github.com,
+  google.com), and youtube.com was *not* among them, while "YouTube" came as an app with 1 h 24. So Screen Time moves
+  a website that belongs to an app out of Safari's website list and into the app list, but leaves its time in
+  Safari's total. A possible rule: Safari's time not explained by its websites (~83 min) ≈ the web "apps" (84 min).
+  Still to check with Brave (Erik is trying it).
 
 - **Graph widget from Heart Minutes.** Done: "Ring and Chart" (one ring and a chart of its period, small/medium/large).
   Maybe later: the zone bar on the large widget for Heart Minutes rings.
