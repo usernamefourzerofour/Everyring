@@ -21,7 +21,8 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
      apps on the ring's page, in the ring's colours with its daily goal (`ScreenTimeReportStyle` in the App Group).
      Needs Family Controls on `dk.erik.everyring.screentimereport` (managed capability, by hand). Check on a device.
 
-- **Screen Time: websites counted twice in "By app".** Screen Time lists a website that belongs to an app (youtube.com
+- **Screen Time: websites counted twice in "By app" — handled (build 35): Safari = the sum of its websites.** Check
+  with Brave. Background: Screen Time lists a website that belongs to an app (youtube.com
   as "YouTube", even without the app installed) as an app of its own and also inside Safari's time, so stacking
   Safari and "YouTube" counts it twice (seen 23 Nov: Safari 1 h 30, "YouTube" 1 h 24 with the same hourly shape).
   A trial fix (trim Safari by whatever the apps add up to beyond the segment's total) was dropped as not robust:

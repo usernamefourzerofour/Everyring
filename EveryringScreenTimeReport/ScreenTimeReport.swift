@@ -87,6 +87,7 @@ struct PeriodReport: DeviceActivityReportScene {
                 if segment.dateInterval.duration < 2 * 3600 { hourly = true }
                 let slot = segment.dateInterval.start
                 var counted = 0.0
+                var siteMinutes = 0.0
                 defer {
                     // Websites and anything Screen Time doesn't put under an app: in "Other", so each bar adds up to
                     // the segment's whole time.
@@ -94,6 +95,13 @@ struct PeriodReport: DeviceActivityReportScene {
                     if rest >= 0.5 {
                         perSlot[slot, default: [:]][unattributed, default: 0] += rest
                         perApp[unattributed] = (nil, (perApp[unattributed]?.minutes ?? 0) + rest)
+                    }
+                    // Safari is the sum of its websites. Screen Time's own Safari time also holds websites it lists
+                    // as apps (youtube.com as "YouTube"), which would count twice, plus private browsing and time on
+                    // no website, which it can't name. (After "Other" above, so that time doesn't land there.)
+                    if let safari = perSlot[slot]?[PeriodReport.safari] {
+                        perSlot[slot]?[PeriodReport.safari] = siteMinutes
+                        perApp[PeriodReport.safari]?.minutes += siteMinutes - safari
                     }
                 }
                 for await category in segment.categories {
@@ -110,12 +118,13 @@ struct PeriodReport: DeviceActivityReportScene {
                     for await site in category.webDomains {
                         let key = site.webDomain.domain ?? "?"
                         let minutes = site.totalActivityDuration / 60
+                        siteMinutes += minutes
                         perSite[key] = (perSite[key]?.token ?? site.webDomain.token, (perSite[key]?.minutes ?? 0) + minutes)
                     }
                 }
             }
         }
-        let ranked = perApp.filter { $0.key != unattributed }.sorted { $0.value.minutes > $1.value.minutes }
+        let ranked = perApp.filter { $0.key != unattributed && $0.value.minutes >= 0.5 }.sorted { $0.value.minutes > $1.value.minutes }
         let named = Set(ranked.prefix(Self.named).map(\.key))
         let other = String(localized: "Other")
         var breakdown = PeriodBreakdown(hourly: hourly)
@@ -217,6 +226,11 @@ struct PeriodView: View {
                 .lineLimit(1)
                 if app.name == PeriodReport.safari {
                     siteRows
+                    Label("Safari counts time on websites only: private browsing and time on no website aren't included.",
+                          systemImage: "info.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 34)
                 }
             }
             if !breakdown.apps.contains(where: { $0.name == PeriodReport.safari }), !breakdown.sites.isEmpty {
@@ -224,6 +238,10 @@ struct PeriodView: View {
                     .font(.subheadline.weight(.semibold))
                     .padding(.top, 4)
                 siteRows
+                Label("Private browsing and time on no website aren't included.", systemImage: "info.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 34)
             }
         }
         .padding(.vertical, 4)
