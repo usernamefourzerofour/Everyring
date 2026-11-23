@@ -21,8 +21,9 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
      apps on the ring's page, in the ring's colours with its daily goal (`ScreenTimeReportStyle` in the App Group).
      Needs Family Controls on `dk.erik.everyring.screentimereport` (managed capability, by hand). Check on a device.
 
-- **Screen Time: websites counted twice in "By app" — handled (build 35): Safari = the sum of its websites.** Check
-  with Brave. Background: Screen Time lists a website that belongs to an app (youtube.com
+- **Screen Time: websites counted twice in "By app" — handled (build 35): Safari = the sum of its websites.** Checked
+  with Brave (23 Nov): YouTube watched in Brave counts as Brave only (49 min; "YouTube" stayed at 1 h 24), so other
+  browsers don't double count and need nothing. Background: Screen Time lists a website that belongs to an app (youtube.com
   as "YouTube", even without the app installed) as an app of its own and also inside Safari's time, so stacking
   Safari and "YouTube" counts it twice (seen 23 Nov: Safari 1 h 30, "YouTube" 1 h 24 with the same hourly shape).
   A trial fix (trim Safari by whatever the apps add up to beyond the segment's total) was dropped as not robust:
@@ -32,7 +33,7 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
   google.com), and youtube.com was *not* among them, while "YouTube" came as an app with 1 h 24. So Screen Time moves
   a website that belongs to an app out of Safari's website list and into the app list, but leaves its time in
   Safari's total. A possible rule: Safari's time not explained by its websites (~83 min) ≈ the web "apps" (84 min).
-  Still to check with Brave (Erik is trying it).
+
 
 - **Graph widget from Heart Minutes.** Done: "Ring and Chart" (one ring and a chart of its period, small/medium/large).
   Maybe later: the zone bar on the large widget for Heart Minutes rings.
