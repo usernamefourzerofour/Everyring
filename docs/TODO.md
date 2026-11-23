@@ -21,6 +21,13 @@ Open work for Everyring, newest ideas last. Move an item to `HANDOVER.md` → De
      apps on the ring's page, in the ring's colours with its daily goal (`ScreenTimeReportStyle` in the App Group).
      Needs Family Controls on `dk.erik.everyring.screentimereport` (managed capability, by hand). Check on a device.
 
+- **Screen Time: websites counted twice in "By app".** Screen Time lists a website that belongs to an app (youtube.com
+  as "YouTube", even without the app installed) as an app of its own and also inside Safari's time, so stacking
+  Safari and "YouTube" counts it twice (seen 23 Nov: Safari 1 h 30, "YouTube" 1 h 24 with the same hourly shape).
+  A trial fix (trim Safari by whatever the apps add up to beyond the segment's total) was dropped as not robust:
+  it only knows Safari, and only that *something* overlaps. Find a reliable way, e.g. match `webDomains` to the app
+  entries, before counting websites once.
+
 - **Graph widget from Heart Minutes.** Done: "Ring and Chart" (one ring and a chart of its period, small/medium/large).
   Maybe later: the zone bar on the large widget for Heart Minutes rings.
 - **Rings on the watch:** should the watch also write icon and percentage on its rings, like the iPhone? (Asked,

@@ -64,8 +64,6 @@ struct PeriodBreakdown {
 
     /// The most visited websites, shown under Safari.
     var sites: [Site] = []
-    /// Some apps listed are websites also counted in Safari (see makeConfiguration).
-    var websitesInSafari = false
     var total: Double { apps.map(\.minutes).reduce(0, +) }
 }
 
@@ -83,7 +81,6 @@ struct PeriodReport: DeviceActivityReportScene {
         var perSlot: [Date: [String: Double]] = [:]
         var perApp: [String: (token: ApplicationToken?, minutes: Double)] = [:]
         var hourly = false
-        var overlap = false
         var perSite: [String: (token: WebDomainToken?, minutes: Double)] = [:]
         for await device in data {
             for await segment in device.activitySegments {
@@ -94,13 +91,6 @@ struct PeriodReport: DeviceActivityReportScene {
                     // Websites and anything Screen Time doesn't put under an app: in "Other", so each bar adds up to
                     // the segment's whole time.
                     let rest = segment.totalActivityDuration / 60 - counted
-                    // Websites that belong to an app (youtube.com as "YouTube") are listed on their own and also
-                    // counted in Safari, as in Settings. In the bars Safari only keeps what the others don't
-                    // account for, so a bar never adds up to more than the hour or day really had.
-                    if rest < -0.5, let safari = perSlot[slot]?[Self.safari], safari > 0 {
-                        perSlot[slot]?[Self.safari] = max(0, safari + rest)
-                        overlap = true
-                    }
                     if rest >= 0.5 {
                         perSlot[slot, default: [:]][unattributed, default: 0] += rest
                         perApp[unattributed] = (nil, (perApp[unattributed]?.minutes ?? 0) + rest)
@@ -129,7 +119,6 @@ struct PeriodReport: DeviceActivityReportScene {
         let named = Set(ranked.prefix(Self.named).map(\.key))
         let other = String(localized: "Other")
         var breakdown = PeriodBreakdown(hourly: hourly)
-        breakdown.websitesInSafari = overlap
         breakdown.sites = perSite.filter { $0.value.minutes >= 1 }
             .sorted { $0.value.minutes > $1.value.minutes }
             .prefix(5)
@@ -235,11 +224,6 @@ struct PeriodView: View {
                     .font(.subheadline.weight(.semibold))
                     .padding(.top, 4)
                 siteRows
-            }
-            if breakdown.websitesInSafari {
-                Text("Websites that belong to an app, like YouTube, are listed on their own and also counted in Safari, as in Settings. The bars count them once.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
