@@ -190,7 +190,7 @@ struct PeriodView: View {
             .font(.footnote)
             .lineLimit(1)
             .padding(.leading, 34)
-            Label("Time Screen Time doesn't put under an app or website, such as the Home Screen, calls, private browsing and system screens.",
+            Label("Time Screen Time doesn't put under an app or website, such as the Home Screen, calls and system screens.",
                   systemImage: "info.circle")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
