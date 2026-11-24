@@ -64,6 +64,9 @@ struct PeriodBreakdown {
 
     /// The most visited websites, shown under Safari.
     var sites: [Site] = []
+    /// What "Other" holds: the apps after the named ones, and the time tied to no app.
+    var otherApps: [App] = []
+    var unattributedMinutes = 0.0
     var total: Double { apps.map(\.minutes).reduce(0, +) }
 }
 
@@ -135,6 +138,10 @@ struct PeriodReport: DeviceActivityReportScene {
         breakdown.apps = ranked.prefix(Self.named).map { .init(token: $0.value.token, name: $0.key, minutes: $0.value.minutes) }
         let rest = ranked.dropFirst(Self.named).map(\.value.minutes).reduce(0, +) + (perApp[unattributed]?.minutes ?? 0)
         if rest >= 1 { breakdown.apps.append(.init(token: nil, name: other, minutes: rest)) }
+        // What "Other" is made of: the next apps, and the time Screen Time ties to no app.
+        breakdown.otherApps = ranked.dropFirst(Self.named).prefix(8).filter { $0.value.minutes >= 1 }
+            .map { .init(token: $0.value.token, name: $0.key, minutes: $0.value.minutes) }
+        breakdown.unattributedMinutes = perApp[unattributed]?.minutes ?? 0
         for (slot, apps) in perSlot {
             for (name, minutes) in apps where minutes > 0 {
                 breakdown.slots.append(.init(date: slot, app: named.contains(name) ? name : other, minutes: minutes))
@@ -151,6 +158,45 @@ struct PeriodView: View {
 
     /// A distinct colour per app, so the stacks tell apps apart whatever the ring's colour; "Other" grey.
     private static let palette: [Color] = [.blue, .orange, .purple, .teal]
+
+    /// What "Other" is made of, indented under it.
+    @ViewBuilder private var otherRows: some View {
+        ForEach(breakdown.otherApps) { app in
+            HStack(spacing: 8) {
+                if let token = app.token {
+                    Label(token).labelStyle(.titleAndIcon)
+                } else {
+                    Text(app.name)
+                }
+                Spacer()
+                Text(duration(app.minutes))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .font(.footnote)
+            .lineLimit(1)
+            .padding(.leading, 34)
+        }
+        if breakdown.unattributedMinutes >= 1 {
+            HStack(spacing: 8) {
+                Image(systemName: "questionmark.app")
+                    .foregroundStyle(.secondary)
+                Text("Not tied to an app")
+                Spacer()
+                Text(duration(breakdown.unattributedMinutes))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .font(.footnote)
+            .lineLimit(1)
+            .padding(.leading, 34)
+            Label("Time Screen Time doesn't put under an app or website, such as the Home Screen, calls, private browsing and system screens.",
+                  systemImage: "info.circle")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 34)
+        }
+    }
 
     /// The most visited websites, indented (under Safari, whose time they are part of).
     private var siteRows: some View {
@@ -224,6 +270,9 @@ struct PeriodView: View {
                 }
                 .font(.subheadline)
                 .lineLimit(1)
+                if app.token == nil && app.name == String(localized: "Other") {
+                    otherRows
+                }
                 if app.name == PeriodReport.safari {
                     siteRows
                     Label("Safari counts time on websites only: private browsing and time on no website aren't included.",
