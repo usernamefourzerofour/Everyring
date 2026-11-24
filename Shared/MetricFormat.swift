@@ -195,8 +195,12 @@ extension Ring {
     /// The goal as listed: "10,000 steps", "8 hr a day", or "10,000 steps on 5 days".
     var goalText: String {
         if isDaysReaching {
-            let target = metric.format(dailyTarget)
             let days = Int(goal.rounded())
+            if !weekdayTargets.isEmpty {
+                return goalKind == .limit ? String(localized: "Under each day's limit on \(days) days")
+                                          : String(localized: "Each day's target on \(days) days")
+            }
+            let target = metric.format(dailyTarget)
             return goalKind == .limit ? String(localized: "Under \(target) on \(days) days")
                                       : String(localized: "\(target) on \(days) days")
         }

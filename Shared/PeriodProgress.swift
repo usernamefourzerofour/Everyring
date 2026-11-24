@@ -74,7 +74,7 @@ struct PeriodProgress: Hashable, Sendable {
             let counted = ring.counts(start, calendar: calendar)
             let value = counted ? buckets[start] ?? 0 : 0
             if daysReaching {
-                if counted && ring.dayMeetsTarget(value) && (ring.goalKind != .limit || start < today) { total += 1 }
+                if counted && ring.dayMeetsTarget(value, on: start, calendar: calendar) && (ring.goalKind != .limit || start < today) { total += 1 }
                 points.append(Point(date: min(next, now), total: total))
             } else if average {
                 // The running average: everything so far over the days begun so far (hour by hour, a day counts
@@ -263,7 +263,7 @@ extension Ring {
             let today = calendar.startOfDay(for: now)
             // A day under a limit only counts once it's over: it could still go over.
             return Double(zip(days, values).filter { day, value in
-                dayMeetsTarget(value) && (goalKind != .limit || day < today)
+                dayMeetsTarget(value, on: day, calendar: calendar) && (goalKind != .limit || day < today)
             }.count)
         }
         let total = values.reduce(0, +)

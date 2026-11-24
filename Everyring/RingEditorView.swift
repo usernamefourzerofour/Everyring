@@ -9,6 +9,8 @@ struct RingEditorView: View {
     @State private var displayGoal: Double
     /// A days-reaching ring's daily target in the display unit.
     @State private var displayTarget: Double
+    /// Days reaching: each weekday has a target of its own (`Ring.weekdayTargets`).
+    @State private var perWeekday: Bool
     @State private var nameEdited: Bool
     @State private var goalEdited: Bool
     @State private var confirmDelete = false
@@ -28,6 +30,7 @@ struct RingEditorView: View {
         _displayGoal = State(initialValue: ring.isDaysReaching ? ring.goal.rounded() : Self.rounded(ring.metric.toDisplay(ring.goal)))
         _displayTarget = State(initialValue: Self.rounded(ring.metric.toDisplay(
             ring.dailyTarget > 0 ? ring.dailyTarget : ring.metric.suggestedGoal(for: .today))))
+        _perWeekday = State(initialValue: !ring.weekdayTargets.isEmpty)
         _nameEdited = State(initialValue: !isNew)
         _goalEdited = State(initialValue: !isNew)
         self.isNew = isNew
@@ -59,6 +62,30 @@ struct RingEditorView: View {
         let unchanged = abs(Self.rounded(ring.metric.toDisplay(ring.goal)) - displayGoal) < 0.000_001
         if !unchanged { r.goal = ring.metric.fromDisplay(displayGoal) }
         return r
+    }
+
+    /// The weekdays the ring counts, from the week start (1 = Sunday … 7 = Saturday).
+    private var weekdaysInOrder: [Int] {
+        let calendar = Calendar.current
+        return (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }.filter { weekday in
+            guard let date = calendar.nextDate(after: .now, matching: DateComponents(weekday: weekday),
+                                               matchingPolicy: .nextTime) else { return true }
+            return ring.counts(date, calendar: calendar)
+        }
+    }
+
+    /// A weekday's own target in the unit shown; nil (empty) uses the ring's daily target.
+    private func weekdayTarget(_ weekday: Int) -> Binding<Double?> {
+        Binding(
+            get: { ring.weekdayTargets[weekday].map { Self.rounded(ring.metric.toDisplay($0)) } },
+            set: { value in
+                if let value, value > 0 {
+                    ring.weekdayTargets[weekday] = ring.metric.fromDisplay(value)
+                } else {
+                    ring.weekdayTargets[weekday] = nil
+                }
+                goalEdited = true
+            })
     }
 
     /// The most days a days-reaching goal can ask for in one period (about: a month counts 30 days).
@@ -251,6 +278,28 @@ struct RingEditorView: View {
                         Text(ring.metric.unitName())
                             .foregroundStyle(.secondary)
                     }
+                    Toggle("Own target per weekday", isOn: Binding(
+                        get: { perWeekday },
+                        set: { on in
+                            perWeekday = on
+                            if !on { ring.weekdayTargets = [:] }
+                            goalEdited = true
+                        }))
+                    if perWeekday {
+                        ForEach(weekdaysInOrder, id: \.self) { weekday in
+                            HStack {
+                                Text(Calendar.current.standaloneWeekdaySymbols[weekday - 1])
+                                Spacer()
+                                TextField(displayTarget.formatted(), value: weekdayTarget(weekday), format: .number)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(maxWidth: 110)
+                                Text(ring.metric.unitName())
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.leading, 12)
+                        }
+                    }
                     Stepper(value: Binding(get: { Int(displayGoal) }, set: { displayGoal = Double($0); goalEdited = true }),
                             in: 1...maxDays) {
                         Text(Int(displayGoal) == 1 ? "On 1 day" : "On \(Int(displayGoal)) days")
@@ -271,6 +320,8 @@ struct RingEditorView: View {
             } footer: {
                 if !goalIsValid {
                     Text("The goal must be more than zero.")
+                } else if ring.isDaysReaching && perWeekday {
+                    Text("Each weekday can have its own target; an empty one uses the target above. The ring counts the days that make their own target and closes when you've done it on \(Int(displayGoal)) days in the period.")
                 } else if ring.isDaysReaching {
                     Text(ring.goalKind == .limit
                          ? LocalizedStringKey("Counts the days you log something and stay under the target. The ring closes when you've done it on \(Int(displayGoal)) days in the period.")

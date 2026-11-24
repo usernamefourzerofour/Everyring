@@ -16,6 +16,8 @@ struct ScreenTimeReportStyle: Codable, Hashable, Sendable {
     var calendarMonth: Date?
     /// Whether the ring has a past-the-limit mark (a cross in History); off, over-limit days look like the others.
     var marksOverLimit: Bool = true
+    /// Weekdays with a goal or limit of their own (1 = Sunday … 7 = Saturday), in minutes.
+    var weekdayMinutes: [Int: Double] = [:]
 
     private static let key = "screenTime.reportStyle"
 

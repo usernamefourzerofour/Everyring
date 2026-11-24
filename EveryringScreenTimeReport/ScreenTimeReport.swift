@@ -323,7 +323,8 @@ struct DayRing: View {
     var showsMonth = false
 
     var body: some View {
-        let goal = style?.dailyMinutes ?? max(top, 1)
+        let weekday = Calendar.current.component(.weekday, from: day)
+        let goal = style?.weekdayMinutes[weekday] ?? style?.dailyMinutes ?? max(top, 1)
         let fraction = (minutes ?? 0) / goal
         let isLimit = style?.isLimit == true
         let past = !Calendar.current.isDateInToday(day) && day < .now

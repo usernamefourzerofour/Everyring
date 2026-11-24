@@ -40,6 +40,31 @@ struct DaysReachingTests {
         #expect(!ring.isOverLimit(9))
     }
 
+    @Test func weekdaysCanHaveTheirOwnTarget() {
+        // Wednesday 18 November; Monday 16th and Tuesday 17th lie before.
+        let now = date(2026, 11, 18, 15, in: cph)
+        var ring = steps()
+        // Tuesday (weekday 3) asks for less, Wednesday (4) for more; Monday uses the ring's 10,000.
+        ring.weekdayTargets = [3: 6_000, 4: 15_000]
+        let week = ring.period.interval(now: now, calendar: cph)
+        let daily = values([16: 10_500, 17: 8_000, 18: 12_000])
+        #expect(ring.measure(daily: daily, in: week, now: now, calendar: cph) == 2)
+        #expect(ring.target(on: date(2026, 11, 17, in: cph), calendar: cph) == 6_000)
+        #expect(ring.target(on: date(2026, 11, 16, in: cph), calendar: cph) == 10_000)
+        #expect(ring.goalText == "Each day's target on 5 days")
+    }
+
+    @Test func weekdayTargetsSurviveOldSaves() throws {
+        var ring = steps()
+        ring.weekdayTargets = [1: 2_000]
+        let back = try JSONDecoder().decode(Ring.self, from: JSONEncoder().encode(ring))
+        #expect(back.weekdayTargets == [1: 2_000])
+        var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(ring)) as? [String: Any])
+        object.removeValue(forKey: "weekdayTargets")
+        let old = try JSONDecoder().decode(Ring.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(old.weekdayTargets.isEmpty)
+    }
+
     @Test func oneDayPeriodCannotCountDays() {
         #expect(!steps(.today).isDaysReaching)
         #expect(steps(.today).effectiveDays == .everyDay)

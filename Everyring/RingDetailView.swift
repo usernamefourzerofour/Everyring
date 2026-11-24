@@ -475,7 +475,8 @@ extension Ring {
         }
         return ScreenTimeReportStyle(deep: deep.resolve(in: environment), light: light.resolve(in: environment),
                                      dailyMinutes: daily, isLimit: goalKind == .limit, calendarMonth: month,
-                                     marksOverLimit: marksOverLimit)
+                                     marksOverLimit: marksOverLimit,
+                                     weekdayMinutes: aggregation == .daysReaching ? weekdayTargets : [:])
     }
 
     /// The Screen Time filter for this ring's apps over `interval`, day by day or hour by hour.

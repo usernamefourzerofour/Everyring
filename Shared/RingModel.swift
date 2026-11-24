@@ -341,6 +341,9 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     var averageSkipsEmptyDays = false
     /// For days reaching: what a day must reach (or stay under, for a limit), in `metric.baseUnit`.
     var dailyTarget: Double = 0
+    /// For days reaching: a target of its own for some weekdays (1 = Sunday … 7 = Saturday, as `Calendar`), in
+    /// `metric.baseUnit`; the others use `dailyTarget`. "An hour of screen time on weekdays, two at the weekend."
+    var weekdayTargets: [Int: Double] = [:]
     /// Which days of a period of several days count.
     var days: DayFilter = .everyDay
     /// For `days == .custom`: the weekdays that count, as `Calendar` weekday numbers (1 = Sunday … 7 = Saturday).
@@ -400,7 +403,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, color, symbol, metric, goal, period, goalKind, customTint, aggregation, averageSkipsEmptyDays
         case dailyTarget, days, customDays, leftOutWorkouts, activity, sources, minimumWorkoutMinutes, maximumWorkoutMinutes
-        case whenClosed, screenTimeSelection, marksOverLimit
+        case whenClosed, screenTimeSelection, marksOverLimit, weekdayTargets
     }
 
     init(from decoder: Decoder) throws {
@@ -431,6 +434,7 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         whenClosed = try c.decodeIfPresent(ClosedAppearance.self, forKey: .whenClosed) ?? .show
         screenTimeSelection = try c.decodeIfPresent(Data.self, forKey: .screenTimeSelection)
         marksOverLimit = try c.decodeIfPresent(Bool.self, forKey: .marksOverLimit) ?? true
+        weekdayTargets = try c.decodeIfPresent([Int: Double].self, forKey: .weekdayTargets) ?? [:]
     }
 
     /// Whether the ring's value must stay under its goal. A days-reaching ring always counts days up to its goal; its
@@ -468,10 +472,17 @@ struct Ring: Codable, Hashable, Identifiable, Sendable {
         }
     }
 
-    /// Whether a day's value meets `dailyTarget` (reached, or for a limit: logged and stayed under).
-    func dayMeetsTarget(_ value: Double) -> Bool {
-        guard dailyTarget > 0 else { return false }
-        return goalKind == .limit ? value > 0 && value <= dailyTarget : value >= dailyTarget
+    /// The target a day must reach (or stay under): its weekday's own, else `dailyTarget`.
+    func target(on day: Date?, calendar: Calendar) -> Double {
+        guard let day, !weekdayTargets.isEmpty else { return dailyTarget }
+        return weekdayTargets[calendar.component(.weekday, from: day)] ?? dailyTarget
+    }
+
+    /// Whether a day's value meets its target (reached, or for a limit: logged and stayed under).
+    func dayMeetsTarget(_ value: Double, on day: Date? = nil, calendar: Calendar = .current) -> Bool {
+        let target = target(on: day, calendar: calendar)
+        guard target > 0 else { return false }
+        return goalKind == .limit ? value > 0 && value <= target : value >= target
     }
 
     /// Whether a finished period met the ring: reached the goal, or (for a limit) logged something and stayed
