@@ -862,8 +862,16 @@ struct DayGrid: View {
     var selection: (Date) -> (interval: DateInterval, isCurrent: Bool)
     var onSelect: (DateInterval, Bool) -> Void = { _, _ in }
 
+    /// Periods of several days (a week, a month) are marked as a whole: a loop round their days, green when the goal
+    /// was reached, red when a limit was passed. Days (and rolling windows, and days reaching a target) keep a mark of
+    /// their own, since each day is its own result there.
+    private var loopsPeriods: Bool {
+        ring.period.nominalDays > 1 && !ring.period.isRolling && !ring.isDaysReaching
+    }
+
     var body: some View {
         let byDay = Dictionary(days.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
+        let outcomes = loopsPeriods ? periodOutcomes(byDay) : [:]
         let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
         LazyVGrid(columns: columns, spacing: 8) {
             ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
@@ -872,7 +880,7 @@ struct DayGrid: View {
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
-            ForEach(gridDays, id: \.self) { day in
+            ForEach(Array(gridDays.enumerated()), id: \.element) { index, day in
                 if day < range.start || day >= range.end {
                     Color.clear.frame(height: 30)
                         .accessibilityHidden(true)
@@ -889,12 +897,25 @@ struct DayGrid: View {
                             RingStackView(rings: [ring.display(value)])
                                 .frame(width: 30, height: 30)
                                 .opacity(counts ? 1 : 0.35)
-                                .dayMark(counts ? mark(day: day, value: value) : nil, size: 11)
+                                .dayMark(counts && !loopsPeriods ? mark(day: day, value: value) : nil, size: 11)
                             dayNumber(day, bold: isToday || isSelected)
                         }
                         .padding(.vertical, 3)
                         .frame(maxWidth: .infinity)
                         .background(isSelected ? ring.accent.opacity(0.15) : .clear, in: .rect(cornerRadius: 10))
+                        .background {
+                            if let kind = outcomes[day] {
+                                // Joined to the neighbours in the same week row that belong to the same period.
+                                let column = index % 7
+                                let sameAsPrevious = column > 0 && joined(day, -1, outcomes)
+                                let sameAsNext = column < 6 && joined(day, 1, outcomes)
+                                LoopSegment(closedLeading: !sameAsPrevious, closedTrailing: !sameAsNext)
+                                    .stroke(DayMark.color(kind), lineWidth: 2)
+                                    .padding(.horizontal, -2)
+                                    .padding(.leading, sameAsPrevious ? 0 : 2)
+                                    .padding(.trailing, sameAsNext ? 0 : 2)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
@@ -913,6 +934,36 @@ struct DayGrid: View {
                 }
             }
         }
+    }
+
+    /// Each shown day's period result: reached (the goal, or a limit kept to the end), or over (a limit passed). A
+    /// period still running is reached once its goal is; a limit only once it has ended.
+    private func periodOutcomes(_ byDay: [Date: Double]) -> [Date: DayMark.Kind] {
+        var result: [Date: DayMark.Kind] = [:]
+        let now = Date.now
+        let byPeriod = Dictionary(grouping: byDay.keys) { ring.period.interval(containing: $0, calendar: calendar).start }
+        for (_, periodDays) in byPeriod {
+            guard let last = periodDays.max(), let value = byDay[last] else { continue }
+            let interval = ring.period.interval(containing: last, calendar: calendar)
+            let kind: DayMark.Kind?
+            if ring.isOverLimit(value) {
+                kind = ring.marksOverLimit ? .over : nil
+            } else if ring.isLimit {
+                kind = interval.end <= now && ring.isMet(value) ? .reached : nil
+            } else {
+                kind = ring.isMet(value) ? .reached : nil
+            }
+            if let kind { for day in periodDays { result[day] = kind } }
+        }
+        return result
+    }
+
+    /// Whether the day `offset` days away is in the same period with the same result (so the loop runs on).
+    private func joined(_ day: Date, _ offset: Int, _ outcomes: [Date: DayMark.Kind]) -> Bool {
+        guard let other = calendar.date(byAdding: .day, value: offset, to: day), let kind = outcomes[other],
+              kind == outcomes[day] else { return false }
+        return ring.period.interval(containing: other, calendar: calendar).start
+            == ring.period.interval(containing: day, calendar: calendar).start
     }
 
     /// A check for a day that reached its goal (or ended under its limit), a cross for one over its limit. A limit
