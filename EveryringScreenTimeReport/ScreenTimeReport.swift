@@ -67,6 +67,8 @@ struct PeriodBreakdown {
     /// What "Other" holds: the apps after the named ones, and the time tied to no app.
     var otherApps: [App] = []
     var unattributedMinutes = 0.0
+    /// Screen Time's own total for the period (what Settings shows as the day's screen time, to compare).
+    var screenTimeTotal = 0.0
     var total: Double { apps.map(\.minutes).reduce(0, +) }
 }
 
@@ -85,12 +87,14 @@ struct PeriodReport: DeviceActivityReportScene {
         var perApp: [String: (token: ApplicationToken?, minutes: Double)] = [:]
         var hourly = false
         var perSite: [String: (token: WebDomainToken?, minutes: Double)] = [:]
+        var segmentTotal = 0.0
         for await device in data {
             for await segment in device.activitySegments {
                 if segment.dateInterval.duration < 2 * 3600 { hourly = true }
                 let slot = segment.dateInterval.start
                 var counted = 0.0
                 var siteMinutes = 0.0
+                segmentTotal += segment.totalActivityDuration / 60
                 defer {
                     // Websites and anything Screen Time doesn't put under an app: in "Other", so each bar adds up to
                     // the segment's whole time.
@@ -139,9 +143,10 @@ struct PeriodReport: DeviceActivityReportScene {
         let rest = ranked.dropFirst(Self.named).map(\.value.minutes).reduce(0, +) + (perApp[unattributed]?.minutes ?? 0)
         if rest >= 1 { breakdown.apps.append(.init(token: nil, name: other, minutes: rest)) }
         // What "Other" is made of: the next apps, and the time Screen Time ties to no app.
-        breakdown.otherApps = ranked.dropFirst(Self.named).prefix(8).filter { $0.value.minutes >= 1 }
+        breakdown.otherApps = ranked.dropFirst(Self.named).prefix(5).filter { $0.value.minutes >= 1 }
             .map { .init(token: $0.value.token, name: $0.key, minutes: $0.value.minutes) }
         breakdown.unattributedMinutes = perApp[unattributed]?.minutes ?? 0
+        breakdown.screenTimeTotal = segmentTotal
         for (slot, apps) in perSlot {
             for (name, minutes) in apps where minutes > 0 {
                 breakdown.slots.append(.init(date: slot, app: named.contains(name) ? name : other, minutes: minutes))
@@ -231,6 +236,15 @@ struct PeriodView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Screen Time in all")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(duration(breakdown.screenTimeTotal))
+                    .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
+            }
             Chart {
                 ForEach(breakdown.slots) { slot in
                     BarMark(x: .value("Time", slot.date, unit: breakdown.hourly ? .hour : .day),
