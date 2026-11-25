@@ -862,8 +862,8 @@ struct DayGrid: View {
     var selection: (Date) -> (interval: DateInterval, isCurrent: Bool)
     var onSelect: (DateInterval, Bool) -> Void = { _, _ in }
 
-    /// Periods of several days (a week, a month) are marked as a whole: a loop round their days, green when the goal
-    /// was reached, red when a limit was passed. Days (and rolling windows, and days reaching a target) keep a mark of
+    /// Periods of several days (a week, a month) are marked as a whole: their days' background tinted green when the
+    /// goal was reached, red when a limit was passed. Days (and rolling windows, and days reaching a target) keep a mark of
     /// their own, since each day is its own result there.
     private var loopsPeriods: Bool {
         ring.period.nominalDays > 1 && !ring.period.isRolling && !ring.isDaysReaching
@@ -902,18 +902,27 @@ struct DayGrid: View {
                         }
                         .padding(.vertical, 3)
                         .frame(maxWidth: .infinity)
-                        .background(isSelected ? ring.accent.opacity(0.15) : .clear, in: .rect(cornerRadius: 10))
+                        // The selected period: an outline (the background colour tells a period's result).
+                        .overlay {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 10).strokeBorder(ring.accent, lineWidth: 2)
+                            }
+                        }
                         .background {
                             if let kind = outcomes[day] {
-                                // Joined to the neighbours in the same week row that belong to the same period.
+                                // A tinted band under the days of the period, joined to the neighbours in the same
+                                // week row (across the gap between cells), rounded where the period starts or ends.
                                 let column = index % 7
                                 let sameAsPrevious = column > 0 && joined(day, -1, outcomes)
                                 let sameAsNext = column < 6 && joined(day, 1, outcomes)
-                                LoopSegment(closedLeading: !sameAsPrevious, closedTrailing: !sameAsNext)
-                                    .stroke(DayMark.color(kind), lineWidth: 2)
-                                    .padding(.horizontal, -2)
-                                    .padding(.leading, sameAsPrevious ? 0 : 2)
-                                    .padding(.trailing, sameAsNext ? 0 : 2)
+                                let r: CGFloat = 10
+                                UnevenRoundedRectangle(topLeadingRadius: sameAsPrevious ? 0 : r,
+                                                       bottomLeadingRadius: sameAsPrevious ? 0 : r,
+                                                       bottomTrailingRadius: sameAsNext ? 0 : r,
+                                                       topTrailingRadius: sameAsNext ? 0 : r)
+                                    .fill(DayMark.color(kind).opacity(0.18))
+                                    .padding(.leading, sameAsPrevious ? -2 : 0)
+                                    .padding(.trailing, sameAsNext ? -2 : 0)
                             }
                         }
                     }
